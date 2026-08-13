@@ -744,7 +744,7 @@ compile succeed with tests still failing. Implement `NewSuite` and `RegisterScen
 
 ---
 
-### Increment 1.2 — Configuration Loading & Validation
+### Increment 1.2 — Configuration Loading & Validation ✅ COMPLETED (2026-08-13)
 
 **Goal:** Load and validate `gtest.yaml` via Viper. Produce typed `Config` and `ScenarioConfig` structs.
 Return structured errors for all failure modes.
@@ -772,7 +772,7 @@ Return structured errors for all failure modes.
 
 ---
 
-### Increment 1.3 — In-Memory Metrics Engine
+### Increment 1.3 — In-Memory Metrics Engine ✅ COMPLETED (2026-08-13)
 
 **Goal:** Implement `MetricsCollector` with all four metric types. Verify thread safety.
 
