@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.3.0
-	github.com/go-viper/mapstructure/v2 v2.4.0
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
