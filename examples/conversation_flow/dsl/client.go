@@ -60,6 +60,12 @@ type ConversationSession struct {
 	cancel     context.CancelFunc
 }
 
+// Events returns a read-only channel delivering parsed SSE events from the background reader.
+func (s *ConversationSession) Events() <-chan SSEEvent { return s.events }
+
+// Errors returns a read-only channel delivering SSE stream errors from the background reader.
+func (s *ConversationSession) Errors() <-chan error { return s.errs }
+
 // OpenConversation initiates an SSE stream, receives the lifecycle 'created' event, and returns a ConversationSession.
 func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externalID, dialogModel string, timeout time.Duration) (*ConversationSession, error) {
 	metrics := NewMetrics(ctx.Metrics())

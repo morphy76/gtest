@@ -76,3 +76,56 @@ func (m *ConversationMetrics) RecordConversationResult(duration time.Duration, s
 		m.raw.Rate("conversation_success_rate", gtest.Tags{}).Add(0, 1)
 	}
 }
+
+// RecordSSEConnectionRequested increments the count of SSE connection attempts.
+func (m *ConversationMetrics) RecordSSEConnectionRequested() {
+	m.raw.Counter("number_of_requested_sse_connections", gtest.Tags{}).Inc()
+}
+
+// RecordSSEConnectionSuccessful increments the count of successfully established SSE connections.
+func (m *ConversationMetrics) RecordSSEConnectionSuccessful() {
+	m.raw.Counter("number_of_successful_sse_connections", gtest.Tags{}).Inc()
+}
+
+// RecordSSEConnectionFailed increments the count of failed SSE connection attempts.
+func (m *ConversationMetrics) RecordSSEConnectionFailed() {
+	m.raw.Counter("number_of_failed_sse_connections", gtest.Tags{}).Inc()
+}
+
+// RecordSSEConnectionClosed increments the count of cleanly closed SSE connections.
+func (m *ConversationMetrics) RecordSSEConnectionClosed() {
+	m.raw.Counter("number_of_closed_sse_connections", gtest.Tags{}).Inc()
+}
+
+// RecordDialogCreated increments the count of dialogs successfully created via SSE lifecycle events.
+func (m *ConversationMetrics) RecordDialogCreated() {
+	m.raw.Counter("number_of_created_dialogs", gtest.Tags{}).Inc()
+}
+
+// RecordDialogClosed increments the count of dialogs explicitly closed by the client.
+func (m *ConversationMetrics) RecordDialogClosed() {
+	m.raw.Counter("number_of_closed_dialogs", gtest.Tags{}).Inc()
+}
+
+// RecordOpenRoundTrips records discrepancies between expected and received message counts.
+// A non-zero value signals dropped or duplicated messages.
+func (m *ConversationMetrics) RecordOpenRoundTrips(customerDiscrepancy, botDiscrepancy int) {
+	if customerDiscrepancy != 0 {
+		m.raw.Counter("customer_open_round_trips", gtest.Tags{}).Add(int64(abs(customerDiscrepancy)))
+	}
+	if botDiscrepancy != 0 {
+		m.raw.Counter("bot_response_round_trips", gtest.Tags{}).Add(int64(abs(botDiscrepancy)))
+	}
+}
+
+// RecordSSEErrorCategory records a categorized SSE error (e.g., "sse_protocol", "sse_authentication", "sse_parsing").
+func (m *ConversationMetrics) RecordSSEErrorCategory(category string) {
+	m.raw.Counter(category, gtest.Tags{}).Inc()
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}

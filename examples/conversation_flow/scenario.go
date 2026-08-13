@@ -114,6 +114,7 @@ func startMockServer() *httptest.Server {
 }
 
 // Setup initializes global scenario state, starting the mock server if BASE_URL is unset or "mock".
+// If a messages_file param is provided, loads user prompts from CSV; otherwise uses built-in defaults.
 func Setup(ctx gtest.ScenarioContext) (map[string]any, error) {
 	baseURL := ctx.Param("base_url")
 	var mockServer *httptest.Server
@@ -123,10 +124,33 @@ func Setup(ctx gtest.ScenarioContext) (map[string]any, error) {
 		baseURL = mockServer.URL
 	}
 
+	// Load message dataset
+	var messages []dsl.Message
+	if messagesFile := ctx.Param("messages_file"); messagesFile != "" {
+		loaded, err := dsl.LoadMessages(messagesFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load messages dataset: %w", err)
+		}
+		messages = loaded
+	}
+	if len(messages) == 0 {
+		messages = defaultMessages()
+	}
+
 	return map[string]any{
 		"server_url":  baseURL,
 		"mock_server": mockServer,
+		"messages":    messages,
 	}, nil
+}
+
+// defaultMessages returns the built-in prompt set used when no CSV is configured.
+func defaultMessages() []dsl.Message {
+	return []dsl.Message{
+		{ID: "1", Text: "Hello, what services do you offer?", Category: "general", ExpectedTokens: 15},
+		{ID: "2", Text: "Can you help me with pricing details?", Category: "pricing", ExpectedTokens: 20},
+		{ID: "3", Text: "Thank you, goodbye!", Category: "closing", ExpectedTokens: 10},
+	}
 }
 
 // PreTest executes per-VU initialization before iterations start.
@@ -136,65 +160,27 @@ func PreTest(ctx gtest.ScenarioContext) error {
 }
 
 // RunVU executes the multi-turn conversational AI load iteration for a single virtual user.
+// It delegates to the event-driven ConversationFlow which mirrors the JS k6 SSE callback architecture.
 func RunVU(ctx gtest.ScenarioContext) error {
 	baseURL := ctx.GlobalState("server_url").(string)
+	messages := ctx.GlobalState("messages").([]dsl.Message)
 
-	token := ctx.Param("token")
-	tenant := ctx.Param("tenant")
 	dialogModel := ctx.Param("dialog_model")
 	if dialogModel == "" {
 		dialogModel = "gpt-4o"
 	}
-	turns := ctx.ParamInt("turns", 2)
 
-	client := dsl.NewConversationClient(baseURL, token, tenant, nil)
-	metrics := dsl.NewMetrics(ctx.Metrics())
-	externalID := fmt.Sprintf("vu-%d-iter-%d", ctx.VUID(), ctx.Iteration())
+	client := dsl.NewConversationClient(baseURL, ctx.Param("token"), ctx.Param("tenant"), nil)
 
-	startTotal := time.Now()
+	flow := dsl.NewConversationFlow(client, dsl.FlowConfig{
+		DialogModel:      dialogModel,
+		Turns:            ctx.ParamInt("turns", 2),
+		InteractionDelay: ctx.ParamDuration("interaction_delay", 0),
+		SSEEventTimeout:  ctx.ParamDuration("sse_event_timeout", 5*time.Second),
+		Messages:         messages,
+	})
 
-	// 1. Open Conversation SSE Stream and await 'created' event
-	session, err := client.OpenConversation(ctx, externalID, dialogModel, 5*time.Second)
-	if err != nil {
-		metrics.RecordConversationResult(0, false)
-		return fmt.Errorf("OpenConversation failed: %w", err)
-	}
-	defer session.Close()
-
-	// 2. Perform multi-turn conversation exchanges
-	userPrompts := []string{
-		"Hello, what services do you offer?",
-		"Can you help me with pricing details?",
-		"Thank you, goodbye!",
-	}
-
-	for i := 0; i < turns; i++ {
-		prompt := userPrompts[i%len(userPrompts)]
-
-		// Post customer message
-		if err := client.AddMessage(ctx, session, prompt); err != nil {
-			metrics.RecordConversationResult(0, false)
-			return fmt.Errorf("AddMessage turn %d failed: %w", i+1, err)
-		}
-
-		// Wait for bot response with SSE timeout (3 seconds)
-		_, err := session.AwaitBotResponse(ctx, 3*time.Second)
-		if err != nil {
-			metrics.RecordConversationResult(0, false)
-			return fmt.Errorf("AwaitBotResponse turn %d failed: %w", i+1, err)
-		}
-	}
-
-	// 3. Close Conversation
-	if err := client.CloseConversation(ctx, externalID, session.DialogID); err != nil {
-		metrics.RecordConversationResult(0, false)
-		return fmt.Errorf("CloseConversation failed: %w", err)
-	}
-
-	totalDuration := time.Since(startTotal)
-	metrics.RecordConversationResult(totalDuration, true)
-
-	return nil
+	return flow.Run(ctx)
 }
 
 // AfterTest executes per-VU cleanup after iterations complete.
