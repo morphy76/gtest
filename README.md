@@ -258,7 +258,8 @@ go run main.go [flags]
 | `--log-level` | `info` | Log verbosity: `debug`, `info`, `warn`, `error`. |
 | `--log-format` | `pretty` | Log output format: `pretty` or `json`. |
 | `--report-format` | `console` | Report format: `console` or `json`. |
-| `--report-out` | stdout | File path to write the final summary report. |
+| `--report-out` | stdout | File path to write the primary summary report. |
+| `--json-report-out` | (none) | File path to write the JSON report document (§10.2 schema). |
 | `--version` | `false` | Prints library version info and returns `0`. |
 
 ### Exit Code Contract

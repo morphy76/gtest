@@ -119,6 +119,12 @@ func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int
 		logger.Error().Err(err).Msg("failed to write report")
 	}
 
+	if flags.JSONReportOut != "" {
+		if err := report.WriteReport(stdout, "json", flags.JSONReportOut, reportData); err != nil {
+			logger.Error().Err(err).Msg("failed to write JSON report")
+		}
+	}
+
 	if exitFunc != nil {
 		if allPassed {
 			exitFunc(0)

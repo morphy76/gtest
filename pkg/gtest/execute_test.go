@@ -194,3 +194,41 @@ scenarios:
 	assert.Contains(t, stdout.String(), "[FAIL]")
 	assert.Contains(t, stdout.String(), "OVERALL: FAILED")
 }
+
+func TestExecuteJSONReportOutFlag(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "gtest.yaml")
+	jsonReportPath := filepath.Join(tempDir, "report.json")
+
+	yamlContent := `version: "1.0"
+default_scenario: scenario_a
+scenarios:
+  scenario_a:
+    type: constant_vus
+    vus: 1
+    run_period: 50ms
+    vu_timeout: 1s
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yamlContent), 0644))
+
+	suite := gtest.NewSuite("JSON Export Test Suite")
+	suite.RegisterScenario("scenario_a", gtest.Scenario{
+		RunVU: func(ctx gtest.ScenarioContext) error {
+			ctx.Metrics().Counter("http_requests", gtest.Tags{}).Inc()
+			return nil
+		},
+	})
+
+	var stdout bytes.Buffer
+	err := suite.ExecuteWithArgs([]string{"--config", configPath, "--json-report-out", jsonReportPath}, &stdout, func(int) {})
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout.String(), "GTEST LOAD TEST SUMMARY", "console summary should be printed to stdout")
+
+	jsonBytes, err := os.ReadFile(jsonReportPath)
+	require.NoError(t, err, "json report file must exist")
+	assert.Contains(t, string(jsonBytes), `"suite_name": "JSON Export Test Suite"`)
+	assert.Contains(t, string(jsonBytes), `"scenario": "scenario_a"`)
+	assert.Contains(t, string(jsonBytes), `"name": "http_requests"`)
+}
+

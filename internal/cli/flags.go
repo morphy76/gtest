@@ -9,13 +9,14 @@ import (
 
 // Flags holds the parsed command-line configuration options.
 type Flags struct {
-	ConfigPath   string
-	ScenarioName string
-	LogLevel     string
-	LogFormat    string
-	ReportFormat string
-	ReportOut    string
-	ShowVersion  bool
+	ConfigPath    string
+	ScenarioName  string
+	LogLevel      string
+	LogFormat     string
+	ReportFormat  string
+	ReportOut     string
+	JSONReportOut string
+	ShowVersion   bool
 }
 
 // ParseFlags parses command-line arguments into a Flags struct.
@@ -33,6 +34,7 @@ func ParseFlags(args []string, errOutput io.Writer) (*Flags, error) {
 	fs.StringVar(&flags.LogFormat, "log-format", "pretty", "Log output format: pretty or json")
 	fs.StringVar(&flags.ReportFormat, "report-format", "console", "Report format: console or json")
 	fs.StringVar(&flags.ReportOut, "report-out", "", "Write final report to this file path instead of stdout")
+	fs.StringVar(&flags.JSONReportOut, "json-report-out", "", "Write JSON report document to this file path")
 	fs.BoolVar(&flags.ShowVersion, "version", false, "Print library version and exit")
 
 	if err := fs.Parse(args); err != nil {
