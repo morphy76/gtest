@@ -974,6 +974,133 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 
 ---
 
+### Increment 1.12 — Interaction Delay Strategies (Think Time)
+
+**Goal:** Provide configurable user interaction delay (think time) strategies to simulate realistic user pauses between actions and iterations.
+
+**Supported Strategies:**
+1. **`fixed`**: Static pause duration (e.g. `500ms`).
+2. **`range`**: Uniform random distribution $U(\text{min}, \text{max})$.
+3. **`expo`**: Exponential distribution with specified `mean` (Poisson arrival modeling), $D = -\text{mean} \cdot \ln(U)$, with optional `min`/`max` clamping.
+4. **`gaussian`**: Normal distribution $N(\mu, \sigma)$ with specified `mean` and `std_dev`, with optional `min`/`max` clamping (negative values clamped to 0 or `min`).
+
+**Deliverables:**
+- `pkg/gtest/delay.go` — `DelayGenerator`, `DelayStrategy`, and constructor functions (`FixedDelay`, `RangeDelay`, `ExpoDelay`, `GaussianDelay`)
+- `pkg/gtest/context.go` — `ScenarioContext.Sleep(d ...time.Duration) error` method (respects `ctx.Done()`)
+- `internal/config/model.go` — `InteractionDelayConfig` struct mapped under `scenarios.<name>.interaction_delay`
+- `internal/config/validate.go` — validation rules for delay configs
+
+**Configuration Schema:**
+
+```yaml
+scenarios:
+  user_checkout:
+    type: constant_vus
+    vus: 10
+    run_period: 1m
+    vu_timeout: 5s
+    interaction_delay:
+      type: range        # "fixed" | "range" | "expo" | "gaussian"
+      min: 200ms
+      max: 1s
+```
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.12.1: Fixed delay returns constant duration
+// AC-1.12.2: Range delay returns values uniformly distributed within [min, max]
+// AC-1.12.3: Expo delay generates exponential distribution with sample mean converging to target mean
+// AC-1.12.4: Gaussian delay generates normally distributed durations with specified mean and std_dev
+// AC-1.12.5: All delay strategies respect min/max clamping when configured
+// AC-1.12.6: ctx.Sleep() halts for generated duration and aborts immediately on ctx.Done()
+```
+
+---
+
+### Increment 1.13 — Checks (Inline Assertions)
+
+**Goal:** Enable real-time inline pass/fail assertions inside `RunVU` without terminating the iteration, aggregating results for reporting and threshold gates.
+
+**Deliverables:**
+- `pkg/gtest/check.go` — `CheckFunc` type (`type CheckFunc func() string`) and check evaluation logic
+- `pkg/gtest/context.go` — `ScenarioContext.Check(name string, fn CheckFunc) bool`
+- `internal/report/console.go` & `internal/report/json.go` — CHECKS section in summary and JSON reports
+- Auto-instrumentation of built-in metrics: `gtest.checks.passed`, `gtest.checks.failed`
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.13.1: Passing check returns true, increments gtest.checks.passed
+// AC-1.13.2: Failing check returns false, increments gtest.checks.failed, logs reason
+// AC-1.13.3: Multiple checks per iteration are aggregated independently
+// AC-1.13.4: Console and JSON reports display per-check pass/fail counts and percentages
+// AC-1.13.5: Thresholds can evaluate gtest.checks.failed and gtest.checks.passed
+```
+
+---
+
+### Increment 1.14 — Data Parameterization Module (`pkg/gtest/data`)
+
+**Goal:** Provide a dedicated data loading and parameterization package for CSV, JSON, and JSON Lines datasets with thread-safe distribution strategies.
+
+**Deliverables:**
+- `pkg/gtest/data/dataset.go` — `DataSet`, `LoadCSV`, `LoadJSON`, `LoadJSONL`
+- `pkg/gtest/data/strategy.go` — `Strategy` enum (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`) and thread-safe row selection
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.14.1: LoadCSV parses CSV with headers into string key-value maps
+// AC-1.14.2: LoadJSON parses JSON array of objects into key-value maps
+// AC-1.14.3: LoadJSONL parses newline-delimited JSON objects
+// AC-1.14.4: Sequential strategy round-robins across rows deterministically by VU ID and iteration
+// AC-1.14.5: Random strategy selects rows uniformly with thread safety
+// AC-1.14.6: SharedQueue strategy dispenses each row exactly once across concurrent VUs
+```
+
+---
+
+### Increment 1.15 — Execution Summary Hooks (`HandleSummary`)
+
+**Goal:** Allow test developers to programmatically receive the complete structured execution summary post-run (for Slack alerts, webhooks, or custom output generation).
+
+**Deliverables:**
+- `pkg/gtest/scenario.go` — `SummaryHook` type (`func(ctx context.Context, summary SummaryData) error`) and `Scenario.HandleSummary` field
+- `pkg/gtest/summary.go` — `SummaryData` export struct containing run metadata, metrics snapshot, and SLA results
+- `internal/runner/runner.go` — post-report execution of `HandleSummary`
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.15.1: HandleSummary is invoked after test completion and report generation
+// AC-1.15.2: SummaryData contains complete suite name, scenario name, execution duration, metrics, and SLA threshold results
+// AC-1.15.3: Error returned by HandleSummary is logged as an error but does not mutate the exit code
+```
+
+---
+
+### Increment 1.16 — Graceful Abort / Early Stop (`abort_on_fail`)
+
+**Goal:** Support early test termination when critical thresholds breach during test execution, avoiding wasted resources or runaway system damage.
+
+**Deliverables:**
+- `internal/config/model.go` — `AbortOnFail bool` and `DelayAbortEval time.Duration` fields in `ThresholdConfig`
+- `internal/config/validate.go` — validation for abort-on-fail threshold options
+- `internal/engine/abort.go` — periodic background threshold monitor during run
+- `internal/report/console.go` — report banner reflecting `ABORTED` verdict when early stop is triggered
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.16.1: Threshold configured with abort_on_fail=true evaluates periodically during test execution
+// AC-1.16.2: Breach before delay_abort_eval is ignored (warm-up grace period)
+// AC-1.16.3: Breach after delay_abort_eval cancels all active VU contexts immediately
+// AC-1.16.4: Aborted test generates report showing ABORTED status and exits with code 1
+```
+
+---
+
 ## 12. Phase 2: Kubernetes Integration (Draft)
 
 ### Increment 2.1 — Docker & Helm Packaging
@@ -1019,75 +1146,7 @@ GET    /api/v1/tests/:id/report  → returns JSON report (same schema as §10.2)
 
 Phase 3 extends `gtest` with capabilities found in mature load testing frameworks (k6, Gatling, Locust) adapted to the Go library model.
 
-### 14.1 Checks (Inline Assertions)
-
-**Inspiration**: k6 `check()`, Gatling assertions.
-
-Checks are lightweight pass/fail assertions recorded inline during RunVU. Unlike thresholds (post-run gates), checks are real-time validations embedded in test logic. Check results are aggregated and reported as a dedicated metric.
-
-#### Public API
-
-```go
-// CheckFunc validates a condition and returns a human-readable failure reason.
-// Return "" for pass, non-empty string for fail.
-type CheckFunc func() string
-
-// Check records a named assertion. Multiple checks per iteration are allowed.
-// Pass/fail counts are stored as built-in metrics: gtest.checks.passed, gtest.checks.failed.
-func (ctx ScenarioContext) Check(name string, fn CheckFunc)
-```
-
-#### Usage
-
-```go
-ctx.Check("status is 200", func() string {
-    if resp.StatusCode != 200 {
-        return fmt.Sprintf("got %d", resp.StatusCode)
-    }
-    return ""
-})
-
-ctx.Check("body is not empty", func() string {
-    if len(body) == 0 {
-        return "empty body"
-    }
-    return ""
-})
-```
-
-#### Built-in Metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `gtest.checks.passed` | Counter | Total passed checks |
-| `gtest.checks.failed` | Counter | Total failed checks |
-
-#### Reporting
-
-The console report adds a CHECKS section showing pass/fail counts per check name:
-
-```text
-CHECKS
-────────────────────────────────────────────────────────────────
-  ✓ status is 200              1450/1450 (100.00%)
-  ✗ body is not empty          1448/1450 (99.86%)
-```
-
-#### Threshold Integration
-
-Checks integrate with the existing threshold system:
-
-```yaml
-thresholds:
-  - metric: gtest.checks.failed
-    stat: count
-    operator: "<="
-    target: "10"
-```
-
----
-
-### 14.2 Groups (Transaction Boundaries)
+### 14.1 Groups (Transaction Boundaries)
 
 **Inspiration**: k6 `group()`, Gatling `exec().group()`.
 
@@ -1133,7 +1192,7 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 
 ---
 
-### 14.3 HTTP Module (Built-in HTTP Client Helpers)
+### 14.2 HTTP Module (Built-in HTTP Client Helpers)
 
 **Inspiration**: k6 `k6/http`, Gatling `http()`.
 
@@ -1198,7 +1257,7 @@ gtesthttp.NewClient(ctx,
 
 ---
 
-### 14.4 Ramping VUs Executor
+### 14.3 Ramping VUs Executor
 
 **Inspiration**: k6 `ramping-vus`, Gatling `rampUsersPerSec`.
 
@@ -1242,7 +1301,7 @@ type StageConfig struct {
 
 ---
 
-### 14.5 Scenarios (Multi-Scenario Concurrent Execution)
+### 14.4 Scenarios (Multi-Scenario Concurrent Execution)
 
 **Inspiration**: k6 `scenarios`, Gatling `setUp().protocols()`.
 
@@ -1293,70 +1352,7 @@ go run main.go --scenario browse_catalog
 
 ---
 
-### 14.6 Data Parameterization Module
-
-**Inspiration**: k6 `SharedArray`, k6 `papaparse`, Gatling `csv()`.
-
-A built-in package for loading test data from CSV, JSON, or JSON Lines files with configurable distribution strategies.
-
-#### Package: `pkg/gtest/data`
-
-```go
-import gtestdata "github.com/morphy76/gtest/pkg/gtest/data"
-
-// DataSet holds pre-loaded test data rows.
-type DataSet struct { /* ... */ }
-
-// LoadCSV reads a CSV file into a DataSet. First row is headers.
-func LoadCSV(path string) (*DataSet, error)
-
-// LoadJSON reads a JSON array file into a DataSet.
-func LoadJSON(path string) (*DataSet, error)
-
-// LoadJSONL reads a JSON Lines file (one JSON object per line).
-func LoadJSONL(path string) (*DataSet, error)
-
-// Rows returns the total number of data rows.
-func (ds *DataSet) Rows() int
-
-// Pick returns a row using the given strategy.
-func (ds *DataSet) Pick(strategy Strategy, vuid int64, iteration int64) map[string]string
-
-// Strategy defines how rows are selected.
-type Strategy int
-const (
-    Sequential   Strategy = iota  // round-robin through rows
-    Random                        // random selection (thread-safe)
-    UniquePerVU                   // each VU gets a unique row (wraps if VUs > rows)
-    SharedQueue                   // rows consumed from a shared queue (no reuse)
-)
-```
-
-#### Usage in Setup + RunVU
-
-```go
-Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
-    ds, err := gtestdata.LoadCSV(ctx.Param("data_file"))
-    if err != nil {
-        return nil, err
-    }
-    return map[string]any{"users": ds}, nil
-},
-
-RunVU: func(ctx gtest.ScenarioContext) error {
-    ds := ctx.GlobalState("users").(*gtestdata.DataSet)
-    row := ds.Pick(gtestdata.Sequential, ctx.VUID(), ctx.Iteration())
-
-    username := row["username"]
-    password := row["password"]
-    // ... use in request ...
-    return nil
-},
-```
-
----
-
-### 14.7 Real-Time Metrics Export
+### 14.5 Real-Time Metrics Export
 
 **Inspiration**: k6 `--out influxdb`, k6 `--out prometheus-rw`, Gatling live Graphite.
 
@@ -1406,79 +1402,7 @@ scenarios:
 
 ---
 
-### 14.8 Execution Summary Hooks
-
-**Inspiration**: k6 `handleSummary()`.
-
-Allow test developers to programmatically process the final summary data (e.g., to send a Slack notification, write custom report formats, or upload to a dashboard).
-
-#### Public API
-
-```go
-// SummaryHook receives the complete test results after execution completes.
-type SummaryHook func(ctx context.Context, summary SummaryData) error
-
-// SummaryData contains the full test run metadata, metrics, and threshold results.
-type SummaryData struct {
-    SuiteName   string
-    Scenario    string
-    Version     string
-    StartedAt   time.Time
-    EndedAt     time.Time
-    Metrics     MetricsSnapshot
-    Thresholds  []ThresholdResult
-    Passed      bool
-}
-
-// Register via Scenario:
-type Scenario struct {
-    // ... existing fields ...
-    HandleSummary SummaryHook  // optional, called after report generation
-}
-```
-
-#### Usage
-
-```go
-suite.RegisterScenario("my_test", gtest.Scenario{
-    RunVU: runVU,
-    HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
-        // Post to Slack
-        msg := fmt.Sprintf("Load test %s: %s", summary.Scenario, verdictStr(summary.Passed))
-        return postSlack(ctx, webhookURL, msg)
-    },
-})
-```
-
----
-
-### 14.9 Graceful Abort (Early Stop)
-
-**Inspiration**: k6 `abortOnFail` threshold option.
-
-Allow thresholds to trigger an **early abort** of the test if breached during execution (not just post-run evaluation).
-
-#### Configuration
-
-```yaml
-thresholds:
-  - metric: http_req_failed
-    stat: rate
-    operator: ">="
-    target: "0.50"
-    abort_on_fail: true         # NEW: stop the test immediately
-    delay_abort_eval: 30s       # NEW: wait this long before evaluating (warm-up)
-```
-
-#### Behavior
-
-- Thresholds with `abort_on_fail: true` are evaluated periodically during the run (every 5s by default).
-- If breached after `delay_abort_eval`, the framework cancels all VU contexts immediately.
-- The console report shows `ABORTED` instead of `PASSED/FAILED`.
-
----
-
-### 14.10 Tagging and Filtering in Reports
+### 14.6 Tagging and Filtering in Reports
 
 **Inspiration**: k6 tag filtering, Gatling assertions by group.
 
@@ -1516,12 +1440,10 @@ go run main.go --tag-filter endpoint=/api/checkout
 
 | Increment | Scope | Dependencies |
 |-----------|-------|-------------|
-| **3.1** | Checks + Groups | None (pure framework addition) |
-| **3.2** | HTTP Module | 3.1 (uses checks for auto-assertions) |
+| **3.1** | Groups (Transaction Boundaries) | None (pure framework addition) |
+| **3.2** | HTTP Module | 3.1, Increment 1.13 (uses checks for auto-assertions) |
 | **3.3** | Ramping VUs executor | None (new pacing engine) |
-| **3.4** | Data Parameterization module | None (utility package) |
-| **3.5** | Multi-Scenario execution | 3.3 (needs all executors) |
-| **3.6** | Real-Time Metrics Export | None (new output pipeline) |
-| **3.7** | Summary Hooks | None (post-run extension) |
-| **3.8** | Graceful Abort | 3.6 (needs periodic evaluation) |
-| **3.9** | Tag Filtering + Per-Tag Thresholds | None (config + SLA evaluator) |
+| **3.4** | Multi-Scenario execution | 3.3 (needs all executors) |
+| **3.5** | Real-Time Metrics Export | None (new output pipeline) |
+| **3.6** | Tag Filtering + Per-Tag Thresholds | None (config + SLA evaluator) |
+
