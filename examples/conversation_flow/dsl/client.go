@@ -37,8 +37,8 @@ func NewConversationClient(baseURL, token, tenant string, httpClient *http.Clien
 
 // SSEEvent represents a parsed Server-Sent Event payload.
 type SSEEvent struct {
-	Event     string `json:"event,omitempty"`
-	Message   *struct {
+	Event   string `json:"event,omitempty"`
+	Message *struct {
 		Event string `json:"event"`
 		Role  string `json:"role"`
 		Text  string `json:"text"`
@@ -75,6 +75,8 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 	req.Header.Set("X-Tenant-ID", c.Tenant)
 	req.Header.Set("Accept", "text/event-stream")
 
+	// TODO this is SSE, this api blocks until the connection is closed, so we need to use a loop to read the stream.
+	// and callbacks to notify the user about events and proceed with the test scenario
 	resp, err := c.HTTPClient.Do(req)
 	openDuration := time.Since(start)
 
