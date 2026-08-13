@@ -1,0 +1,33 @@
+name: Main Branch Tests
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Tests & Benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Main Branch
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run Unit Tests
+        run: make test
+
+      - name: Run Tests with Race Detector
+        run: make test-race
+
+      - name: Build Examples
+        run: make test-examples
+
+      - name: Run Benchmarks
+        run: make test-bench
