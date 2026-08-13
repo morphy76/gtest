@@ -938,15 +938,18 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 
 ---
 
-### Increment 1.10 — Developer Examples
+### Increment 1.10 — Developer Examples ✅ COMPLETED (2026-08-13)
 
 **Goal:** Provide two working example load tests that serve as end-to-end integration tests of the library.
 
 **Deliverables:**
 - `examples/http_checkout/main.go` — `//go:build gtest_example`
 - `examples/grpc_user_service/main.go` — `//go:build gtest_example`
+- `examples/conversation_flow/main.go` — `//go:build gtest_example` (Conversational AI SSE replication)
+- `examples/conversation_flow/dsl/client.go` — Conversational DSL API & metric consolidation
 - `examples/http_checkout/gtest.yaml`
 - `examples/grpc_user_service/gtest.yaml`
+- `examples/conversation_flow/gtest.yaml`
 
 **Build Validation:** `go build -tags=gtest_example ./examples/...` must succeed.
 

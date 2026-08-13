@@ -1,0 +1,27 @@
+version: "1.0"
+default_scenario: conversation_test_flow
+
+scenarios:
+  conversation_test_flow:
+    type: constant_vus
+    vus: 3
+    ramp_up: 100ms
+    run_period: 500ms
+    ramp_down: 100ms
+    vu_timeout: 5s
+    params:
+      dialog_model: "gpt-4o"
+      turns: "2"
+    thresholds:
+      - metric: sse_open_time
+        stat: p95
+        operator: "<"
+        target: "200ms"
+      - metric: answer_received_time
+        stat: p95
+        operator: "<"
+        target: "500ms"
+      - metric: conversation_success_rate
+        stat: rate
+        operator: ">="
+        target: "0.9"

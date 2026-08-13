@@ -1,0 +1,22 @@
+version: "1.0"
+default_scenario: http_checkout_flow
+
+scenarios:
+  http_checkout_flow:
+    type: constant_vus
+    vus: 5
+    ramp_up: 100ms
+    run_period: 500ms
+    ramp_down: 100ms
+    vu_timeout: 1s
+    params:
+      checkout_path: "/checkout"
+    thresholds:
+      - metric: http_request_duration
+        stat: p95
+        operator: "<"
+        target: "200ms"
+      - metric: checkout_success_rate
+        stat: rate
+        operator: ">="
+        target: "0.9"
