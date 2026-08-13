@@ -13,7 +13,7 @@ lifecycle hooks, compile their own `main` package, and run the resulting binary 
 
 ```
 Test Developer's Project
-├── go.mod   (imports github.com/morphy76/gtest)
+├── go.mod   (imports github.com/morphy76/gtest/pkg/gtest)
 ├── main.go  (registers scenarios, calls suite.Execute())
 └── gtest.yaml
 ```
@@ -33,29 +33,25 @@ github.com/morphy76/gtest/               ← module root
 ├── Makefile
 ├── SPECIFICATION.md
 │
-├── *.go                                 ← Public API surface (package gtest)
-│   ├── suite.go                         ← Suite, NewSuite(), Execute()
-│   ├── scenario.go                      ← Scenario struct and all hook types
-│   ├── context.go                       ← ScenarioContext interface
-│   ├── metrics.go                       ← MetricsCollector, Counter, Gauge, Duration, Rate
-│   └── logger.go                        ← Logger, LogEvent interfaces
+├── pkg/
+│   └── gtest/                           ← Public API surface (package gtest)
+│       ├── suite.go                     ← Suite, NewSuite(), Execute()
+│       ├── scenario.go                  ← Scenario struct and all hook types
+│       ├── context.go                   ← ScenarioContext interface
+│       ├── metrics.go                   ← MetricsCollector, Counter, Gauge, Duration, Rate
+│       ├── logger.go                    ← Logger, LogEvent interfaces
+│       └── errors.go                    ← ConfigError, ValidationError, etc.
 │
 ├── internal/
 │   ├── version/
 │   │   └── version.go                   ← Version, Commit, BuildTime vars (ldflags target)
-│   ├── domain/
-│   │   ├── model/                       ← VU, ExecutionState, MetricRecord, ThresholdRule
-│   │   ├── event/                       ← LoadTestStarted, IterationCompleted, SLAEvaluated
-│   │   └── service/                     ← PacingEngine, MetricAggregator, SLAEvaluator
-│   ├── application/
-│   │   ├── ports/
-│   │   │   ├── inbound/                 ← TestRunnerPort, ScenarioRegistryPort
-│   │   │   └── outbound/               ← MetricStorePort, ReporterPort, ConfigLoaderPort
-│   │   └── service/                     ← ScenarioExecutor, MetricOrchestrator
-│   └── adapters/
-│       ├── inbound/                     ← CLI adapter (flag parsing)
-│       └── outbound/                    ← Viper config loader, HDR histogram store,
-│                                          console reporter, JSON reporter
+│   ├── config/                          ← YAML loading, validation, Config/ScenarioConfig types
+│   ├── engine/                          ← VU lifecycle, pacing (constant_vus, arrival_rate)
+│   ├── metric/                          ← In-memory metrics store (Counter, Gauge, Histogram, Rate)
+│   ├── sla/                             ← Threshold evaluation and results
+│   ├── log/                             ← Zerolog adapter implementing gtest.Logger
+│   ├── cli/                             ← CLI flag parsing
+│   └── report/                          ← Console and JSON report formatters
 │
 └── examples/
     ├── http_checkout/
@@ -91,7 +87,7 @@ Example integration tests are guarded:
 
 package main
 
-import "github.com/morphy76/gtest"
+import "github.com/morphy76/gtest/pkg/gtest"
 ```
 
 ### 3.3 Makefile Targets
@@ -709,17 +705,17 @@ Each increment specifies: what to build, the acceptance criteria, and the TDD re
 
 ---
 
-### Increment 1.1 — Core Domain Model & Lifecycle Contracts
+### Increment 1.1 — Core Domain Model & Lifecycle Contracts ✅ COMPLETED (2026-08-13)
 
 **Goal:** Define the `Scenario`, `Suite`, `ScenarioContext`, hook types, and `Logger`/`LogEvent` interfaces.
 No execution engine yet — just types and compilation guarantees.
 
 **Deliverables:**
-- `logger.go` — `Logger`, `LogEvent` interfaces
-- `metrics.go` — `MetricsCollector`, `Counter`, `Gauge`, `Duration`, `Rate` interfaces + `Tags` type
-- `context.go` — `ScenarioContext` interface
-- `scenario.go` — `Scenario` struct, all hook types
-- `suite.go` — `Suite` struct, `NewSuite()`, `RegisterScenario()`
+- `pkg/gtest/logger.go` — `Logger`, `LogEvent` interfaces
+- `pkg/gtest/metrics.go` — `MetricsCollector`, `Counter`, `Gauge`, `Duration`, `Rate` interfaces + `Tags` type
+- `pkg/gtest/context.go` — `ScenarioContext` interface
+- `pkg/gtest/scenario.go` — `Scenario` struct, all hook types
+- `pkg/gtest/suite.go` — `Suite` struct, `NewSuite()`, `RegisterScenario()`
 - `internal/version/version.go` — version vars
 
 **Acceptance Criteria (testable):**
@@ -754,9 +750,9 @@ compile succeed with tests still failing. Implement `NewSuite` and `RegisterScen
 Return structured errors for all failure modes.
 
 **Deliverables:**
-- `internal/adapters/outbound/config_loader.go` — Viper-based `ConfigLoader` implementing the outbound port
-- `internal/application/ports/outbound/config_loader_port.go` — `ConfigLoaderPort` interface
-- `internal/domain/model/config.go` — `Config`, `ScenarioConfig`, `ThresholdConfig`, error types
+- `internal/config/loader.go` — Viper-based config loading
+- `internal/config/model.go` — `Config`, `ScenarioConfig`, `ThresholdConfig` types, error types
+- `internal/config/validate.go` — Validation logic
 
 **Acceptance Criteria (testable):**
 
@@ -781,9 +777,9 @@ Return structured errors for all failure modes.
 **Goal:** Implement `MetricsCollector` with all four metric types. Verify thread safety.
 
 **Deliverables:**
-- `internal/adapters/outbound/metrics_store.go` — concrete `InMemoryMetricsStore`
-- HDR histogram per-VU lifetime management
-- Merge API for report time
+- `internal/metric/store.go` — `InMemoryMetricsStore` implementing `gtest.MetricsCollector`
+- `internal/metric/counter.go`, `gauge.go`, `histogram.go`, `rate.go` — concrete metric types
+- HDR histogram per-VU lifetime management and merge API for report time
 
 **Acceptance Criteria:**
 
@@ -808,8 +804,8 @@ Return structured errors for all failure modes.
 Return a structured result per threshold.
 
 **Deliverables:**
-- `internal/domain/service/sla_evaluator.go`
-- `internal/domain/model/threshold_result.go`
+- `internal/sla/evaluator.go` — threshold evaluation logic
+- `internal/sla/result.go` — `ThresholdResult` type
 
 **Acceptance Criteria:**
 
@@ -830,8 +826,7 @@ Return a structured result per threshold.
 field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing.
 
 **Deliverables:**
-- `internal/adapters/outbound/zerolog_logger.go`
-- `internal/application/ports/outbound/logger_port.go`
+- `internal/log/zerolog.go` — zerolog adapter implementing `gtest.Logger` and `gtest.LogEvent`
 
 **Acceptance Criteria:**
 
@@ -852,8 +847,8 @@ field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing
 ramp-down, and lifecycle orchestration. Exercise all lifecycle hooks.
 
 **Deliverables:**
-- `internal/domain/service/pacing_constant_vus.go`
-- `internal/application/service/scenario_executor.go`
+- `internal/engine/constant_vus.go` — constant VU pacing and ramp-up/ramp-down
+- `internal/engine/executor.go` — scenario lifecycle orchestration (Setup → VUs → Teardown)
 
 **Acceptance Criteria:**
 
@@ -882,7 +877,7 @@ completion assertions.
 **Goal:** Implement the `arrival_rate` execution engine with token bucket dispatch and `max_vus` pool cap.
 
 **Deliverables:**
-- `internal/domain/service/pacing_arrival_rate.go`
+- `internal/engine/arrival_rate.go` — arrival rate pacing with token bucket and `max_vus` pool
 - `gtest.pacing.dropped_iterations` counter integration
 
 **Acceptance Criteria:**
@@ -903,8 +898,8 @@ completion assertions.
 the `Execute()` entry point. Implement all CLI flags from §6.
 
 **Deliverables:**
-- `internal/adapters/inbound/cli.go`
-- `suite.go` — `Execute()` implementation
+- `internal/cli/flags.go` — CLI flag parsing and wiring
+- `pkg/gtest/suite.go` — `Execute()` implementation
 
 **Acceptance Criteria:**
 
@@ -928,9 +923,8 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 (metrics sorted alphabetically by name).
 
 **Deliverables:**
-- `internal/adapters/outbound/console_reporter.go`
-- `internal/adapters/outbound/json_reporter.go`
-- `internal/application/ports/outbound/reporter_port.go`
+- `internal/report/console.go` — console summary formatter
+- `internal/report/json.go` — JSON report formatter
 
 **Acceptance Criteria:**
 
