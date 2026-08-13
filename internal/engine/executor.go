@@ -41,8 +41,9 @@ func (e *Executor) Execute(ctx context.Context) error {
 
 	// 1. Setup phase
 	if e.Scenario.Setup != nil {
+		setupCtx := newScenarioContext(ctx, 0, 0, e.Config, e.ScenarioName, nil, e.Logger, e.Metrics)
 		var err error
-		globalState, err = e.Scenario.Setup(ctx)
+		globalState, err = e.Scenario.Setup(setupCtx)
 		if err != nil {
 			return &gtest.SetupError{Err: err}
 		}
@@ -60,7 +61,8 @@ func (e *Executor) Execute(ctx context.Context) error {
 
 	// 3. Teardown phase
 	if e.Scenario.Teardown != nil {
-		if err := e.Scenario.Teardown(ctx, globalState); err != nil {
+		teardownCtx := newScenarioContext(ctx, 0, 0, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
+		if err := e.Scenario.Teardown(teardownCtx, globalState); err != nil {
 			e.Logger.Error().Err(err).Msg("Teardown hook error")
 		}
 	}

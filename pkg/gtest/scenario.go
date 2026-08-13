@@ -1,11 +1,9 @@
 package gtest
 
-import "context"
-
 // SetupHook is called once before any VU is spawned.
 // It returns a global state map shared (read-only) with all VUs via ScenarioContext.GlobalState().
 // A non-nil error aborts the test run immediately.
-type SetupHook func(ctx context.Context) (state map[string]any, err error)
+type SetupHook func(ctx ScenarioContext) (state map[string]any, err error)
 
 // PreTestHook is called once per VU goroutine before its iteration loop begins.
 // A non-nil error skips RunVU but still guarantees AfterTestHook execution for that VU.
@@ -24,7 +22,7 @@ type AfterTestHook func(ctx ScenarioContext) error
 // TeardownHook is called once after all VU goroutines have exited.
 // It receives the same global state produced by Setup.
 // A non-nil error is logged but does not affect the overall pass/fail verdict.
-type TeardownHook func(ctx context.Context, state map[string]any) error
+type TeardownHook func(ctx ScenarioContext, state map[string]any) error
 
 // Scenario groups all lifecycle hooks for a named test scenario.
 // Only RunVU is required. All other hooks are optional and may be nil.

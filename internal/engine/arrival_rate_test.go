@@ -118,7 +118,7 @@ func TestArrivalRateLifecycleHooks(t *testing.T) {
 	var teardownCount atomic.Int64
 
 	scenario := gtest.Scenario{
-		Setup: func(ctx context.Context) (map[string]any, error) {
+		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 			setupCount.Add(1)
 			return map[string]any{"data": "ok"}, nil
 		},
@@ -136,7 +136,7 @@ func TestArrivalRateLifecycleHooks(t *testing.T) {
 			afterTestCount.Add(1)
 			return nil
 		},
-		Teardown: func(ctx context.Context, state map[string]any) error {
+		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 			teardownCount.Add(1)
 			assert.Equal(t, "ok", state["data"])
 			return nil

@@ -3,6 +3,7 @@ package dsl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,7 +37,8 @@ func NewConversationClient(baseURL, token, tenant string, httpClient *http.Clien
 
 // SSEEvent represents a parsed Server-Sent Event payload.
 type SSEEvent struct {
-	Message *struct {
+	Event     string `json:"event,omitempty"`
+	Message   *struct {
 		Event string `json:"event"`
 		Role  string `json:"role"`
 		Text  string `json:"text"`
@@ -47,12 +49,15 @@ type SSEEvent struct {
 	} `json:"lifecycle,omitempty"`
 }
 
-// ConversationSession represents an active user conversation state.
+// ConversationSession represents an active user conversation state over SSE.
 type ConversationSession struct {
 	ExternalID string
 	DialogID   string
 	SSEStream  io.ReadCloser
-	Scanner    *bufio.Scanner
+	events     chan SSEEvent
+	errs       chan error
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 // OpenConversation initiates an SSE stream, receives the lifecycle 'created' event, and returns a ConversationSession.
@@ -89,11 +94,18 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 	ctx.Metrics().Duration("sse_open_time", gtest.Tags{}).Observe(openDuration)
 	ctx.Metrics().Rate("sse_channel_availability", gtest.Tags{}).Add(1, 1)
 
+	sessCtx, cancel := context.WithCancel(context.Background())
 	session := &ConversationSession{
 		ExternalID: externalID,
 		SSEStream:  resp.Body,
-		Scanner:    bufio.NewScanner(resp.Body),
+		events:     make(chan SSEEvent, 100),
+		errs:       make(chan error, 10),
+		ctx:        sessCtx,
+		cancel:     cancel,
 	}
+
+	// Start background reader loop
+	go session.readLoop(resp.Body)
 
 	// Wait for 'created' lifecycle event with SSE timeout
 	createdStart := time.Now()
@@ -105,7 +117,7 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 		return nil, fmt.Errorf("failed to receive created event: %w", err)
 	}
 
-	if event.Lifecycle == nil || event.Lifecycle.Event != "created" || event.Lifecycle.DialogID == "" {
+	if event == nil || event.Lifecycle == nil || event.Lifecycle.Event != "created" || event.Lifecycle.DialogID == "" {
 		session.Close()
 		return nil, fmt.Errorf("unexpected initial SSE event: expected lifecycle created, got %v", event)
 	}
@@ -113,6 +125,61 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 	session.DialogID = event.Lifecycle.DialogID
 	ctx.Metrics().Duration("dialog_created_event_time", gtest.Tags{}).Observe(createdDuration)
 	return session, nil
+}
+
+// readLoop runs as a dedicated background goroutine to parse incoming SSE stream frames.
+func (s *ConversationSession) readLoop(body io.ReadCloser) {
+	scanner := bufio.NewScanner(body)
+	var currentEvent string
+
+	for scanner.Scan() {
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+		}
+
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			currentEvent = ""
+			continue
+		}
+
+		if strings.HasPrefix(line, ":") {
+			// SSE comment / heartbeat
+			continue
+		}
+
+		if strings.HasPrefix(line, "event:") {
+			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
+
+		if strings.HasPrefix(line, "data:") {
+			dataStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if dataStr == "" || dataStr == "{}" {
+				continue
+			}
+			var evt SSEEvent
+			if err := json.Unmarshal([]byte(dataStr), &evt); err == nil {
+				if evt.Event == "" {
+					evt.Event = currentEvent
+				}
+				select {
+				case s.events <- evt:
+				case <-s.ctx.Done():
+					return
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		select {
+		case s.errs <- err:
+		case <-s.ctx.Done():
+		}
+	}
 }
 
 // AddMessage posts a customer message to an active dialog.
@@ -167,7 +234,7 @@ func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeou
 			return nil, err
 		}
 
-		if event.Message != nil {
+		if event != nil && event.Message != nil {
 			if event.Message.Role == "CUSTOMER" {
 				ctx.Metrics().Counter("customer_messages_received", gtest.Tags{}).Inc()
 			} else if event.Message.Role == "BOT" {
@@ -180,42 +247,16 @@ func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeou
 	}
 }
 
-// ReadNextEvent reads the next event line from the SSE stream with configurable timeout handling.
+// ReadNextEvent reads the next event line from the SSE stream channel with configurable timeout handling.
 func (s *ConversationSession) ReadNextEvent(ctx gtest.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
-	type result struct {
-		event *SSEEvent
-		err   error
-	}
-
-	ch := make(chan result, 1)
-
-	go func() {
-		for s.Scanner.Scan() {
-			line := strings.TrimSpace(s.Scanner.Text())
-			if strings.HasPrefix(line, "data:") {
-				dataStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-				if dataStr == "" || dataStr == "{}" {
-					continue
-				}
-				var event SSEEvent
-				if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
-					ch <- result{err: fmt.Errorf("failed to unmarshal SSE event: %w", err)}
-					return
-				}
-				ch <- result{event: &event}
-				return
-			}
-		}
-		if err := s.Scanner.Err(); err != nil {
-			ch <- result{err: fmt.Errorf("SSE scanner error: %w", err)}
-			return
-		}
-		ch <- result{err: io.EOF}
-	}()
-
 	select {
-	case res := <-ch:
-		return res.event, res.err
+	case evt, ok := <-s.events:
+		if !ok {
+			return nil, io.EOF
+		}
+		return &evt, nil
+	case err := <-s.errs:
+		return nil, err
 	case <-time.After(timeout):
 		ctx.Metrics().Counter("sse_timeout_errors", gtest.Tags{}).Inc()
 		return nil, fmt.Errorf("SSE event timeout after %v", timeout)
@@ -224,8 +265,11 @@ func (s *ConversationSession) ReadNextEvent(ctx gtest.ScenarioContext, timeout t
 	}
 }
 
-// Close closes the SSE stream.
+// Close terminates the SSE stream and stops the background reader goroutine.
 func (s *ConversationSession) Close() {
+	if s.cancel != nil {
+		s.cancel()
+	}
 	if s.SSEStream != nil {
 		s.SSEStream.Close()
 	}

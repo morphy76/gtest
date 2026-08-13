@@ -1,11 +1,11 @@
 ---
 trigger: always_on
-description: General non-functional requirements, including technology stack locks, monorepo Makefile build system, semantic versioning lifecycle, and HTTP framework conventions.
+description: General non-functional requirements, including technology stack locks, monorepo Makefile build system, semantic versioning lifecycle, structured logging, and clean SOLID code principles.
 ---
 
 # General NFR and System Constraints
 
-This rule enforces general software constraints, technology stack lock-in, monorepo build orchestration, idiomatic Go binary versioning, structured logging guidelines, and application conventions.
+This rule enforces general software constraints, technology stack lock-in, monorepo build orchestration, idiomatic Go binary versioning, structured logging guidelines, graceful teardown, and clean SOLID code principles for maintainability and readability.
 
 ## 1. Approved Technology Stack
 
@@ -109,3 +109,25 @@ All long-running components (HTTP servers, queue consumers, background daemons) 
 - Listen for `os.Interrupt`, `syscall.SIGINT`, and `syscall.SIGTERM`.
 - Stop accepting new incoming HTTP/RPC requests.
 - Provide a configurable shutdown timeout context (e.g., 10 seconds) to flush in-flight operations before terminating.
+
+## 6. Clean Code & SOLID Principles for Maintainability and Readability
+
+All code must adhere to clean code practices and SOLID design principles to ensure long-term maintainability, testability, and readability across the monorepo:
+
+### A. SOLID Design Principles (Go-Idiomatic)
+- **Single Responsibility Principle (SRP):** Every package, struct, and function must have one clearly defined responsibility. Avoid monolithic "God" structs or HTTP handlers mixed with complex business calculations.
+- **Open/Closed Principle (OCP):** Design systems to be open for extension but closed for modification. Use Go interface composition, functional options, or strategy patterns to add behavior without mutating existing tested logic.
+- **Liskov Substitution Principle (LSP):** Implementation structs satisfying an interface must fulfill the complete behavioral contract expected by consumers. Implementations should never introduce unexpected side-effects, panic, or bypass documented interface semantics.
+- **Interface Segregation Principle (ISP):** Keep interfaces small, focused, and client-defined ("accept interfaces, return structs"). Prefer small, single-purpose interfaces (e.g., 1–3 methods) scoped to consumer requirements in `application/ports/` rather than large, bloated interfaces.
+- **Dependency Inversion Principle (DIP):** High-level application services must depend exclusively on abstractions (port interfaces), never on low-level concrete adapters (e.g., direct database clients or external SDKs).
+
+### B. Readability & Function Granularity
+- **Small, Granular Functions:** Functions should do one thing well. Keep function length short and focused on a single level of abstraction.
+- **Left-Aligned Happy Path (Guard Clauses):** Handle errors and edge cases early using guard clauses and early returns. Keep the primary success logic unindented along the left margin to maximize visual clarity.
+- **Explicit Domain Naming:** Choose precise, self-documenting names reflecting domain context. Avoid generic naming conventions (`data`, `mgr`, `process`, `doStuff`, `info`) and cryptic abbreviations.
+
+### C. Maintainability & Code Quality
+- **Explicit Error Handling:** Never suppress, swallow, or ignore errors using blank identifiers (`_`). Explicitly handle, wrap, or translate errors with domain context.
+- **Avoid Global State & Side-Effects:** Do not use package-level global variables or implicit side-effects in `init()` functions. State must be explicitly constructed and passed via dependency injection.
+- **Pragmatic DRY (Don't Repeat Yourself):** Eliminate duplication of core domain logic and complex calculations. However, avoid premature abstraction or tight coupling for simple, structural code similarities across distinct boundary layers.
+

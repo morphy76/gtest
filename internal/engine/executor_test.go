@@ -67,7 +67,7 @@ func TestSetupCalledOnceBeforePreTest(t *testing.T) {
 	var mu sync.Mutex
 
 	scenario := gtest.Scenario{
-		Setup: func(ctx context.Context) (map[string]any, error) {
+		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 			mu.Lock()
 			setupTime = time.Now()
 			mu.Unlock()
@@ -207,7 +207,7 @@ func TestTeardownCalledOnceAfterVUsExit(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
-		Teardown: func(ctx context.Context, state map[string]any) error {
+		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 			teardownCount.Add(1)
 			activeVUsAtTeardown = int64(metrics.LastGaugeValue("gtest.vu.active"))
 			return nil
@@ -384,7 +384,7 @@ func TestSetupErrorAbortsExecution(t *testing.T) {
 	var preTestCalled bool
 
 	scenario := gtest.Scenario{
-		Setup: func(ctx context.Context) (map[string]any, error) {
+		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 			return nil, errors.New("database connection failed")
 		},
 		PreTest: func(ctx gtest.ScenarioContext) error {

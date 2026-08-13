@@ -54,7 +54,7 @@ func TestRegisterScenarioWithAllHooks(t *testing.T) {
 	suite := gtest.NewSuite("test")
 	assert.NotPanics(t, func() {
 		suite.RegisterScenario("full", gtest.Scenario{
-			Setup: func(ctx context.Context) (map[string]any, error) {
+			Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 				return nil, nil
 			},
 			PreTest: func(ctx gtest.ScenarioContext) error {
@@ -66,7 +66,7 @@ func TestRegisterScenarioWithAllHooks(t *testing.T) {
 			AfterTest: func(ctx gtest.ScenarioContext) error {
 				return nil
 			},
-			Teardown: func(ctx context.Context, state map[string]any) error {
+			Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 				return nil
 			},
 		})

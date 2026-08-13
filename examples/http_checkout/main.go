@@ -24,7 +24,7 @@ func main() {
 	suite := gtest.NewSuite("HTTP Checkout Flow Suite")
 
 	suite.RegisterScenario("http_checkout_flow", gtest.Scenario{
-		Setup: func(ctx context.Context) (map[string]any, error) {
+		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 			client := &http.Client{
 				Timeout: 2 * time.Second,
 			}
@@ -75,7 +75,7 @@ func main() {
 			ctx.Log().Debug().Msg("completed checkout iteration")
 			return nil
 		},
-		Teardown: func(ctx context.Context, state map[string]any) error {
+		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 			return nil
 		},
 	})

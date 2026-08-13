@@ -10,6 +10,9 @@ scenarios:
     ramp_down: 100ms
     vu_timeout: 5s
     params:
+      base_url: "mock" # Set to target API URL (e.g. https://api.dev.example.com) or "mock" for in-process mock server
+      token: "pat_token" # Set to access token or override via PAT environment variable
+      tenant: "tenant_1"
       dialog_model: "gpt-4o"
       turns: "2"
     thresholds:

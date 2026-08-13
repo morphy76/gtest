@@ -19,7 +19,7 @@ func main() {
 	suite := gtest.NewSuite("gRPC User Service Load Test")
 
 	suite.RegisterScenario("grpc_user_service_flow", gtest.Scenario{
-		Setup: func(ctx context.Context) (map[string]any, error) {
+		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 			db := &userDB{
 				users: map[int]string{
 					1: "Alice",
@@ -66,7 +66,7 @@ func main() {
 			ctx.Log().Debug().Msg("completed RPC invocation")
 			return nil
 		},
-		Teardown: func(ctx context.Context, state map[string]any) error {
+		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 			return nil
 		},
 	})
