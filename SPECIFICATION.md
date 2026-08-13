@@ -1,0 +1,998 @@
+# `gtest` — Golang Load Testing Library Specification
+
+**Module:** `github.com/morphy76/gtest`  
+**Language:** Go 1.26+  
+**Revision:** 2 (post-challenge hardening)
+
+---
+
+## 1. Purpose & Adoption Model
+
+`gtest` is a **Go library** — not a standalone binary. Test developers import it, implement test logic using
+lifecycle hooks, compile their own `main` package, and run the resulting binary against a YAML configuration.
+
+```
+Test Developer's Project
+├── go.mod   (imports github.com/morphy76/gtest)
+├── main.go  (registers scenarios, calls suite.Execute())
+└── gtest.yaml
+```
+
+The compiled binary is self-contained: it loads config, runs the selected scenario, emits a terminal report,
+evaluates SLA thresholds, and exits with the appropriate code.
+
+---
+
+## 2. Module Layout
+
+```text
+github.com/morphy76/gtest/               ← module root
+├── go.mod
+├── go.sum
+├── VERSION.gtest                        ← SemVer plain-text file (e.g., "0.1.0")
+├── Makefile
+├── SPECIFICATION.md
+│
+├── *.go                                 ← Public API surface (package gtest)
+│   ├── suite.go                         ← Suite, NewSuite(), Execute()
+│   ├── scenario.go                      ← Scenario struct and all hook types
+│   ├── context.go                       ← ScenarioContext interface
+│   ├── metrics.go                       ← MetricsCollector, Counter, Gauge, Duration, Rate
+│   └── logger.go                        ← Logger, LogEvent interfaces
+│
+├── internal/
+│   ├── version/
+│   │   └── version.go                   ← Version, Commit, BuildTime vars (ldflags target)
+│   ├── domain/
+│   │   ├── model/                       ← VU, ExecutionState, MetricRecord, ThresholdRule
+│   │   ├── event/                       ← LoadTestStarted, IterationCompleted, SLAEvaluated
+│   │   └── service/                     ← PacingEngine, MetricAggregator, SLAEvaluator
+│   ├── application/
+│   │   ├── ports/
+│   │   │   ├── inbound/                 ← TestRunnerPort, ScenarioRegistryPort
+│   │   │   └── outbound/               ← MetricStorePort, ReporterPort, ConfigLoaderPort
+│   │   └── service/                     ← ScenarioExecutor, MetricOrchestrator
+│   └── adapters/
+│       ├── inbound/                     ← CLI adapter (flag parsing)
+│       └── outbound/                    ← Viper config loader, HDR histogram store,
+│                                          console reporter, JSON reporter
+│
+└── examples/
+    ├── http_checkout/
+    │   └── main.go                      ← //go:build gtest_example
+    └── grpc_user_service/
+        └── main.go                      ← //go:build gtest_example
+```
+
+---
+
+## 3. TDD Strategy & Build Tag Convention
+
+The library is developed using **Test-Driven Development**. All framework source code is written to make a
+failing test pass, followed by a refactor step.
+
+### 3.1 Build Tag Taxonomy
+
+| Tag | Purpose | Used in |
+|-----|---------|---------|
+| *(none)* | Framework unit tests — always run with `go test ./...` | `internal/**/*_test.go`, `*_test.go` at root |
+| `integration` | Tests requiring external services (e.g., a real HTTP server) | `internal/**/*_integration_test.go` |
+| `gtest_example` | Compilable example load tests in `examples/` | `examples/**/*.go` |
+
+### 3.2 Applying Tags
+
+All `_test.go` files in the library that are internal framework tests carry **no special build tag** — they
+are excluded automatically when consumers import the library (Go's module system never runs a dependency's
+test files in a downstream project).
+
+Example integration tests are guarded:
+```go
+//go:build gtest_example
+
+package main
+
+import "github.com/morphy76/gtest"
+```
+
+### 3.3 Makefile Targets
+
+All targets must be `.PHONY`.
+
+```makefile
+COMPONENT  := gtest
+VERSION    ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || echo "0.0.0")
+COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS    := -s -w \
+  -X 'github.com/morphy76/gtest/internal/version.Version=$(VERSION)' \
+  -X 'github.com/morphy76/gtest/internal/version.Commit=$(COMMIT)' \
+  -X 'github.com/morphy76/gtest/internal/version.BuildTime=$(BUILD_TIME)'
+
+## test: Run all library unit tests
+test:
+	go test ./...
+
+## test-integration: Run integration tests (requires external services)
+test-integration:
+	go test -tags=integration ./...
+
+## test-examples: Build example binaries to verify they compile
+test-examples:
+	go build -tags=gtest_example ./examples/...
+
+## test-race: Run unit tests with race detector
+test-race:
+	go test -race ./...
+
+## lint: Run static analysis
+lint:
+	golangci-lint run ./...
+
+## generate: Run code generators
+generate:
+	go generate ./...
+
+## help: Print this help
+help:
+	@grep -E '^## ' Makefile | sed 's/## //'
+```
+
+---
+
+## 4. Public API Surface (Package `gtest`)
+
+This section is the **contract** between the library and test developers. Every exported symbol here must be
+stable within a minor version.
+
+### 4.1 `Logger` & `LogEvent` Interfaces
+
+The `Logger` interface mirrors the zerolog fluent API subset without exposing the concrete zerolog type.
+
+```go
+// LogEvent is a fluent builder for a single log message.
+// Callers must terminate with Msg() to emit the event.
+type LogEvent interface {
+    Str(key, val string) LogEvent
+    Int(key string, val int) LogEvent
+    Int64(key string, val int64) LogEvent
+    Float64(key string, val float64) LogEvent
+    Bool(key string, val bool) LogEvent
+    Dur(key string, val time.Duration) LogEvent
+    Err(err error) LogEvent
+    Msg(msg string)
+}
+
+// Logger is the scoped logger available inside a VU execution.
+// The implementation is zerolog; the interface is stable.
+type Logger interface {
+    Debug() LogEvent
+    Info() LogEvent
+    Warn() LogEvent
+    Error() LogEvent
+}
+```
+
+### 4.2 `MetricsCollector` Interface
+
+```go
+// Tags is an optional set of key-value labels attached to a metric observation.
+// Tag keys and values must be non-empty strings. Panics on nil map — use gtest.Tags{} for no tags.
+type Tags map[string]string
+
+// MetricsCollector is available inside ScenarioContext.
+// All returned metric handles are safe for concurrent use from multiple VU goroutines.
+type MetricsCollector interface {
+    // Counter returns a monotonically increasing counter identified by name+tags.
+    Counter(name string, tags Tags) Counter
+
+    // Gauge returns an instantaneous value handle identified by name+tags.
+    Gauge(name string, tags Tags) Gauge
+
+    // Duration returns a latency histogram identified by name+tags.
+    // Internally uses per-VU HDR histograms merged at report time.
+    Duration(name string, tags Tags) Duration
+
+    // Rate returns a ratio tracker identified by name+tags.
+    // Test developers record numerator and denominator together.
+    // Threshold stat "rate" computes sum(numerator)/sum(denominator) across all observations.
+    Rate(name string, tags Tags) Rate
+}
+
+type Counter interface {
+    Inc()
+    Add(delta int64)
+}
+
+type Gauge interface {
+    Set(value float64)
+    Add(delta float64)
+}
+
+type Duration interface {
+    // Observe records one latency sample.
+    Observe(d time.Duration)
+}
+
+type Rate interface {
+    // Add records `numerator` events out of `denominator` total attempts.
+    // Both must be >= 0. Denominator == 0 is ignored (no observation recorded).
+    Add(numerator, denominator int64)
+}
+```
+
+### 4.3 `ScenarioContext` Interface
+
+```go
+// ScenarioContext is the scoped execution context passed to every VU hook.
+// It embeds context.Context so it can be passed directly to stdlib calls (http.NewRequestWithContext, etc.).
+type ScenarioContext interface {
+    context.Context
+
+    // VUID returns the 1-based unique identifier for this Virtual User goroutine.
+    VUID() int64
+
+    // Iteration returns the 0-based iteration count for the current VU.
+    // Always 0 inside PreTest and AfterTest hooks.
+    Iteration() int64
+
+    // ScenarioName returns the active scenario name as declared in gtest.yaml.
+    ScenarioName() string
+
+    // Param retrieves a string value from the scenario's params map.
+    // Returns "" if key is absent.
+    Param(key string) string
+
+    // ParamInt retrieves a params value parsed as int.
+    // Returns defaultValue if key is absent or value cannot be parsed.
+    ParamInt(key string, defaultValue int) int
+
+    // ParamDuration retrieves a params value parsed as time.Duration.
+    // Returns defaultValue if key is absent or value cannot be parsed.
+    ParamDuration(key string, defaultValue time.Duration) time.Duration
+
+    // GlobalState retrieves a value from the map returned by the Setup hook.
+    // The map is read-only and shared across all VUs; callers must not mutate it.
+    // Returns nil if key is absent or Setup was not provided.
+    GlobalState(key string) any
+
+    // Log returns the VU-scoped logger pre-enriched with scenario, vu_id, iteration fields.
+    Log() Logger
+
+    // Metrics returns the shared metrics collector.
+    Metrics() MetricsCollector
+}
+```
+
+> **Note on Global State Thread Safety:** The `map[string]any` returned by `Setup` is treated as **immutable**
+> after Setup returns. The framework makes a shallow copy and exposes it read-only via `GlobalState()`. Test
+> developers must not store mutable pointers inside the Setup state map without their own synchronization.
+
+### 4.4 Hook Types
+
+```go
+// SetupHook is called once before any VU is spawned.
+// It returns a global state map shared (read-only) with all VUs via ScenarioContext.GlobalState().
+// A non-nil error aborts the test run immediately.
+type SetupHook func(ctx context.Context) (state map[string]any, err error)
+
+// PreTestHook is called once per VU goroutine before its iteration loop begins.
+// A non-nil error skips RunVU but still guarantees AfterTestHook execution for that VU.
+type PreTestHook func(ctx ScenarioContext) error
+
+// VURunnerHook is called repeatedly in a loop for each VU during the run_period.
+// Each call receives a fresh child context with the vu_timeout deadline applied.
+// A non-nil error or panic is caught, logged, and counted; the loop continues.
+type VURunnerHook func(ctx ScenarioContext) error
+
+// AfterTestHook is called once per VU after the run loop ends (or after PreTest failure).
+// It runs in a deferred call, so it executes even if RunVU panicked.
+// A non-nil error is logged but does not affect the overall pass/fail verdict.
+type AfterTestHook func(ctx ScenarioContext) error
+
+// TeardownHook is called once after all VU goroutines have exited.
+// It receives the same global state produced by Setup.
+// A non-nil error is logged but does not affect the overall pass/fail verdict.
+type TeardownHook func(ctx context.Context, state map[string]any) error
+```
+
+### 4.5 `Scenario` Struct
+
+```go
+// Scenario groups all lifecycle hooks for a named test scenario.
+// Only RunVU is required. All other hooks are optional and may be nil.
+type Scenario struct {
+    Setup     SetupHook     // optional
+    PreTest   PreTestHook   // optional
+    RunVU     VURunnerHook  // required
+    AfterTest AfterTestHook // optional
+    Teardown  TeardownHook  // optional
+}
+```
+
+**Validation:** `RegisterScenario` panics if `RunVU` is nil.
+
+### 4.6 `Suite` API
+
+```go
+// Suite is the root object that test developers interact with.
+type Suite struct { /* unexported fields */ }
+
+// NewSuite creates an empty suite with the given display name.
+// The name appears in terminal reports only.
+func NewSuite(name string) *Suite
+
+// RegisterScenario associates a named Scenario with the suite.
+// The name must exactly match a scenario key in gtest.yaml.
+// Panics if name is empty or if RunVU is nil.
+// Calling RegisterScenario after Execute has been called is undefined behavior.
+func (s *Suite) RegisterScenario(name string, scenario Scenario)
+
+// Execute is the CLI entry point. It:
+//  1. Parses CLI flags (see §6 for the full flag inventory).
+//  2. Loads and validates gtest.yaml via Viper.
+//  3. Resolves the target scenario (--scenario flag or default_scenario).
+//  4. Executes the scenario lifecycle (Setup → ramp-up → run → ramp-down → Teardown).
+//  5. Evaluates SLA thresholds.
+//  6. Prints the terminal summary report.
+//  7. Returns an error if the scenario was not found, config was invalid,
+//     or Setup returned an error. Does NOT return an error for SLA threshold failures
+//     (those are expressed via os.Exit(1)).
+//
+// Execute calls os.Exit(1) directly if any SLA threshold is breached.
+// Execute calls os.Exit(0) on clean completion.
+// It returns a non-nil error only for fatal pre-execution failures (config, registration).
+func (s *Suite) Execute() error
+```
+
+**Error Taxonomy for `Execute()`:**
+
+| Condition | Behavior |
+|-----------|----------|
+| `--config` file not found | Returns `*gtest.ConfigError` |
+| YAML parse error | Returns `*gtest.ConfigError` |
+| Validation invariant violated | Returns `*gtest.ValidationError` |
+| Scenario in `--scenario` not registered | Returns `*gtest.ScenarioNotFoundError` |
+| Scenario registered but not in config | Returns `*gtest.ScenarioNotFoundError` |
+| `Setup` hook returns error | Returns `*gtest.SetupError` wrapping the hook error |
+| SLA threshold breached | Calls `os.Exit(1)` (does not return) |
+| Clean completion, all thresholds pass | Calls `os.Exit(0)` (does not return) |
+
+---
+
+## 5. VU Lifecycle — Detailed State Machine
+
+### 5.1 Execution Order Guarantee
+
+```text
+[Suite.Execute() called]
+        │
+        ▼
+ ┌─ Load & Validate Config ──────────────────┐
+ │  fail → return ConfigError/ValidationError│
+ └───────────────────────────────────────────┘
+        │
+        ▼
+ ┌─ Setup (once, sequential) ────────────────┐
+ │  fail → return SetupError                 │
+ │  success → globalState map captured       │
+ └───────────────────────────────────────────┘
+        │
+        ▼  [spawn VU goroutines per pacing schedule]
+        │
+   per VU goroutine:
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │  defer AfterTest()   ← registered BEFORE PreTest is called          │
+   │                                                                      │
+   │  PreTest() ──fail──► log error, count vu_pretest_errors, skip RunVU │
+   │      │                                                               │
+   │  (success)                                                           │
+   │      │                                                               │
+   │  loop while run_period not expired AND ctx not cancelled:            │
+   │      │                                                               │
+   │    iteration ctx = context.WithTimeout(ctx, vu_timeout)             │
+   │    RunVU(iterationCtx)                                               │
+   │      ├─ panic ──► recover, log+count error_panic, continue loop     │
+   │      ├─ error ──► log+count vu_iteration_errors, continue loop      │
+   │      └─ nil   ──► count vu_iterations_total, continue loop          │
+   │                                                                      │
+   │  [deferred AfterTest() runs here regardless of what happened above]  │
+   └──────────────────────────────────────────────────────────────────────┘
+        │
+        ▼  [all VU goroutines exited]
+        │
+ ┌─ Teardown (once, sequential) ─────────────┐
+ │  error logged, does not affect verdict    │
+ └───────────────────────────────────────────┘
+        │
+        ▼
+ ┌─ SLA Threshold Evaluation ─────────────────┐
+ │  breach → print report, os.Exit(1)         │
+ │  pass   → print report, os.Exit(0)         │
+ └────────────────────────────────────────────┘
+```
+
+### 5.2 `vu_timeout` Scope
+
+`vu_timeout` applies **per `RunVU` iteration**. For each call to `RunVU`, the framework creates a child
+context with `context.WithTimeout(parentCtx, vuTimeout)`. A deadline exceeded counts as a failed iteration
+and increments the built-in `vu_iteration_errors` counter. The run loop continues with the next iteration.
+
+### 5.3 Built-In Framework Metrics
+
+The framework automatically records these metrics (always available in the report, not controllable by
+test developers):
+
+| Metric Name | Type | Description |
+|-------------|------|-------------|
+| `gtest.vu.iterations_total` | Counter | Total completed `RunVU` calls (success + failure) |
+| `gtest.vu.iterations_failed` | Counter | `RunVU` calls returning non-nil error or panic |
+| `gtest.vu.iterations_timeout` | Counter | `RunVU` calls that hit the `vu_timeout` deadline |
+| `gtest.vu.panics` | Counter | `RunVU` panics recovered by the framework |
+| `gtest.vu.pretest_errors` | Counter | VUs where `PreTest` returned non-nil error |
+| `gtest.vu.active` | Gauge | Active VU goroutines at current instant |
+
+Test-developer-defined metrics use any other name. Framework metrics are prefixed `gtest.*` and must not be
+used by test developers.
+
+---
+
+## 6. CLI Flag Inventory
+
+`suite.Execute()` registers and parses the following flags using the `flag` standard library package
+(no third-party CLI framework required).
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | `gtest.yaml` | Path to the YAML configuration file |
+| `--scenario` | string | value of `default_scenario` in YAML | Name of the scenario to execute |
+| `--log-level` | string | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
+| `--log-format` | string | `pretty` | Log output format: `pretty` (human-readable) or `json` |
+| `--report-format` | string | `console` | Report format: `console` or `json` |
+| `--report-out` | string | *(stdout)* | Write final report to this file path instead of stdout |
+| `--version` | bool | false | Print library version and exit |
+
+---
+
+## 7. Configuration Reference
+
+### 7.1 Complete Field Table
+
+| Field | Type | Required | Default | Validation |
+|-------|------|----------|---------|------------|
+| `version` | string | yes | — | Must be `"1.0"` |
+| `default_scenario` | string | no | — | Must match a key in `scenarios` if present |
+| `scenarios.<name>.type` | string | yes | — | `"constant_vus"` or `"arrival_rate"` |
+| `scenarios.<name>.vus` | int | if `constant_vus` | — | > 0 |
+| `scenarios.<name>.target_tps` | int | if `arrival_rate` | — | > 0 |
+| `scenarios.<name>.max_vus` | int | if `arrival_rate` | — | > 0, ≥ 1 |
+| `scenarios.<name>.ramp_up` | duration string | no | `"0s"` | ≥ 0 |
+| `scenarios.<name>.run_period` | duration string | yes | — | > 0 |
+| `scenarios.<name>.ramp_down` | duration string | no | `"0s"` | ≥ 0 |
+| `scenarios.<name>.vu_timeout` | duration string | yes | — | > 0 |
+| `scenarios.<name>.params` | map[string]string | no | `{}` | Keys and values must be non-empty strings |
+| `scenarios.<name>.thresholds` | list | no | `[]` | See §7.2 |
+
+Duration strings follow Go's `time.ParseDuration` format (e.g., `"15s"`, `"2m30s"`, `"500ms"`).
+
+### 7.2 Threshold Configuration
+
+Each threshold entry has these fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `metric` | string | yes | Exact metric name as recorded by the test developer |
+| `stat` | string | yes | Statistic to evaluate (see table below) |
+| `operator` | string | yes | Comparison operator: `<`, `<=`, `>`, `>=` |
+| `target` | string | yes | Threshold value; parsed as duration if stat is a percentile, as float64 otherwise |
+
+**Supported `stat` values:**
+
+| `stat` value | Applies to metric type | Computed as |
+|---|---|---|
+| `p50` | Duration | 50th percentile of all observed durations |
+| `p90` | Duration | 90th percentile |
+| `p95` | Duration | 95th percentile |
+| `p99` | Duration | 99th percentile |
+| `mean` | Duration | Arithmetic mean of all observed durations |
+| `max` | Duration | Maximum observed duration |
+| `count` | Counter | Total accumulated value |
+| `rate` | Rate | `sum(numerator) / sum(denominator)` across all `Rate.Add()` calls |
+| `value` | Gauge | Last recorded gauge value |
+
+**Disambiguation Rule:** If `stat` is one of `{p50, p90, p95, p99, mean, max}`, `target` is parsed as
+`time.Duration`. Otherwise `target` is parsed as `float64`. Configuration loading fails with a
+`ValidationError` if parsing fails.
+
+**Tag Aggregation:** Thresholds evaluate the metric aggregated **across all tag combinations**. Tag-specific
+threshold evaluation is not supported in Phase 1.
+
+### 7.3 Annotated `gtest.yaml` Example
+
+```yaml
+version: "1.0"
+default_scenario: "http_checkout_flow"
+
+scenarios:
+  http_checkout_flow:
+    type: "constant_vus"
+    vus: 100
+    ramp_up: "15s"
+    run_period: "2m"
+    ramp_down: "10s"
+    vu_timeout: "5s"
+    params:
+      base_url: "https://api.staging.example.com"
+      checkout_endpoint: "/v1/checkout"
+      max_retries: "3"
+    thresholds:
+      - metric: "http_request_duration"
+        stat: "p95"
+        operator: "<"
+        target: "200ms"
+      - metric: "checkout_success_rate"
+        stat: "rate"
+        operator: ">"
+        target: "0.995"  # Succeed if success rate > 99.5%
+
+  payment_throughput:
+    type: "arrival_rate"
+    target_tps: 500
+    max_vus: 200          # Hard cap on concurrent goroutines; if the pool is saturated
+                          # and the target TPS cannot be maintained, a built-in
+                          # 'gtest.pacing.dropped_iterations' counter is incremented.
+    ramp_up: "10s"
+    run_period: "1m"
+    ramp_down: "5s"
+    vu_timeout: "2s"
+    params:
+      gateway_url: "https://payments.staging.example.com"
+    thresholds:
+      - metric: "payment_duration"
+        stat: "p99"
+        operator: "<"
+        target: "500ms"
+```
+
+---
+
+## 8. Pacing Engine Algorithms
+
+### 8.1 Ramp-Up Algorithm (Both Modes)
+
+Ramp-up uses **linear interpolation** of the target level over `ramp_up` duration.
+
+- **`constant_vus`:** Target active VU count increases linearly from 0 to `vus`. The scheduler spawns
+  new VU goroutines at equal time intervals: `interval = ramp_up / vus`. One goroutine is spawned every
+  `interval`. During steady state, all `vus` goroutines are live.
+
+- **`arrival_rate`:** The token bucket rate increases linearly from 0 to `target_tps` over `ramp_up`.
+  The rate is updated every 100ms using `rate.NewLimiter` with the interpolated value.
+
+### 8.2 Ramp-Down Algorithm
+
+- **`constant_vus`:** Context cancellation signal is sent to all VU goroutines. VUs finish their current
+  `RunVU` call before exiting (they are not killed mid-iteration). Ramp-down completes when all goroutines
+  return from their deferred `AfterTest`.
+
+- **`arrival_rate`:** Token budget is set to 0 immediately. In-flight goroutines complete their current
+  iteration. The engine waits for all goroutines to return before declaring ramp-down complete.
+
+### 8.3 Arrival Rate — Pool Saturation
+
+If the worker pool has reached `max_vus` and a new token is available, the framework increments
+`gtest.pacing.dropped_iterations` and discards the token (does not block or back-pressure). This is
+intentional: arrival rate is an open model and cannot block the arrival clock.
+
+### 8.4 Pacing Goroutine Safety
+
+- All VU goroutines are tracked in a `sync.WaitGroup`. `Execute()` blocks on `wg.Wait()` before proceeding
+  to Teardown.
+- Worker pool is bounded via a semaphore channel of size `max_vus` (for `arrival_rate`) or pre-sized to
+  `vus` (for `constant_vus`).
+
+---
+
+## 9. In-Memory Metrics Engine
+
+### 9.1 Implementation Strategy
+
+| Metric Type | Implementation | Thread Safety |
+|-------------|----------------|---------------|
+| Counter | `atomic.Int64` | Lock-free |
+| Gauge | `atomic.Value` (float64 bits) | Lock-free |
+| Duration | Per-VU HDR histogram; merged at report time | No contention during write path |
+| Rate | Two `atomic.Int64` values (numerator accumulator, denominator accumulator) | Lock-free |
+
+**HDR Histogram Library:** `github.com/HdrHistogram/hdrhistogram-go` with a default range of 1µs to 60s
+and 3 significant digits of precision. Each VU owns its own histogram instance. At report time, histograms
+are merged using HDR's native `Merge()` function and percentiles extracted from the merged result.
+
+### 9.2 Metric Registration & Identity
+
+A metric is uniquely identified by its `(name, type, sorted-tags)` triple. Two `Duration` calls with the
+same name but different tags produce separate histogram instances. At report time, all instances sharing the
+same name are merged (tags dropped) for threshold evaluation.
+
+**Identity collision rule:** Calling `Counter("foo", ...)` and `Duration("foo", ...)` with the same name
+causes a panic at the first conflicting registration. Metric types cannot be mixed for the same name.
+
+---
+
+## 10. Reporting
+
+### 10.1 Console Summary (default `--report-format=console`)
+
+Printed to stdout (or `--report-out` file) after ramp-down completes. Produced by the `Reporter` port
+implementation.
+
+```text
+================================================================================
+                        GTEST LOAD TEST SUMMARY
+================================================================================
+Scenario:     http_checkout_flow              Version: 0.1.0
+Mode:         constant_vus (100 VUs)          Commit:  a1b2c3d
+Duration:     00:02:25  (ramp-up: 15s | run: 2m | ramp-down: 10s)
+Iterations:   14,520 total  |  12 failed (0.08%)  |  3 timeout
+
+BUILT-IN METRICS
+────────────────────────────────────────────────────────────────
+gtest.vu.iterations_total      Counter    14,520
+gtest.vu.iterations_failed     Counter    12
+gtest.vu.iterations_timeout    Counter    3
+gtest.vu.panics                Counter    0
+gtest.vu.pretest_errors        Counter    0
+
+CUSTOM METRICS
+────────────────────────────────────────────────────────────────
+Metric                         Type       Count    Min     Mean    p95     p99     Max
+http_request_duration          Duration   14,520   12ms    45ms    110ms   230ms   850ms
+http_requests_total            Counter    14,520
+http_requests_failed           Counter    12
+checkout_success_rate          Rate       14,520   (rate: 0.9992)
+
+SLA THRESHOLD EVALUATION
+────────────────────────────────────────────────────────────────
+  [PASS]  http_request_duration   p95 < 200ms     → actual: 110ms
+  [PASS]  checkout_success_rate   rate > 0.995    → actual: 0.9992
+────────────────────────────────────────────────────────────────
+OVERALL: PASSED                                          (exit 0)
+================================================================================
+```
+
+### 10.2 JSON Report (`--report-format=json`)
+
+Emits a structured JSON document to stdout or `--report-out`. Schema:
+
+```json
+{
+  "suite_name": "E-Commerce Load Tests",
+  "scenario": "http_checkout_flow",
+  "version": "0.1.0",
+  "commit": "a1b2c3d",
+  "started_at": "2026-08-13T17:30:00Z",
+  "ended_at": "2026-08-13T17:32:25Z",
+  "config": { ... },
+  "metrics": [
+    {
+      "name": "http_request_duration",
+      "type": "duration",
+      "tags": {},
+      "count": 14520,
+      "min_ms": 12,
+      "mean_ms": 45,
+      "p50_ms": 40,
+      "p90_ms": 95,
+      "p95_ms": 110,
+      "p99_ms": 230,
+      "max_ms": 850
+    }
+  ],
+  "thresholds": [
+    {
+      "metric": "http_request_duration",
+      "stat": "p95",
+      "operator": "<",
+      "target": "200ms",
+      "actual": "110ms",
+      "passed": true
+    }
+  ],
+  "passed": true
+}
+```
+
+---
+
+## 11. Increment Deliverables with TDD Structure
+
+Each increment specifies: what to build, the acceptance criteria, and the TDD red/green cycle guide.
+
+---
+
+### Increment 1.1 — Core Domain Model & Lifecycle Contracts
+
+**Goal:** Define the `Scenario`, `Suite`, `ScenarioContext`, hook types, and `Logger`/`LogEvent` interfaces.
+No execution engine yet — just types and compilation guarantees.
+
+**Deliverables:**
+- `logger.go` — `Logger`, `LogEvent` interfaces
+- `metrics.go` — `MetricsCollector`, `Counter`, `Gauge`, `Duration`, `Rate` interfaces + `Tags` type
+- `context.go` — `ScenarioContext` interface
+- `scenario.go` — `Scenario` struct, all hook types
+- `suite.go` — `Suite` struct, `NewSuite()`, `RegisterScenario()`
+- `internal/version/version.go` — version vars
+
+**Acceptance Criteria (testable):**
+
+```go
+// AC-1.1.1: NewSuite returns a non-nil *Suite
+suite := gtest.NewSuite("test")
+assert.NotNil(t, suite)
+
+// AC-1.1.2: RegisterScenario with a nil RunVU panics
+assert.Panics(t, func() {
+    suite.RegisterScenario("bad", gtest.Scenario{RunVU: nil})
+})
+
+// AC-1.1.3: RegisterScenario with an empty name panics
+assert.Panics(t, func() {
+    suite.RegisterScenario("", gtest.Scenario{RunVU: func(ctx gtest.ScenarioContext) error { return nil }})
+})
+
+// AC-1.1.4: ScenarioContext is embeddable as context.Context (compile-time check)
+var _ context.Context = (gtest.ScenarioContext)(nil)
+```
+
+**TDD Cycle:** Write all AC tests first. Compile will fail. Add interface definitions and stub types to make
+compile succeed with tests still failing. Implement `NewSuite` and `RegisterScenario` to make tests pass.
+
+---
+
+### Increment 1.2 — Configuration Loading & Validation
+
+**Goal:** Load and validate `gtest.yaml` via Viper. Produce typed `Config` and `ScenarioConfig` structs.
+Return structured errors for all failure modes.
+
+**Deliverables:**
+- `internal/adapters/outbound/config_loader.go` — Viper-based `ConfigLoader` implementing the outbound port
+- `internal/application/ports/outbound/config_loader_port.go` — `ConfigLoaderPort` interface
+- `internal/domain/model/config.go` — `Config`, `ScenarioConfig`, `ThresholdConfig`, error types
+
+**Acceptance Criteria (testable):**
+
+```go
+// AC-1.2.1: Valid YAML round-trips correctly
+// AC-1.2.2: Missing required field returns ValidationError
+// AC-1.2.3: Unknown scenario in default_scenario returns ValidationError
+// AC-1.2.4: arrival_rate without target_tps returns ValidationError
+// AC-1.2.5: constant_vus without vus returns ValidationError
+// AC-1.2.6: threshold with invalid operator returns ValidationError
+// AC-1.2.7: threshold target "200ms" parses correctly for Duration stats
+// AC-1.2.8: threshold target "0.005" parses correctly for rate stat
+// AC-1.2.9: threshold target "200ms" for "rate" stat returns ValidationError
+```
+
+**Test Data:** Use embedded YAML strings via `strings.NewReader`; no file I/O needed in unit tests.
+
+---
+
+### Increment 1.3 — In-Memory Metrics Engine
+
+**Goal:** Implement `MetricsCollector` with all four metric types. Verify thread safety.
+
+**Deliverables:**
+- `internal/adapters/outbound/metrics_store.go` — concrete `InMemoryMetricsStore`
+- HDR histogram per-VU lifetime management
+- Merge API for report time
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.3.1: Counter.Inc is atomic — concurrent increments from 100 goroutines produce exact total
+// AC-1.3.2: Counter with identical name+tags returns the same instance
+// AC-1.3.3: Counter and Duration with same name panic (type collision)
+// AC-1.3.4: Duration.Observe stores values retrievable as p50/p95/p99 within HDR precision
+// AC-1.3.5: Rate.Add(1,1) + Rate.Add(0,1) produces rate = 0.5
+// AC-1.3.6: Rate.Add(x, 0) is a no-op (denominator 0 is ignored)
+// AC-1.3.7: Gauge.Set(5.0) + Gauge.Add(-2.0) produces 3.0
+// AC-1.3.8: Tags {"a":"1"} and {"a":"2"} produce separate Counter instances for same name
+```
+
+**TDD Note:** Use `go test -race` as a mandatory step for this increment.
+
+---
+
+### Increment 1.4 — SLA Threshold Evaluator
+
+**Goal:** Evaluate a set of `ThresholdConfig` entries against an `InMemoryMetricsStore` snapshot.
+Return a structured result per threshold.
+
+**Deliverables:**
+- `internal/domain/service/sla_evaluator.go`
+- `internal/domain/model/threshold_result.go`
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.4.1: p95 < 200ms passes when actual p95 = 110ms
+// AC-1.4.2: p95 < 200ms fails when actual p95 = 250ms
+// AC-1.4.3: rate > 0.995 passes when rate = 0.9992
+// AC-1.4.4: count >= 100 passes when count = 100
+// AC-1.4.5: Metric not found in store returns a failed threshold with "no data" reason
+// AC-1.4.6: All thresholds evaluated even if the first one fails (no short-circuit)
+```
+
+---
+
+### Increment 1.5 — Zerolog Logger Adapter
+
+**Goal:** Implement the public `Logger` / `LogEvent` interfaces backed by `zerolog`. Ensure automatic
+field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing.
+
+**Deliverables:**
+- `internal/adapters/outbound/zerolog_logger.go`
+- `internal/application/ports/outbound/logger_port.go`
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.5.1: Log().Info().Str("k","v").Msg("m") emits one JSON line with level=info, k=v, message=m
+// AC-1.5.2: Logger built with vuID=3 auto-injects vu_id=3 on every event
+// AC-1.5.3: Debug events are suppressed when log level is set to "info"
+// AC-1.5.4: Logger satisfies the gtest.Logger interface (compile-time check)
+```
+
+**Test Strategy:** Use `zerolog.New(buf)` with a `bytes.Buffer` and parse emitted JSON lines.
+
+---
+
+### Increment 1.6 — Constant VU Pacing Engine
+
+**Goal:** Implement the `constant_vus` execution engine: VU spawning, ramp-up, steady state,
+ramp-down, and lifecycle orchestration. Exercise all lifecycle hooks.
+
+**Deliverables:**
+- `internal/domain/service/pacing_constant_vus.go`
+- `internal/application/service/scenario_executor.go`
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.6.1: With vus=3, ramp_up=0, run_period=100ms, exactly 3 VU goroutines are active during run
+// AC-1.6.2: Setup is called exactly once before any PreTest
+// AC-1.6.3: PreTest is called exactly once per VU
+// AC-1.6.4: RunVU is called at least once per VU during a 100ms run_period
+// AC-1.6.5: AfterTest is called exactly once per VU, even when RunVU returns an error
+// AC-1.6.6: Teardown is called exactly once after all VUs exit
+// AC-1.6.7: A RunVU panic does not terminate other VUs
+// AC-1.6.8: A PreTest failure skips RunVU but still calls AfterTest for that VU
+// AC-1.6.9: vu_timeout causes a context.DeadlineExceeded which counts as a failed iteration;
+//            the loop does not exit — RunVU is called again on the next iteration
+// AC-1.6.10: ramp_up=200ms, vus=4 → VU goroutines spawned at ~50ms intervals
+```
+
+**Test Strategy:** Use hook functions with `sync.Mutex`-protected call counters and channels. Keep
+`run_period` short (50ms–200ms) in tests. Use `require.Eventually` with 1s timeout for goroutine
+completion assertions.
+
+---
+
+### Increment 1.7 — Arrival Rate Pacing Engine
+
+**Goal:** Implement the `arrival_rate` execution engine with token bucket dispatch and `max_vus` pool cap.
+
+**Deliverables:**
+- `internal/domain/service/pacing_arrival_rate.go`
+- `gtest.pacing.dropped_iterations` counter integration
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.7.1: target_tps=10, run_period=1s → approximately 10 RunVU calls (±20% tolerance)
+// AC-1.7.2: max_vus=2 with slow RunVU (sleeps 500ms) and target_tps=100 → pool saturates;
+//            gtest.pacing.dropped_iterations > 0
+// AC-1.7.3: ramp_up=200ms, target_tps=10 → first iteration starts after ~100ms (midpoint of ramp)
+// AC-1.7.4: All other lifecycle guarantees from Increment 1.6 apply equally to arrival_rate mode
+```
+
+---
+
+### Increment 1.8 — CLI Adapter & Suite.Execute()
+
+**Goal:** Wire config loading, pacing engine selection, SLA evaluation, and reporting behind
+the `Execute()` entry point. Implement all CLI flags from §6.
+
+**Deliverables:**
+- `internal/adapters/inbound/cli.go`
+- `suite.go` — `Execute()` implementation
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.8.1: --version flag prints version string and returns nil (no os.Exit)
+// AC-1.8.2: --config pointing to nonexistent file returns *gtest.ConfigError
+// AC-1.8.3: --scenario not in config returns *gtest.ScenarioNotFoundError
+// AC-1.8.4: Scenario registered but not in config returns *gtest.ScenarioNotFoundError
+// AC-1.8.5: All thresholds pass → report printed, os.Exit(0) called
+// AC-1.8.6: Any threshold fails → report printed with [FAIL] row, os.Exit(1) called
+```
+
+**Test Strategy:** For exit code tests, run `Execute()` in a subprocess (use `os/exec` or `testutil`
+subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitFunc` in the CLI adapter.
+
+---
+
+### Increment 1.9 — Reporting Adapters
+
+**Goal:** Implement console and JSON report formatters. Ensure the report output is deterministic
+(metrics sorted alphabetically by name).
+
+**Deliverables:**
+- `internal/adapters/outbound/console_reporter.go`
+- `internal/adapters/outbound/json_reporter.go`
+- `internal/application/ports/outbound/reporter_port.go`
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.9.1: Console report contains scenario name, mode, duration, iteration counts
+// AC-1.9.2: Console report shows [PASS]/[FAIL] for each threshold with actual vs target value
+// AC-1.9.3: JSON report is valid JSON and unmarshals to the schema defined in §10.2
+// AC-1.9.4: Metrics in both report formats are sorted alphabetically by name
+// AC-1.9.5: --report-out writes to the specified file, not stdout
+```
+
+---
+
+### Increment 1.10 — Developer Examples
+
+**Goal:** Provide two working example load tests that serve as end-to-end integration tests of the library.
+
+**Deliverables:**
+- `examples/http_checkout/main.go` — `//go:build gtest_example`
+- `examples/grpc_user_service/main.go` — `//go:build gtest_example`
+- `examples/http_checkout/gtest.yaml`
+- `examples/grpc_user_service/gtest.yaml`
+
+**Build Validation:** `go build -tags=gtest_example ./examples/...` must succeed.
+
+---
+
+## 12. Phase 2: Kubernetes Integration (Draft)
+
+### Increment 2.1 — Docker & Helm Packaging
+- Multi-stage Dockerfile producing a static binary on `distroless/static-debian12`.
+- Helm chart at `deploy/helm/gtest-operator/` with `Chart.yaml`, `values.yaml`,
+  `templates/deployment.yaml`, `templates/configmap.yaml`, `templates/job-template.yaml`.
+
+### Increment 2.2 — REST Triggering API (Gin)
+```
+POST   /api/v1/tests/run         → trigger; returns run ID
+GET    /api/v1/tests/:id/status  → {state, started_at, ended_at}
+DELETE /api/v1/tests/:id         → cancel in-flight run
+GET    /api/v1/tests/:id/report  → returns JSON report (same schema as §10.2)
+```
+
+### Increment 2.3 — Background & Cron Scheduling
+- Native cron expressions via K8s `CronJob`.
+- Isolated `Job` pod per run; report stored in ephemeral volume or object storage.
+
+### Increment 2.4 — K8s Observability
+- Structured JSON logs (`--log-format=json`) compatible with Loki/FluentBit log aggregation.
+
+---
+
+## 13. Architectural Decisions Log
+
+| # | Decision | Selected Approach | Rationale |
+|---|----------|-------------------|-----------|
+| 1 | Pacing Model | Both `constant_vus` and `arrival_rate` in Phase 1 | Config-driven; covers both closed and open load profiles |
+| 2 | SLA Assertions | `thresholds` block in YAML; breach → `os.Exit(1)` | CI/CD automation via exit code is the idiomatic shell contract |
+| 3 | Concurrent Scenarios | Single scenario per CLI invocation | Prevents resource interference; multi-scenario reserved for Phase 2 orchestration layer |
+| 4 | Metrics Export | In-memory only; reports as final summary | Metrics capture business outcomes, not infrastructure telemetry |
+| 5 | Logger Exposure | Minimal `Logger`/`LogEvent` interface | Keeps zerolog as an internal detail; test developers depend on a stable abstraction |
+| 6 | Rate Threshold | Dedicated `Rate` metric type; developer supplies numerator+denominator | Framework cannot infer denominator; explicit recording is unambiguous |
+| 7 | VU Timeout Scope | Per-iteration deadline via `context.WithTimeout` | Timeout per call; run loop continues; aligns with HTTP client timeout semantics |
+| 8 | PreTest Failure | Skip RunVU; AfterTest still runs via `defer` | AfterTest is a cleanup guarantee; PreTest failure is not a fatal scenario abort |
+| 9 | Histogram Impl | Per-VU HDR histogram; merged at report time | Eliminates hot-path contention; HDR provides accurate percentiles |
+| 10 | Global State Access | `ScenarioContext.GlobalState(key string) any` | Avoids Go's typed-key `context.Value` antipattern with raw strings |
