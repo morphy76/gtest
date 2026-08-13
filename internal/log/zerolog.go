@@ -5,83 +5,82 @@ import (
 	"io"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/rs/zerolog"
 )
 
-// Logger is a zerolog-backed implementation of gtest.Logger.
-type Logger struct {
+// ZerologLogger is a zerolog-backed implementation of Logger.
+type ZerologLogger struct {
 	zlog zerolog.Logger
 }
 
-// New creates a new Logger writing JSON logs to w at the specified zerolog Level.
-func New(w io.Writer, level zerolog.Level) *Logger {
+// New creates a new ZerologLogger writing JSON logs to w at the specified zerolog Level.
+func New(w io.Writer, level zerolog.Level) *ZerologLogger {
 	zlog := zerolog.New(w).Level(level).With().Timestamp().Logger()
-	return &Logger{zlog: zlog}
+	return &ZerologLogger{zlog: zlog}
 }
 
-// NewWithFormat creates a Logger that uses either human-readable console output ("pretty")
+// NewWithFormat creates a ZerologLogger that uses either human-readable console output ("pretty")
 // or structured JSON output ("json"). Defaults to JSON for unrecognized formats.
-func NewWithFormat(w io.Writer, level zerolog.Level, format string) *Logger {
+func NewWithFormat(w io.Writer, level zerolog.Level, format string) *ZerologLogger {
 	var writer io.Writer = w
 	if format == "pretty" {
 		writer = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
 	zlog := zerolog.New(writer).Level(level).With().Timestamp().Logger()
-	return &Logger{zlog: zlog}
+	return &ZerologLogger{zlog: zlog}
 }
 
-// NewWithZerolog wraps an existing zerolog.Logger into a gtest.Logger.
-func NewWithZerolog(zlog zerolog.Logger) *Logger {
-	return &Logger{zlog: zlog}
+// NewWithZerolog wraps an existing zerolog.Logger into a ZerologLogger.
+func NewWithZerolog(zlog zerolog.Logger) *ZerologLogger {
+	return &ZerologLogger{zlog: zlog}
 }
 
-// WithScenario returns a child Logger with the "scenario" field bound.
-func (l *Logger) WithScenario(scenario string) *Logger {
-	return &Logger{zlog: l.zlog.With().Str("scenario", scenario).Logger()}
+// WithScenario returns a child ZerologLogger with the "scenario" field bound.
+func (l *ZerologLogger) WithScenario(scenario string) *ZerologLogger {
+	return &ZerologLogger{zlog: l.zlog.With().Str("scenario", scenario).Logger()}
 }
 
-// WithVU returns a child Logger with the "vu_id" field bound.
-func (l *Logger) WithVU(vuID int) *Logger {
-	return &Logger{zlog: l.zlog.With().Int("vu_id", vuID).Logger()}
+// WithVU returns a child ZerologLogger with the "vu_id" field bound.
+func (l *ZerologLogger) WithVU(vuID int) *ZerologLogger {
+	return &ZerologLogger{zlog: l.zlog.With().Int("vu_id", vuID).Logger()}
 }
 
-// WithIteration returns a child Logger with the "iteration" field bound.
-func (l *Logger) WithIteration(iter int64) *Logger {
-	return &Logger{zlog: l.zlog.With().Int64("iteration", iter).Logger()}
+// WithIteration returns a child ZerologLogger with the "iteration" field bound.
+func (l *ZerologLogger) WithIteration(iter int64) *ZerologLogger {
+	return &ZerologLogger{zlog: l.zlog.With().Int64("iteration", iter).Logger()}
 }
 
-// WithFields returns a child Logger with arbitrary key-value context fields.
-func (l *Logger) WithFields(fields map[string]any) *Logger {
+// WithFields returns a child ZerologLogger with arbitrary key-value context fields.
+func (l *ZerologLogger) WithFields(fields map[string]any) *ZerologLogger {
 	ctx := l.zlog.With()
 	for k, v := range fields {
 		ctx = ctx.Interface(k, v)
 	}
-	return &Logger{zlog: ctx.Logger()}
+	return &ZerologLogger{zlog: ctx.Logger()}
 }
 
 // Zerolog returns the underlying zerolog.Logger instance.
-func (l *Logger) Zerolog() zerolog.Logger {
+func (l *ZerologLogger) Zerolog() zerolog.Logger {
 	return l.zlog
 }
 
 // Debug starts a new debug log event.
-func (l *Logger) Debug() gtest.LogEvent {
+func (l *ZerologLogger) Debug() LogEvent {
 	return &logEvent{event: l.zlog.Debug()}
 }
 
 // Info starts a new info log event.
-func (l *Logger) Info() gtest.LogEvent {
+func (l *ZerologLogger) Info() LogEvent {
 	return &logEvent{event: l.zlog.Info()}
 }
 
 // Warn starts a new warning log event.
-func (l *Logger) Warn() gtest.LogEvent {
+func (l *ZerologLogger) Warn() LogEvent {
 	return &logEvent{event: l.zlog.Warn()}
 }
 
 // Error starts a new error log event.
-func (l *Logger) Error() gtest.LogEvent {
+func (l *ZerologLogger) Error() LogEvent {
 	return &logEvent{event: l.zlog.Error()}
 }
 
@@ -90,49 +89,49 @@ type logEvent struct {
 	event *zerolog.Event
 }
 
-func (e *logEvent) Str(key, val string) gtest.LogEvent {
+func (e *logEvent) Str(key, val string) LogEvent {
 	if e.event != nil {
 		e.event.Str(key, val)
 	}
 	return e
 }
 
-func (e *logEvent) Int(key string, val int) gtest.LogEvent {
+func (e *logEvent) Int(key string, val int) LogEvent {
 	if e.event != nil {
 		e.event.Int(key, val)
 	}
 	return e
 }
 
-func (e *logEvent) Int64(key string, val int64) gtest.LogEvent {
+func (e *logEvent) Int64(key string, val int64) LogEvent {
 	if e.event != nil {
 		e.event.Int64(key, val)
 	}
 	return e
 }
 
-func (e *logEvent) Float64(key string, val float64) gtest.LogEvent {
+func (e *logEvent) Float64(key string, val float64) LogEvent {
 	if e.event != nil {
 		e.event.Float64(key, val)
 	}
 	return e
 }
 
-func (e *logEvent) Bool(key string, val bool) gtest.LogEvent {
+func (e *logEvent) Bool(key string, val bool) LogEvent {
 	if e.event != nil {
 		e.event.Bool(key, val)
 	}
 	return e
 }
 
-func (e *logEvent) Dur(key string, val time.Duration) gtest.LogEvent {
+func (e *logEvent) Dur(key string, val time.Duration) LogEvent {
 	if e.event != nil {
 		e.event.Dur(key, val)
 	}
 	return e
 }
 
-func (e *logEvent) Err(err error) gtest.LogEvent {
+func (e *logEvent) Err(err error) LogEvent {
 	if e.event != nil {
 		e.event.Err(err)
 	}
@@ -147,6 +146,6 @@ func (e *logEvent) Msg(msg string) {
 
 // Compile-time interface satisfaction checks.
 var (
-	_ gtest.Logger   = (*Logger)(nil)
-	_ gtest.LogEvent = (*logEvent)(nil)
+	_ Logger   = (*ZerologLogger)(nil)
+	_ LogEvent = (*logEvent)(nil)
 )

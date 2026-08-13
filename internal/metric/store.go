@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-
-	"github.com/morphy76/gtest/pkg/gtest"
 )
 
 // metricType identifies the kind of metric registered under a name.
@@ -29,12 +27,12 @@ type metricKey struct {
 
 // makeKey produces a metricKey from a name and tags map.
 // Tags are sorted by key to ensure deterministic identity.
-func makeKey(name string, tags gtest.Tags) metricKey {
+func makeKey(name string, tags Tags) metricKey {
 	return metricKey{name: name, tagsKey: sortedTagsKey(tags)}
 }
 
 // sortedTagsKey produces a canonical string representation of tags for identity comparison.
-func sortedTagsKey(tags gtest.Tags) string {
+func sortedTagsKey(tags Tags) string {
 	if len(tags) == 0 {
 		return ""
 	}
@@ -56,7 +54,7 @@ func sortedTagsKey(tags gtest.Tags) string {
 	return b.String()
 }
 
-// Store is an in-memory metrics store implementing gtest.MetricsCollector.
+// Store is an in-memory metrics store implementing Collector.
 // It is safe for concurrent use from multiple goroutines.
 type Store struct {
 	mu sync.RWMutex
@@ -84,7 +82,7 @@ func NewStore() *Store {
 
 // Counter returns a monotonically increasing counter identified by name+tags.
 // Panics if the same name was previously registered with a different metric type.
-func (s *Store) Counter(name string, tags gtest.Tags) gtest.Counter {
+func (s *Store) Counter(name string, tags Tags) Counter {
 	key := makeKey(name, tags)
 
 	s.mu.RLock()
@@ -111,7 +109,7 @@ func (s *Store) Counter(name string, tags gtest.Tags) gtest.Counter {
 
 // Gauge returns an instantaneous value handle identified by name+tags.
 // Panics if the same name was previously registered with a different metric type.
-func (s *Store) Gauge(name string, tags gtest.Tags) gtest.Gauge {
+func (s *Store) Gauge(name string, tags Tags) Gauge {
 	key := makeKey(name, tags)
 
 	s.mu.RLock()
@@ -137,7 +135,7 @@ func (s *Store) Gauge(name string, tags gtest.Tags) gtest.Gauge {
 
 // Duration returns a latency histogram identified by name+tags.
 // Panics if the same name was previously registered with a different metric type.
-func (s *Store) Duration(name string, tags gtest.Tags) gtest.Duration {
+func (s *Store) Duration(name string, tags Tags) Duration {
 	key := makeKey(name, tags)
 
 	s.mu.RLock()
@@ -163,7 +161,7 @@ func (s *Store) Duration(name string, tags gtest.Tags) gtest.Duration {
 
 // Rate returns a ratio tracker identified by name+tags.
 // Panics if the same name was previously registered with a different metric type.
-func (s *Store) Rate(name string, tags gtest.Tags) gtest.Rate {
+func (s *Store) Rate(name string, tags Tags) Rate {
 	key := makeKey(name, tags)
 
 	s.mu.RLock()
@@ -215,28 +213,28 @@ func metricTypeName(mt metricType) string {
 
 // GetCounter returns the internal counter for the given key, or nil if not found.
 // Used by SLA evaluation and reporting.
-func (s *Store) GetCounter(name string, tags gtest.Tags) *counter {
+func (s *Store) GetCounter(name string, tags Tags) *counter {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.counters[makeKey(name, tags)]
 }
 
 // GetGauge returns the internal gauge for the given key, or nil if not found.
-func (s *Store) GetGauge(name string, tags gtest.Tags) *gauge {
+func (s *Store) GetGauge(name string, tags Tags) *gauge {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.gauges[makeKey(name, tags)]
 }
 
 // GetHistogram returns the internal histogram for the given key, or nil if not found.
-func (s *Store) GetHistogram(name string, tags gtest.Tags) *histogram {
+func (s *Store) GetHistogram(name string, tags Tags) *histogram {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.histograms[makeKey(name, tags)]
 }
 
 // GetRate returns the internal rate for the given key, or nil if not found.
-func (s *Store) GetRate(name string, tags gtest.Tags) *rate {
+func (s *Store) GetRate(name string, tags Tags) *rate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.rates[makeKey(name, tags)]
@@ -398,4 +396,4 @@ func (s *Store) LastGaugeValue(name string) float64 {
 }
 
 // Compile-time interface satisfaction check.
-var _ gtest.MetricsCollector = (*Store)(nil)
+var _ Collector = (*Store)(nil)

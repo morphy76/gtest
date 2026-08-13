@@ -1,26 +1,18 @@
 package gtest
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"sync"
+
+	"github.com/morphy76/gtest/internal/engine"
+	"github.com/morphy76/gtest/internal/runner"
 )
-
-// SuiteExecutorFunc is the signature for the suite CLI execution engine.
-type SuiteExecutorFunc func(s *Suite, args []string, stdout io.Writer, exitFunc func(int)) error
-
-var defaultExecutor SuiteExecutorFunc
-
-// SetExecutor registers the execution engine for Suite.Execute.
-func SetExecutor(exec SuiteExecutorFunc) {
-	defaultExecutor = exec
-}
 
 // Suite is the root object that test developers interact with.
 type Suite struct {
 	name      string
-	scenarios map[string]Scenario
+	scenarios map[string]engine.Scenario
 	mu        sync.Mutex
 }
 
@@ -29,7 +21,7 @@ type Suite struct {
 func NewSuite(name string) *Suite {
 	return &Suite{
 		name:      name,
-		scenarios: make(map[string]Scenario),
+		scenarios: make(map[string]engine.Scenario),
 	}
 }
 
@@ -39,7 +31,7 @@ func (s *Suite) Name() string {
 }
 
 // GetScenario retrieves a registered scenario by name.
-func (s *Suite) GetScenario(name string) (Scenario, bool) {
+func (s *Suite) GetScenario(name string) (engine.Scenario, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sc, ok := s.scenarios[name]
@@ -64,7 +56,7 @@ func (s *Suite) RegisterScenario(name string, scenario Scenario) {
 }
 
 // Execute is the CLI entry point. It:
-//  1. Parses CLI flags (see §6 for the full flag inventory).
+//  1. Parses CLI flags.
 //  2. Loads and validates gtest.yaml via Viper.
 //  3. Resolves the target scenario (--scenario flag or default_scenario).
 //  4. Executes the scenario lifecycle (Setup → ramp-up → run → ramp-down → Teardown).
@@ -83,8 +75,5 @@ func (s *Suite) Execute() error {
 
 // ExecuteWithArgs allows executing the suite with custom args, stdout, and exitFunc for testing.
 func (s *Suite) ExecuteWithArgs(args []string, stdout io.Writer, exitFunc func(int)) error {
-	if defaultExecutor == nil {
-		return fmt.Errorf("gtest: suite executor is not registered")
-	}
-	return defaultExecutor(s, args, stdout, exitFunc)
+	return runner.RunSuite(s, args, stdout, exitFunc)
 }

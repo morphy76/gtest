@@ -50,7 +50,6 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/pkg/gtest"
-	_ "github.com/morphy76/gtest/internal/runner"
 )
 
 func main() {
@@ -176,16 +175,6 @@ suite.RegisterScenario("checkout_flow", gtest.Scenario{
     },
 })
 ```
-
-### Runner import
-
-You **must** import the runner package to wire the execution engine:
-
-```go
-import _ "github.com/morphy76/gtest/internal/runner"
-```
-
-Without this import, `suite.Execute()` returns `"gtest: suite executor is not registered"`.
 
 ---
 
@@ -576,11 +565,6 @@ if resp.StatusCode == http.StatusOK {
 ---
 
 ## 12. Troubleshooting
-
-### "gtest: suite executor is not registered"
-
-**Cause**: Missing the runner import.  
-**Fix**: Add `_ "github.com/morphy76/gtest/internal/runner"` to your imports.
 
 ### "gtest: RegisterScenario called with nil RunVU"
 

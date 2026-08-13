@@ -13,7 +13,6 @@ import (
 	"github.com/morphy76/gtest/internal/metric"
 	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/sla"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,15 +21,15 @@ func createTestReportData() report.ReportData {
 	store := metric.NewStore()
 
 	// Built-in metrics
-	store.Counter("gtest.vu.iterations_total", gtest.Tags{}).Add(100)
-	store.Counter("gtest.vu.iterations_failed", gtest.Tags{}).Add(2)
-	store.Counter("gtest.vu.iterations_timeout", gtest.Tags{}).Add(1)
+	store.Counter("gtest.vu.iterations_total", metric.Tags{}).Add(100)
+	store.Counter("gtest.vu.iterations_failed", metric.Tags{}).Add(2)
+	store.Counter("gtest.vu.iterations_timeout", metric.Tags{}).Add(1)
 
 	// Custom metrics (out of order to test alphabetical sorting)
-	store.Counter("z_requests_total", gtest.Tags{}).Add(100)
-	store.Duration("http_request_duration", gtest.Tags{}).Observe(50 * time.Millisecond)
-	store.Rate("alpha_success_rate", gtest.Tags{}).Add(98, 100)
-	store.Gauge("beta_gauge", gtest.Tags{}).Set(42.5)
+	store.Counter("z_requests_total", metric.Tags{}).Add(100)
+	store.Duration("http_request_duration", metric.Tags{}).Observe(50 * time.Millisecond)
+	store.Rate("alpha_success_rate", metric.Tags{}).Add(98, 100)
+	store.Gauge("beta_gauge", metric.Tags{}).Set(42.5)
 
 	thresholds := []sla.ThresholdResult{
 		{

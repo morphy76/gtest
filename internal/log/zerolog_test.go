@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,10 +60,10 @@ func TestDebugEventsSuppressedAtInfoLevel(t *testing.T) {
 	assert.NotEmpty(t, buf.String(), "buffer must contain output for Info event")
 }
 
-// AC-1.5.4: Logger satisfies the gtest.Logger interface (compile-time check)
+// AC-1.5.4: ZerologLogger satisfies the log.Logger interface (compile-time check)
 func TestLoggerInterfaceSatisfaction(t *testing.T) {
-	var _ gtest.Logger = (*log.Logger)(nil)
-	var _ gtest.LogEvent = (gtest.LogEvent)(nil)
+	var _ log.Logger = (*log.ZerologLogger)(nil)
+	var _ log.LogEvent = (log.LogEvent)(nil)
 }
 
 // Additional test: WithScenario and WithIteration binding

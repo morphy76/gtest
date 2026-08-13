@@ -7,7 +7,6 @@ import (
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/metric"
 	"github.com/morphy76/gtest/internal/sla"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +14,7 @@ import (
 // AC-1.4.1: p95 < 200ms passes when actual p95 = 110ms
 func TestP95PassesWhenUnderTarget(t *testing.T) {
 	store := metric.NewStore()
-	d := store.Duration("http_request_duration", gtest.Tags{})
+	d := store.Duration("http_request_duration", metric.Tags{})
 
 	// Record observations to produce ~110ms p95.
 	for i := 1; i <= 90; i++ {
@@ -45,7 +44,7 @@ func TestP95PassesWhenUnderTarget(t *testing.T) {
 // AC-1.4.2: p95 < 200ms fails when actual p95 = 250ms
 func TestP95FailsWhenOverTarget(t *testing.T) {
 	store := metric.NewStore()
-	d := store.Duration("http_request_duration", gtest.Tags{})
+	d := store.Duration("http_request_duration", metric.Tags{})
 
 	// Record observations to produce ~250ms p95.
 	for i := 1; i <= 90; i++ {
@@ -72,7 +71,7 @@ func TestP95FailsWhenOverTarget(t *testing.T) {
 // AC-1.4.3: rate > 0.995 passes when rate = 0.9992
 func TestRatePassesWhenOverTarget(t *testing.T) {
 	store := metric.NewStore()
-	r := store.Rate("checkout_success_rate", gtest.Tags{})
+	r := store.Rate("checkout_success_rate", metric.Tags{})
 
 	// Record 9992 successes out of 10000 = 0.9992 rate.
 	r.Add(9992, 10000)
@@ -94,7 +93,7 @@ func TestRatePassesWhenOverTarget(t *testing.T) {
 // AC-1.4.4: count >= 100 passes when count = 100
 func TestCountPassesWhenEqualTarget(t *testing.T) {
 	store := metric.NewStore()
-	c := store.Counter("total_orders", gtest.Tags{})
+	c := store.Counter("total_orders", metric.Tags{})
 	c.Add(100)
 
 	th := config.ThresholdConfig{
@@ -133,10 +132,10 @@ func TestMetricNotFoundReturnsFailedWithNoDataReason(t *testing.T) {
 func TestAllThresholdsEvaluatedWithoutShortCircuit(t *testing.T) {
 	store := metric.NewStore()
 
-	d := store.Duration("http_latency", gtest.Tags{})
+	d := store.Duration("http_latency", metric.Tags{})
 	d.Observe(300 * time.Millisecond) // p95 will be ~300ms
 
-	c := store.Counter("requests", gtest.Tags{})
+	c := store.Counter("requests", metric.Tags{})
 	c.Add(500)
 
 	thresholds := []config.ThresholdConfig{
@@ -185,7 +184,7 @@ func TestAllThresholdsEvaluatedWithoutShortCircuit(t *testing.T) {
 // Additional test: Gauge threshold evaluation
 func TestGaugeThresholdEvaluation(t *testing.T) {
 	store := metric.NewStore()
-	g := store.Gauge("active_users", gtest.Tags{})
+	g := store.Gauge("active_users", metric.Tags{})
 	g.Set(50)
 
 	thPass := config.ThresholdConfig{
@@ -216,7 +215,7 @@ func TestGaugeThresholdEvaluation(t *testing.T) {
 // Additional test: Rate with no data (denominator = 0) returns "no data"
 func TestRateNoDataReturnsNoData(t *testing.T) {
 	store := metric.NewStore()
-	_ = store.Rate("empty_rate", gtest.Tags{}) // registered but no Add calls
+	_ = store.Rate("empty_rate", metric.Tags{}) // registered but no Add calls
 
 	th := config.ThresholdConfig{
 		Metric:      "empty_rate",

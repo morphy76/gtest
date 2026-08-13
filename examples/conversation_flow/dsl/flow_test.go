@@ -16,11 +16,14 @@ import (
 // --- Test helpers for SSE mock servers ---
 
 type sseTestChannel struct {
+	mu      sync.Mutex
 	w       http.ResponseWriter
 	flusher http.Flusher
 }
 
 func sendSSEEvent(ch *sseTestChannel, payload any) {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	data, _ := json.Marshal(payload)
 	fmt.Fprintf(ch.w, "data: %s\n\n", data)
 	ch.flusher.Flush()
@@ -98,17 +101,12 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			w.WriteHeader(http.StatusOK)
 
-			// Async: echo customer message + bot reply over SSE
-			go func() {
-				time.Sleep(5 * time.Millisecond)
-				mu.Lock()
-				ch, exists := channels[dialogID]
-				mu.Unlock()
-				if !exists {
-					return
-				}
+			mu.Lock()
+			ch, exists := channels[dialogID]
+			mu.Unlock()
+
+			if exists {
 				// Echo customer message
 				sendSSEEvent(ch, map[string]any{
 					"message": map[string]string{
@@ -117,7 +115,6 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 						"text":  body["text"],
 					},
 				})
-				time.Sleep(5 * time.Millisecond)
 				// Bot reply
 				sendSSEEvent(ch, map[string]any{
 					"message": map[string]string{
@@ -126,7 +123,9 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 						"text":  "Response to: " + body["text"],
 					},
 				})
-			}()
+			}
+
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 

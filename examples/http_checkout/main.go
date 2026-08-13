@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"time"
 
-	_ "github.com/morphy76/gtest/internal/runner"
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 

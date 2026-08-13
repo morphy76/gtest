@@ -8,19 +8,20 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/gtest/internal/log"
+	"github.com/morphy76/gtest/internal/metric"
 	"golang.org/x/time/rate"
 )
 
 // RunArrivalRate executes the arrival_rate pacing schedule using token bucket dispatch.
 func RunArrivalRate(
 	ctx context.Context,
-	scenario gtest.Scenario,
+	scenario Scenario,
 	cfg config.ScenarioConfig,
 	scenarioName string,
 	globalState map[string]any,
-	logger gtest.Logger,
-	metrics gtest.MetricsCollector,
+	logger log.Logger,
+	metrics metric.Collector,
 ) {
 	// Total context includes ramp_down as a grace period for in-flight workers.
 	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
@@ -43,7 +44,7 @@ func RunArrivalRate(
 			vuid := atomic.AddInt64(&vuidSeq, 1)
 			go runArrivalRateWorker(runCtx, scenario, cfg, scenarioName, vuid, globalState, logger, metrics, sem, &wg)
 		default:
-			metrics.Counter("gtest.pacing.dropped_iterations", gtest.Tags{}).Inc()
+			metrics.Counter("gtest.pacing.dropped_iterations", metric.Tags{}).Inc()
 		}
 	}
 
@@ -91,13 +92,13 @@ func RunArrivalRate(
 
 func runArrivalRateWorker(
 	ctx context.Context,
-	scenario gtest.Scenario,
+	scenario Scenario,
 	cfg config.ScenarioConfig,
 	scenarioName string,
 	vuid int64,
 	globalState map[string]any,
-	logger gtest.Logger,
-	metrics gtest.MetricsCollector,
+	logger log.Logger,
+	metrics metric.Collector,
 	sem chan struct{},
 	wg *sync.WaitGroup,
 ) {
@@ -106,7 +107,7 @@ func runArrivalRateWorker(
 		wg.Done()
 	}()
 
-	activeGauge := metrics.Gauge("gtest.vu.active", gtest.Tags{})
+	activeGauge := metrics.Gauge("gtest.vu.active", metric.Tags{})
 	activeGauge.Add(1)
 	defer activeGauge.Add(-1)
 
@@ -124,7 +125,7 @@ func runArrivalRateWorker(
 	if scenario.PreTest != nil {
 		preCtx := newScenarioContext(ctx, vuid, 0, cfg, scenarioName, globalState, logger, metrics)
 		if err := scenario.PreTest(preCtx); err != nil {
-			metrics.Counter("gtest.vu.pretest_errors", gtest.Tags{}).Inc()
+			metrics.Counter("gtest.vu.pretest_errors", metric.Tags{}).Inc()
 			logger.Error().Err(err).Msg("PreTest hook failed, skipping RunVU")
 			return
 		}
@@ -138,9 +139,9 @@ func runArrivalRateWorker(
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				metrics.Counter("gtest.vu.panics", gtest.Tags{}).Inc()
-				metrics.Counter("gtest.vu.iterations_failed", gtest.Tags{}).Inc()
-				metrics.Counter("gtest.vu.iterations_total", gtest.Tags{}).Inc()
+				metrics.Counter("gtest.vu.panics", metric.Tags{}).Inc()
+				metrics.Counter("gtest.vu.iterations_failed", metric.Tags{}).Inc()
+				metrics.Counter("gtest.vu.iterations_total", metric.Tags{}).Inc()
 				logger.Error().Str("panic", fmt.Sprintf("%v", r)).Msg("RunVU panicked")
 			}
 		}()
@@ -148,16 +149,16 @@ func runArrivalRateWorker(
 		err := scenario.RunVU(sCtx)
 
 		if iterCtx.Err() == context.DeadlineExceeded {
-			metrics.Counter("gtest.vu.iterations_timeout", gtest.Tags{}).Inc()
-			metrics.Counter("gtest.vu.iterations_failed", gtest.Tags{}).Inc()
-			metrics.Counter("gtest.vu.iterations_total", gtest.Tags{}).Inc()
+			metrics.Counter("gtest.vu.iterations_timeout", metric.Tags{}).Inc()
+			metrics.Counter("gtest.vu.iterations_failed", metric.Tags{}).Inc()
+			metrics.Counter("gtest.vu.iterations_total", metric.Tags{}).Inc()
 			logger.Error().Err(iterCtx.Err()).Msg("RunVU iteration timed out")
 		} else if err != nil {
-			metrics.Counter("gtest.vu.iterations_failed", gtest.Tags{}).Inc()
-			metrics.Counter("gtest.vu.iterations_total", gtest.Tags{}).Inc()
+			metrics.Counter("gtest.vu.iterations_failed", metric.Tags{}).Inc()
+			metrics.Counter("gtest.vu.iterations_total", metric.Tags{}).Inc()
 			logger.Error().Err(err).Msg("RunVU returned error")
 		} else {
-			metrics.Counter("gtest.vu.iterations_total", gtest.Tags{}).Inc()
+			metrics.Counter("gtest.vu.iterations_total", metric.Tags{}).Inc()
 		}
 	}()
 }

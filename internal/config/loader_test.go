@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -154,8 +153,8 @@ scenarios:
 			_, err := config.Load(strings.NewReader(tt.yaml))
 			require.Error(t, err)
 
-			var valErr *gtest.ValidationError
-			require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T: %v", err, err)
+			var valErr *config.ValidationError
+			require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T: %v", err, err)
 			assert.Equal(t, tt.field, valErr.Field)
 		})
 	}
@@ -177,8 +176,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Equal(t, "default_scenario", valErr.Field)
 	assert.Contains(t, valErr.Message, "nonexistent")
 }
@@ -198,8 +197,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Equal(t, "scenarios.s1.target_tps", valErr.Field)
 }
 
@@ -217,8 +216,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Equal(t, "scenarios.s1.vus", valErr.Field)
 }
 
@@ -242,8 +241,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Contains(t, valErr.Field, "operator")
 }
 
@@ -317,8 +316,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Contains(t, valErr.Field, "target")
 }
 
@@ -337,8 +336,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Equal(t, "scenarios.s1.max_vus", valErr.Field)
 }
 
@@ -347,8 +346,8 @@ func TestInvalidYAMLReturnsConfigError(t *testing.T) {
 	_, err := config.Load(strings.NewReader("{{invalid yaml"))
 	require.Error(t, err)
 
-	var cfgErr *gtest.ConfigError
-	require.True(t, errors.As(err, &cfgErr), "expected *gtest.ConfigError, got %T", err)
+	var cfgErr *config.ConfigError
+	require.True(t, errors.As(err, &cfgErr), "expected *config.ConfigError, got %T", err)
 }
 
 // Additional: wrong version returns ValidationError
@@ -366,8 +365,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Equal(t, "version", valErr.Field)
 }
 
@@ -391,8 +390,8 @@ scenarios:
 	_, err := config.Load(strings.NewReader(yaml))
 	require.Error(t, err)
 
-	var valErr *gtest.ValidationError
-	require.True(t, errors.As(err, &valErr), "expected *gtest.ValidationError, got %T", err)
+	var valErr *config.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected *config.ValidationError, got %T", err)
 	assert.Contains(t, valErr.Field, "stat")
 }
 
@@ -505,7 +504,7 @@ func TestLoadFromFileNotFoundReturnsConfigError(t *testing.T) {
 	_, err := config.LoadFromFile("/nonexistent/path/gtest.yaml")
 	require.Error(t, err)
 
-	var cfgErr *gtest.ConfigError
-	require.True(t, errors.As(err, &cfgErr), "expected *gtest.ConfigError, got %T", err)
+	var cfgErr *config.ConfigError
+	require.True(t, errors.As(err, &cfgErr), "expected *config.ConfigError, got %T", err)
 	assert.Equal(t, "/nonexistent/path/gtest.yaml", cfgErr.Path)
 }

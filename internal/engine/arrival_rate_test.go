@@ -10,7 +10,6 @@ import (
 
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,8 +18,8 @@ import (
 func TestArrivalRateTargetTPS(t *testing.T) {
 	logger, metrics := newTestDeps()
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			time.Sleep(5 * time.Millisecond)
 			return nil
 		},
@@ -49,8 +48,8 @@ func TestArrivalRateTargetTPS(t *testing.T) {
 func TestArrivalRatePoolSaturationDropsIterations(t *testing.T) {
 	logger, metrics := newTestDeps()
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			time.Sleep(500 * time.Millisecond)
 			return nil
 		},
@@ -80,8 +79,8 @@ func TestArrivalRateRampUpMidpointFirstIteration(t *testing.T) {
 	var once sync.Once
 	startTime := time.Now()
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			once.Do(func() {
 				firstCallTime = time.Now()
 			})
@@ -117,26 +116,26 @@ func TestArrivalRateLifecycleHooks(t *testing.T) {
 	var afterTestCount atomic.Int64
 	var teardownCount atomic.Int64
 
-	scenario := gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+	scenario := engine.Scenario{
+		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
 			setupCount.Add(1)
 			return map[string]any{"data": "ok"}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx engine.ScenarioContext) error {
 			preTestCount.Add(1)
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx engine.ScenarioContext) error {
 			if ctx.VUID() == 1 {
 				return errors.New("iteration error")
 			}
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx engine.ScenarioContext) error {
 			afterTestCount.Add(1)
 			return nil
 		},
-		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx engine.ScenarioContext, state map[string]any) error {
 			teardownCount.Add(1)
 			assert.Equal(t, "ok", state["data"])
 			return nil

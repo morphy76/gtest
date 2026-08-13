@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/morphy76/gtest/internal/runner"
 	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

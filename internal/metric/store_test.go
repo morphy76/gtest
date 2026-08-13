@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +13,7 @@ import (
 // AC-1.3.1: Counter.Inc is atomic — concurrent increments from 100 goroutines produce exact total
 func TestCounterConcurrentInc(t *testing.T) {
 	store := metric.NewStore()
-	c := store.Counter("requests", gtest.Tags{})
+	c := store.Counter("requests", metric.Tags{})
 
 	const goroutines = 100
 	const incsPerGoroutine = 1000
@@ -33,7 +32,7 @@ func TestCounterConcurrentInc(t *testing.T) {
 
 	wg.Wait()
 
-	ic := store.GetCounter("requests", gtest.Tags{})
+	ic := store.GetCounter("requests", metric.Tags{})
 	require.NotNil(t, ic)
 	assert.Equal(t, int64(goroutines*incsPerGoroutine), ic.Value())
 }
@@ -41,7 +40,7 @@ func TestCounterConcurrentInc(t *testing.T) {
 // AC-1.3.2: Counter with identical name+tags returns the same instance
 func TestCounterSameInstance(t *testing.T) {
 	store := metric.NewStore()
-	tags := gtest.Tags{"env": "staging"}
+	tags := metric.Tags{"env": "staging"}
 
 	c1 := store.Counter("requests", tags)
 	c2 := store.Counter("requests", tags)
@@ -57,17 +56,17 @@ func TestCounterSameInstance(t *testing.T) {
 // AC-1.3.3: Counter and Duration with same name panic (type collision)
 func TestTypeCollisionPanics(t *testing.T) {
 	store := metric.NewStore()
-	store.Counter("latency", gtest.Tags{})
+	store.Counter("latency", metric.Tags{})
 
 	assert.Panics(t, func() {
-		store.Duration("latency", gtest.Tags{})
+		store.Duration("latency", metric.Tags{})
 	}, "registering Duration after Counter with same name must panic")
 }
 
 // AC-1.3.4: Duration.Observe stores values retrievable as p50/p95/p99 within HDR precision
 func TestDurationObservePercentiles(t *testing.T) {
 	store := metric.NewStore()
-	d := store.Duration("http_latency", gtest.Tags{})
+	d := store.Duration("http_latency", metric.Tags{})
 
 	// Record 100 values from 1ms to 100ms.
 	for i := 1; i <= 100; i++ {
@@ -87,12 +86,12 @@ func TestDurationObservePercentiles(t *testing.T) {
 // AC-1.3.5: Rate.Add(1,1) + Rate.Add(0,1) produces rate = 0.5
 func TestRateComputation(t *testing.T) {
 	store := metric.NewStore()
-	r := store.Rate("success_rate", gtest.Tags{})
+	r := store.Rate("success_rate", metric.Tags{})
 
 	r.Add(1, 1) // 1 success out of 1
 	r.Add(0, 1) // 0 success out of 1
 
-	ir := store.GetRate("success_rate", gtest.Tags{})
+	ir := store.GetRate("success_rate", metric.Tags{})
 	require.NotNil(t, ir)
 	assert.InDelta(t, 0.5, ir.Value(), 1e-9)
 }
@@ -100,12 +99,12 @@ func TestRateComputation(t *testing.T) {
 // AC-1.3.6: Rate.Add(x, 0) is a no-op (denominator 0 is ignored)
 func TestRateDenominatorZeroIsNoOp(t *testing.T) {
 	store := metric.NewStore()
-	r := store.Rate("error_rate", gtest.Tags{})
+	r := store.Rate("error_rate", metric.Tags{})
 
 	r.Add(5, 0) // Should be ignored.
 	r.Add(1, 2) // 1 out of 2.
 
-	ir := store.GetRate("error_rate", gtest.Tags{})
+	ir := store.GetRate("error_rate", metric.Tags{})
 	require.NotNil(t, ir)
 	assert.InDelta(t, 0.5, ir.Value(), 1e-9)
 	assert.Equal(t, int64(1), ir.Numerator())
@@ -115,12 +114,12 @@ func TestRateDenominatorZeroIsNoOp(t *testing.T) {
 // AC-1.3.7: Gauge.Set(5.0) + Gauge.Add(-2.0) produces 3.0
 func TestGaugeSetAndAdd(t *testing.T) {
 	store := metric.NewStore()
-	g := store.Gauge("active_vus", gtest.Tags{})
+	g := store.Gauge("active_vus", metric.Tags{})
 
 	g.Set(5.0)
 	g.Add(-2.0)
 
-	ig := store.GetGauge("active_vus", gtest.Tags{})
+	ig := store.GetGauge("active_vus", metric.Tags{})
 	require.NotNil(t, ig)
 	assert.InDelta(t, 3.0, ig.Value(), 1e-9)
 }
@@ -128,14 +127,14 @@ func TestGaugeSetAndAdd(t *testing.T) {
 // AC-1.3.8: Tags {"a":"1"} and {"a":"2"} produce separate Counter instances for same name
 func TestDifferentTagsProduceSeparateInstances(t *testing.T) {
 	store := metric.NewStore()
-	c1 := store.Counter("requests", gtest.Tags{"a": "1"})
-	c2 := store.Counter("requests", gtest.Tags{"a": "2"})
+	c1 := store.Counter("requests", metric.Tags{"a": "1"})
+	c2 := store.Counter("requests", metric.Tags{"a": "2"})
 
 	c1.Add(10)
 	c2.Add(20)
 
-	ic1 := store.GetCounter("requests", gtest.Tags{"a": "1"})
-	ic2 := store.GetCounter("requests", gtest.Tags{"a": "2"})
+	ic1 := store.GetCounter("requests", metric.Tags{"a": "1"})
+	ic2 := store.GetCounter("requests", metric.Tags{"a": "2"})
 
 	require.NotNil(t, ic1)
 	require.NotNil(t, ic2)
@@ -149,7 +148,7 @@ func TestDifferentTagsProduceSeparateInstances(t *testing.T) {
 // Additional: Counter.Add with concurrent goroutines produces exact total
 func TestCounterConcurrentAdd(t *testing.T) {
 	store := metric.NewStore()
-	c := store.Counter("bytes_sent", gtest.Tags{})
+	c := store.Counter("bytes_sent", metric.Tags{})
 
 	const goroutines = 50
 	const addsPerGoroutine = 500
@@ -168,7 +167,7 @@ func TestCounterConcurrentAdd(t *testing.T) {
 
 	wg.Wait()
 
-	ic := store.GetCounter("bytes_sent", gtest.Tags{})
+	ic := store.GetCounter("bytes_sent", metric.Tags{})
 	require.NotNil(t, ic)
 	assert.Equal(t, int64(goroutines*addsPerGoroutine*3), ic.Value())
 }
@@ -176,7 +175,7 @@ func TestCounterConcurrentAdd(t *testing.T) {
 // Additional: Gauge concurrent Set/Add does not race
 func TestGaugeConcurrentAccess(t *testing.T) {
 	store := metric.NewStore()
-	g := store.Gauge("temperature", gtest.Tags{})
+	g := store.Gauge("temperature", metric.Tags{})
 
 	const goroutines = 50
 
@@ -196,7 +195,7 @@ func TestGaugeConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 	// We just verify no race detector complaints — the final value is non-deterministic.
-	ig := store.GetGauge("temperature", gtest.Tags{})
+	ig := store.GetGauge("temperature", metric.Tags{})
 	require.NotNil(t, ig)
 	_ = ig.Value()
 }
@@ -204,7 +203,7 @@ func TestGaugeConcurrentAccess(t *testing.T) {
 // Additional: Rate concurrent Add does not race
 func TestRateConcurrentAdd(t *testing.T) {
 	store := metric.NewStore()
-	r := store.Rate("success", gtest.Tags{})
+	r := store.Rate("success", metric.Tags{})
 
 	const goroutines = 100
 
@@ -220,7 +219,7 @@ func TestRateConcurrentAdd(t *testing.T) {
 
 	wg.Wait()
 
-	ir := store.GetRate("success", gtest.Tags{})
+	ir := store.GetRate("success", metric.Tags{})
 	require.NotNil(t, ir)
 	assert.InDelta(t, 1.0, ir.Value(), 1e-9)
 	assert.Equal(t, int64(goroutines), ir.Numerator())
@@ -230,20 +229,20 @@ func TestRateConcurrentAdd(t *testing.T) {
 // Additional: type collision in reverse (Duration then Counter)
 func TestTypeCollisionDurationThenCounter(t *testing.T) {
 	store := metric.NewStore()
-	store.Duration("foo", gtest.Tags{})
+	store.Duration("foo", metric.Tags{})
 
 	assert.Panics(t, func() {
-		store.Counter("foo", gtest.Tags{})
+		store.Counter("foo", metric.Tags{})
 	})
 }
 
 // Additional: type collision Gauge vs Rate
 func TestTypeCollisionGaugeVsRate(t *testing.T) {
 	store := metric.NewStore()
-	store.Gauge("bar", gtest.Tags{})
+	store.Gauge("bar", metric.Tags{})
 
 	assert.Panics(t, func() {
-		store.Rate("bar", gtest.Tags{})
+		store.Rate("bar", metric.Tags{})
 	})
 }
 
@@ -252,21 +251,21 @@ func TestSameNameSameTypeDifferentTagsNoPanic(t *testing.T) {
 	store := metric.NewStore()
 
 	assert.NotPanics(t, func() {
-		store.Counter("requests", gtest.Tags{"env": "staging"})
-		store.Counter("requests", gtest.Tags{"env": "prod"})
+		store.Counter("requests", metric.Tags{"env": "staging"})
+		store.Counter("requests", metric.Tags{"env": "prod"})
 	})
 }
 
 // Additional: tag order does not matter for identity
 func TestTagOrderDoesNotMatter(t *testing.T) {
 	store := metric.NewStore()
-	c1 := store.Counter("requests", gtest.Tags{"a": "1", "b": "2"})
-	c2 := store.Counter("requests", gtest.Tags{"b": "2", "a": "1"})
+	c1 := store.Counter("requests", metric.Tags{"a": "1", "b": "2"})
+	c2 := store.Counter("requests", metric.Tags{"b": "2", "a": "1"})
 
 	c1.Inc()
 	c2.Inc()
 
-	ic := store.GetCounter("requests", gtest.Tags{"a": "1", "b": "2"})
+	ic := store.GetCounter("requests", metric.Tags{"a": "1", "b": "2"})
 	require.NotNil(t, ic)
 	assert.Equal(t, int64(2), ic.Value(), "tag order should not affect identity")
 }
@@ -274,13 +273,13 @@ func TestTagOrderDoesNotMatter(t *testing.T) {
 // Additional: empty tags and nil-equivalent tags are the same
 func TestEmptyTagsIdentity(t *testing.T) {
 	store := metric.NewStore()
-	c1 := store.Counter("requests", gtest.Tags{})
-	c2 := store.Counter("requests", gtest.Tags{})
+	c1 := store.Counter("requests", metric.Tags{})
+	c2 := store.Counter("requests", metric.Tags{})
 
 	c1.Inc()
 	c2.Inc()
 
-	ic := store.GetCounter("requests", gtest.Tags{})
+	ic := store.GetCounter("requests", metric.Tags{})
 	require.NotNil(t, ic)
 	assert.Equal(t, int64(2), ic.Value())
 }
@@ -288,8 +287,8 @@ func TestEmptyTagsIdentity(t *testing.T) {
 // Additional: MergedHistogramSnapshot across different tags
 func TestMergedHistogramAcrossTags(t *testing.T) {
 	store := metric.NewStore()
-	d1 := store.Duration("latency", gtest.Tags{"endpoint": "/a"})
-	d2 := store.Duration("latency", gtest.Tags{"endpoint": "/b"})
+	d1 := store.Duration("latency", metric.Tags{"endpoint": "/a"})
+	d2 := store.Duration("latency", metric.Tags{"endpoint": "/b"})
 
 	for i := 1; i <= 50; i++ {
 		d1.Observe(time.Duration(i) * time.Millisecond)
@@ -306,8 +305,8 @@ func TestMergedHistogramAcrossTags(t *testing.T) {
 // Additional: AggregatedRateValue across tags
 func TestAggregatedRateAcrossTags(t *testing.T) {
 	store := metric.NewStore()
-	r1 := store.Rate("success", gtest.Tags{"svc": "a"})
-	r2 := store.Rate("success", gtest.Tags{"svc": "b"})
+	r1 := store.Rate("success", metric.Tags{"svc": "a"})
+	r2 := store.Rate("success", metric.Tags{"svc": "b"})
 
 	r1.Add(8, 10) // 80%
 	r2.Add(9, 10) // 90%
@@ -319,16 +318,16 @@ func TestAggregatedRateAcrossTags(t *testing.T) {
 // Additional: Rate with no observations returns 0
 func TestRateNoObservationsReturnsZero(t *testing.T) {
 	store := metric.NewStore()
-	_ = store.Rate("unused", gtest.Tags{})
+	_ = store.Rate("unused", metric.Tags{})
 
-	ir := store.GetRate("unused", gtest.Tags{})
+	ir := store.GetRate("unused", metric.Tags{})
 	require.NotNil(t, ir)
 	assert.InDelta(t, 0.0, ir.Value(), 1e-9)
 }
 
-// Additional: compile-time check that Store implements gtest.MetricsCollector
+// Additional: compile-time check that Store implements metric.Collector
 func TestStoreImplementsMetricsCollector(t *testing.T) {
-	var _ gtest.MetricsCollector = (*metric.Store)(nil)
+	var _ metric.Collector = (*metric.Store)(nil)
 }
 
 // helper

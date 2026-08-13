@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/gtest/internal/log"
+	"github.com/morphy76/gtest/internal/metric"
 )
 
 type scenarioBinder interface {
@@ -22,8 +23,8 @@ type scenarioContext struct {
 	scenarioName string
 	params       map[string]string
 	globalState  map[string]any
-	logger       gtest.Logger
-	metrics      gtest.MetricsCollector
+	logger       log.Logger
+	metrics      metric.Collector
 }
 
 func newScenarioContext(
@@ -33,14 +34,14 @@ func newScenarioContext(
 	cfg config.ScenarioConfig,
 	scenarioName string,
 	globalState map[string]any,
-	logger gtest.Logger,
-	metrics gtest.MetricsCollector,
+	logger log.Logger,
+	metrics metric.Collector,
 ) *scenarioContext {
 	boundLogger := logger
 	if b, ok := logger.(scenarioBinder); ok {
 		if s, ok := b.WithScenario(scenarioName).(scenarioBinder); ok {
 			if v, ok := s.WithVU(int(vuid)).(scenarioBinder); ok {
-				if i, ok := v.WithIteration(iteration).(gtest.Logger); ok {
+				if i, ok := v.WithIteration(iteration).(log.Logger); ok {
 					boundLogger = i
 				}
 			}
@@ -109,13 +110,13 @@ func (c *scenarioContext) GlobalState(key string) any {
 	return c.globalState[key]
 }
 
-func (c *scenarioContext) Log() gtest.Logger {
+func (c *scenarioContext) Log() log.Logger {
 	return c.logger
 }
 
-func (c *scenarioContext) Metrics() gtest.MetricsCollector {
+func (c *scenarioContext) Metrics() metric.Collector {
 	return c.metrics
 }
 
 // Compile-time interface satisfaction check.
-var _ gtest.ScenarioContext = (*scenarioContext)(nil)
+var _ ScenarioContext = (*scenarioContext)(nil)

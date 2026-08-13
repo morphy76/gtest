@@ -5,25 +5,25 @@ import (
 	"fmt"
 
 	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/pkg/gtest"
 )
 
 // Executor orchestrates scenario execution: Setup -> VUs -> Teardown.
 type Executor struct {
 	ScenarioName string
-	Scenario     gtest.Scenario
+	Scenario     Scenario
 	Config       config.ScenarioConfig
-	Logger       gtest.Logger
+	Logger       log.Logger
 	Metrics      *metric.Store
 }
 
 // NewExecutor creates a new scenario executor.
 func NewExecutor(
 	scenarioName string,
-	scenario gtest.Scenario,
+	scenario Scenario,
 	cfg config.ScenarioConfig,
-	logger gtest.Logger,
+	logger log.Logger,
 	metrics *metric.Store,
 ) *Executor {
 	return &Executor{
@@ -45,7 +45,7 @@ func (e *Executor) Execute(ctx context.Context) error {
 		var err error
 		globalState, err = e.Scenario.Setup(setupCtx)
 		if err != nil {
-			return &gtest.SetupError{Err: err}
+			return &SetupError{Err: err}
 		}
 		// Shallow copy the state map so VUs cannot mutate the original (spec §4.3).
 		if globalState != nil {

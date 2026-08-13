@@ -15,26 +15,33 @@ import (
 	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/sla"
 	"github.com/morphy76/gtest/internal/version"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/rs/zerolog"
 )
 
-func init() {
-	Register()
+// ScenarioNotFoundError indicates a scenario was not found in the config or not registered.
+type ScenarioNotFoundError struct {
+	Name    string
+	Message string
 }
 
-// Register wires the default suite executor. Called automatically via package init
-// when imported with `_ "github.com/morphy76/gtest/internal/runner"`.
-// Separated from init() to allow direct invocation in tests without blank imports.
-func Register() {
-	gtest.SetExecutor(RunSuite)
+func (e *ScenarioNotFoundError) Error() string {
+	if e.Name != "" {
+		return fmt.Sprintf("gtest: scenario %q not found: %s", e.Name, e.Message)
+	}
+	return fmt.Sprintf("gtest: scenario not found: %s", e.Message)
+}
+
+// ScenarioRegistry provides access to named scenarios.
+type ScenarioRegistry interface {
+	Name() string
+	GetScenario(name string) (engine.Scenario, bool)
 }
 
 // RunSuite executes the suite CLI workflow.
-func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int)) error {
+func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func(int)) error {
 	flags, err := cli.ParseFlags(args, stdout)
 	if err != nil {
-		return &gtest.ConfigError{Err: err}
+		return &config.ConfigError{Err: err}
 	}
 
 	if flags.ShowVersion {
@@ -45,15 +52,15 @@ func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int
 
 	cfg, err := config.LoadFromFile(flags.ConfigPath)
 	if err != nil {
-		var valErr *gtest.ValidationError
+		var valErr *config.ValidationError
 		if errors.As(err, &valErr) {
 			return valErr
 		}
-		var cfgErr *gtest.ConfigError
+		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
 			return cfgErr
 		}
-		return &gtest.ConfigError{Path: flags.ConfigPath, Err: err}
+		return &config.ConfigError{Path: flags.ConfigPath, Err: err}
 	}
 
 	targetScenario := flags.ScenarioName
@@ -61,7 +68,7 @@ func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int
 		targetScenario = cfg.DefaultScenario
 	}
 	if targetScenario == "" {
-		return &gtest.ScenarioNotFoundError{
+		return &ScenarioNotFoundError{
 			Name:    "",
 			Message: "no scenario specified via --scenario flag or default_scenario in config",
 		}
@@ -71,13 +78,13 @@ func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int
 	scenario, registered := s.GetScenario(targetScenario)
 
 	if !registered {
-		return &gtest.ScenarioNotFoundError{
+		return &ScenarioNotFoundError{
 			Name:    targetScenario,
 			Message: fmt.Sprintf("scenario %q is not registered in Suite", targetScenario),
 		}
 	}
 	if !inConfig {
-		return &gtest.ScenarioNotFoundError{
+		return &ScenarioNotFoundError{
 			Name:    targetScenario,
 			Message: fmt.Sprintf("scenario %q is registered in code but not defined in config file %q", targetScenario, flags.ConfigPath),
 		}
@@ -98,7 +105,7 @@ func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int
 	endedAt := time.Now()
 
 	if execErr != nil {
-		var setupErr *gtest.SetupError
+		var setupErr *engine.SetupError
 		if errors.As(execErr, &setupErr) {
 			return setupErr
 		}

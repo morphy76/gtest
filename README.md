@@ -190,7 +190,6 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/pkg/gtest"
-	_ "github.com/morphy76/gtest/internal/runner" // registers the suite executor
 )
 
 func main() {

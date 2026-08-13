@@ -12,13 +12,12 @@ import (
 	"github.com/morphy76/gtest/internal/engine"
 	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestDeps() (gtest.Logger, *metric.Store) {
+func newTestDeps() (log.Logger, *metric.Store) {
 	logger := log.New(zerolog.NewConsoleWriter(), zerolog.Disabled)
 	metrics := metric.NewStore()
 	return logger, metrics
@@ -30,8 +29,8 @@ func TestConstantVUsActiveCount(t *testing.T) {
 
 	var activeVUIDs sync.Map
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			activeVUIDs.Store(ctx.VUID(), true)
 			time.Sleep(10 * time.Millisecond)
 			return nil
@@ -66,15 +65,15 @@ func TestSetupCalledOnceBeforePreTest(t *testing.T) {
 	var preTestTime time.Time
 	var mu sync.Mutex
 
-	scenario := gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+	scenario := engine.Scenario{
+		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
 			mu.Lock()
 			setupTime = time.Now()
 			mu.Unlock()
 			setupCount.Add(1)
 			return map[string]any{"key": "val"}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx engine.ScenarioContext) error {
 			mu.Lock()
 			if preTestTime.IsZero() {
 				preTestTime = time.Now()
@@ -83,7 +82,7 @@ func TestSetupCalledOnceBeforePreTest(t *testing.T) {
 			assert.Equal(t, "val", ctx.GlobalState("key"))
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx engine.ScenarioContext) error {
 			return nil
 		},
 	}
@@ -111,12 +110,12 @@ func TestPreTestCalledOncePerVU(t *testing.T) {
 
 	var preTestCount atomic.Int64
 
-	scenario := gtest.Scenario{
-		PreTest: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		PreTest: func(ctx engine.ScenarioContext) error {
 			preTestCount.Add(1)
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx engine.ScenarioContext) error {
 			return nil
 		},
 	}
@@ -141,8 +140,8 @@ func TestRunVUExecutedAtLeastOncePerVU(t *testing.T) {
 
 	var executedVUs sync.Map
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			executedVUs.Store(ctx.VUID(), true)
 			return nil
 		},
@@ -171,11 +170,11 @@ func TestAfterTestCalledEvenOnRunVUError(t *testing.T) {
 
 	var afterTestCount atomic.Int64
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			return errors.New("iteration failed")
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx engine.ScenarioContext) error {
 			afterTestCount.Add(1)
 			return nil
 		},
@@ -202,12 +201,12 @@ func TestTeardownCalledOnceAfterVUsExit(t *testing.T) {
 	var teardownCount atomic.Int64
 	var activeVUsAtTeardown int64
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
-		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx engine.ScenarioContext, state map[string]any) error {
 			teardownCount.Add(1)
 			activeVUsAtTeardown = int64(metrics.LastGaugeValue("gtest.vu.active"))
 			return nil
@@ -235,8 +234,8 @@ func TestRunVUPanicDoesNotTerminateOtherVUs(t *testing.T) {
 
 	var vu1Panicked atomic.Bool
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			if ctx.VUID() == 1 && !vu1Panicked.Swap(true) {
 				panic("boom")
 			}
@@ -267,18 +266,18 @@ func TestPreTestFailureSkipsRunVUButCallsAfterTest(t *testing.T) {
 	var runVUCount atomic.Int64
 	var afterTestCount atomic.Int64
 
-	scenario := gtest.Scenario{
-		PreTest: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		PreTest: func(ctx engine.ScenarioContext) error {
 			if ctx.VUID() == 2 {
 				return errors.New("pretest failed for VU 2")
 			}
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx engine.ScenarioContext) error {
 			runVUCount.Add(1)
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx engine.ScenarioContext) error {
 			afterTestCount.Add(1)
 			return nil
 		},
@@ -306,8 +305,8 @@ func TestVUTimeoutCountsAsFailedIterationAndContinuesLoop(t *testing.T) {
 
 	var runVUCallCount atomic.Int64
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			runVUCallCount.Add(1)
 			<-ctx.Done()
 			return ctx.Err()
@@ -337,14 +336,14 @@ func TestRampUpSpawnsAtIntervals(t *testing.T) {
 	startTimes := make(map[int64]time.Time)
 	var mu sync.Mutex
 
-	scenario := gtest.Scenario{
-		PreTest: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		PreTest: func(ctx engine.ScenarioContext) error {
 			mu.Lock()
 			startTimes[ctx.VUID()] = time.Now()
 			mu.Unlock()
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx engine.ScenarioContext) error {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
@@ -383,15 +382,15 @@ func TestSetupErrorAbortsExecution(t *testing.T) {
 
 	var preTestCalled bool
 
-	scenario := gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+	scenario := engine.Scenario{
+		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
 			return nil, errors.New("database connection failed")
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx engine.ScenarioContext) error {
 			preTestCalled = true
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx engine.ScenarioContext) error {
 			return nil
 		},
 	}
@@ -407,8 +406,8 @@ func TestSetupErrorAbortsExecution(t *testing.T) {
 	err := exec.Execute(context.Background())
 
 	require.Error(t, err)
-	var setupErr *gtest.SetupError
-	require.True(t, errors.As(err, &setupErr), "must return *gtest.SetupError")
+	var setupErr *engine.SetupError
+	require.True(t, errors.As(err, &setupErr), "must return *engine.SetupError")
 	assert.False(t, preTestCalled, "PreTest must not be called when Setup fails")
 }
 
@@ -420,8 +419,8 @@ func TestConstantVUsRampDownGracePeriod(t *testing.T) {
 
 	var completedIterations atomic.Int64
 
-	scenario := gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
 			// Simulate work that takes longer than run_period
 			select {
 			case <-time.After(80 * time.Millisecond):
