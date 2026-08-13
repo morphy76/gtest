@@ -62,12 +62,13 @@ type ConversationSession struct {
 
 // OpenConversation initiates an SSE stream, receives the lifecycle 'created' event, and returns a ConversationSession.
 func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externalID, dialogModel string, timeout time.Duration) (*ConversationSession, error) {
+	metrics := NewMetrics(ctx.Metrics())
 	start := time.Now()
 	sseURL := fmt.Sprintf("%s/api/v1/conversation/%s?with_dialog_model=%s", c.BaseURL, externalID, dialogModel)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
 	if err != nil {
-		ctx.Metrics().Counter("connection_failures", gtest.Tags{}).Inc()
+		metrics.RecordConnectionFailure()
 		return nil, fmt.Errorf("failed to build SSE request: %w", err)
 	}
 
@@ -81,20 +82,20 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 	openDuration := time.Since(start)
 
 	if err != nil {
-		ctx.Metrics().Counter("connection_failures", gtest.Tags{}).Inc()
-		ctx.Metrics().Rate("sse_channel_availability", gtest.Tags{}).Add(0, 1)
+		metrics.RecordConnectionFailure()
+		metrics.RecordSSEAvailability(false)
 		return nil, fmt.Errorf("failed to open SSE connection: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		ctx.Metrics().Counter("connection_failures", gtest.Tags{}).Inc()
-		ctx.Metrics().Rate("sse_channel_availability", gtest.Tags{}).Add(0, 1)
+		metrics.RecordConnectionFailure()
+		metrics.RecordSSEAvailability(false)
 		return nil, fmt.Errorf("SSE connection failed with HTTP status %d", resp.StatusCode)
 	}
 
-	ctx.Metrics().Duration("sse_open_time", gtest.Tags{}).Observe(openDuration)
-	ctx.Metrics().Rate("sse_channel_availability", gtest.Tags{}).Add(1, 1)
+	metrics.RecordSSEOpenTime(openDuration)
+	metrics.RecordSSEAvailability(true)
 
 	sessCtx, cancel := context.WithCancel(context.Background())
 	session := &ConversationSession{
@@ -125,7 +126,7 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 	}
 
 	session.DialogID = event.Lifecycle.DialogID
-	ctx.Metrics().Duration("dialog_created_event_time", gtest.Tags{}).Observe(createdDuration)
+	metrics.RecordDialogCreatedTime(createdDuration)
 	return session, nil
 }
 
@@ -186,6 +187,7 @@ func (s *ConversationSession) readLoop(body io.ReadCloser) {
 
 // AddMessage posts a customer message to an active dialog.
 func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *ConversationSession, messageText string) error {
+	metrics := NewMetrics(ctx.Metrics())
 	start := time.Now()
 	url := fmt.Sprintf("%s/api/v1/message/%s", c.BaseURL, session.DialogID)
 
@@ -199,7 +201,7 @@ func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *Conv
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBytes))
 	if err != nil {
-		ctx.Metrics().Rate("message_success_rate", gtest.Tags{}).Add(0, 1)
+		metrics.RecordMessageDelivery(0, false)
 		return fmt.Errorf("failed to build AddMessage request: %w", err)
 	}
 
@@ -210,11 +212,8 @@ func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *Conv
 	resp, err := c.HTTPClient.Do(req)
 	deliveryTime := time.Since(start)
 
-	ctx.Metrics().Duration("message_delivery_time", gtest.Tags{}).Observe(deliveryTime)
-	ctx.Metrics().Counter("messages_sent", gtest.Tags{}).Inc()
-
 	if err != nil || (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated) {
-		ctx.Metrics().Rate("message_success_rate", gtest.Tags{}).Add(0, 1)
+		metrics.RecordMessageDelivery(deliveryTime, false)
 		if resp != nil {
 			resp.Body.Close()
 		}
@@ -222,12 +221,13 @@ func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *Conv
 	}
 
 	resp.Body.Close()
-	ctx.Metrics().Rate("message_success_rate", gtest.Tags{}).Add(1, 1)
+	metrics.RecordMessageDelivery(deliveryTime, true)
 	return nil
 }
 
 // AwaitBotResponse waits for a BOT role message via SSE, enforcing SSE timeout.
 func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
+	metrics := NewMetrics(ctx.Metrics())
 	start := time.Now()
 
 	for {
@@ -238,11 +238,10 @@ func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeou
 
 		if event != nil && event.Message != nil {
 			if event.Message.Role == "CUSTOMER" {
-				ctx.Metrics().Counter("customer_messages_received", gtest.Tags{}).Inc()
+				metrics.RecordCustomerMessageReceived()
 			} else if event.Message.Role == "BOT" {
 				rtt := time.Since(start)
-				ctx.Metrics().Duration("answer_received_time", gtest.Tags{}).Observe(rtt)
-				ctx.Metrics().Counter("bot_messages_received", gtest.Tags{}).Inc()
+				metrics.RecordBotMessageReceived(rtt)
 				return event, nil
 			}
 		}
@@ -251,6 +250,7 @@ func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeou
 
 // ReadNextEvent reads the next event line from the SSE stream channel with configurable timeout handling.
 func (s *ConversationSession) ReadNextEvent(ctx gtest.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
+	metrics := NewMetrics(ctx.Metrics())
 	select {
 	case evt, ok := <-s.events:
 		if !ok {
@@ -260,7 +260,7 @@ func (s *ConversationSession) ReadNextEvent(ctx gtest.ScenarioContext, timeout t
 	case err := <-s.errs:
 		return nil, err
 	case <-time.After(timeout):
-		ctx.Metrics().Counter("sse_timeout_errors", gtest.Tags{}).Inc()
+		metrics.RecordSSETimeout()
 		return nil, fmt.Errorf("SSE event timeout after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()

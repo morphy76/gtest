@@ -148,6 +148,7 @@ func RunVU(ctx gtest.ScenarioContext) error {
 	turns := ctx.ParamInt("turns", 2)
 
 	client := dsl.NewConversationClient(baseURL, token, tenant, nil)
+	metrics := dsl.NewMetrics(ctx.Metrics())
 	externalID := fmt.Sprintf("vu-%d-iter-%d", ctx.VUID(), ctx.Iteration())
 
 	startTotal := time.Now()
@@ -155,7 +156,7 @@ func RunVU(ctx gtest.ScenarioContext) error {
 	// 1. Open Conversation SSE Stream and await 'created' event
 	session, err := client.OpenConversation(ctx, externalID, dialogModel, 5*time.Second)
 	if err != nil {
-		ctx.Metrics().Rate("conversation_success_rate", gtest.Tags{}).Add(0, 1)
+		metrics.RecordConversationResult(0, false)
 		return fmt.Errorf("OpenConversation failed: %w", err)
 	}
 	defer session.Close()
@@ -172,27 +173,26 @@ func RunVU(ctx gtest.ScenarioContext) error {
 
 		// Post customer message
 		if err := client.AddMessage(ctx, session, prompt); err != nil {
-			ctx.Metrics().Rate("conversation_success_rate", gtest.Tags{}).Add(0, 1)
+			metrics.RecordConversationResult(0, false)
 			return fmt.Errorf("AddMessage turn %d failed: %w", i+1, err)
 		}
 
 		// Wait for bot response with SSE timeout (3 seconds)
 		_, err := session.AwaitBotResponse(ctx, 3*time.Second)
 		if err != nil {
-			ctx.Metrics().Rate("conversation_success_rate", gtest.Tags{}).Add(0, 1)
+			metrics.RecordConversationResult(0, false)
 			return fmt.Errorf("AwaitBotResponse turn %d failed: %w", i+1, err)
 		}
 	}
 
 	// 3. Close Conversation
 	if err := client.CloseConversation(ctx, externalID, session.DialogID); err != nil {
-		ctx.Metrics().Rate("conversation_success_rate", gtest.Tags{}).Add(0, 1)
+		metrics.RecordConversationResult(0, false)
 		return fmt.Errorf("CloseConversation failed: %w", err)
 	}
 
 	totalDuration := time.Since(startTotal)
-	ctx.Metrics().Duration("conversation_duration", gtest.Tags{}).Observe(totalDuration)
-	ctx.Metrics().Rate("conversation_success_rate", gtest.Tags{}).Add(1, 1)
+	metrics.RecordConversationResult(totalDuration, true)
 
 	return nil
 }
