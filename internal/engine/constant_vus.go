@@ -20,9 +20,23 @@ func RunConstantVUs(
 	logger gtest.Logger,
 	metrics gtest.MetricsCollector,
 ) {
-	totalDuration := cfg.RampUp + cfg.RunPeriod
+	// Total context includes ramp_down as a grace period for in-flight iterations.
+	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
 	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
 	defer cancel()
+
+	// stopNewIterations fires at ramp_up + run_period — VUs stop starting new iterations
+	// but in-flight iterations continue until ramp_down expires or they complete.
+	stopTimer := time.NewTimer(cfg.RampUp + cfg.RunPeriod)
+	defer stopTimer.Stop()
+	stopCh := make(chan struct{})
+	go func() {
+		select {
+		case <-stopTimer.C:
+			close(stopCh)
+		case <-runCtx.Done():
+		}
+	}()
 
 	var wg sync.WaitGroup
 	var interval time.Duration
@@ -41,7 +55,7 @@ func RunConstantVUs(
 
 		wg.Add(1)
 		vuid := int64(i)
-		go runVUGoroutine(runCtx, scenario, cfg, scenarioName, vuid, globalState, logger, metrics, &wg)
+		go runVUGoroutine(runCtx, stopCh, scenario, cfg, scenarioName, vuid, globalState, logger, metrics, &wg)
 	}
 
 	wg.Wait()
@@ -49,6 +63,7 @@ func RunConstantVUs(
 
 func runVUGoroutine(
 	ctx context.Context,
+	stopCh <-chan struct{},
 	scenario gtest.Scenario,
 	cfg config.ScenarioConfig,
 	scenarioName string,
@@ -86,7 +101,12 @@ func runVUGoroutine(
 
 	var iteration int64 = 0
 	for {
+		// Stop starting new iterations when either:
+		// - stopCh fires (run_period ended, ramp_down grace period active), or
+		// - ctx cancelled (total duration expired, including ramp_down=0 case).
 		select {
+		case <-stopCh:
+			return
 		case <-ctx.Done():
 			return
 		default:
@@ -125,3 +145,4 @@ func runVUGoroutine(
 		iteration++
 	}
 }
+

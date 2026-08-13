@@ -269,7 +269,7 @@ type ScenarioContext interface {
 // SetupHook is called once before any VU is spawned.
 // It returns a global state map shared (read-only) with all VUs via ScenarioContext.GlobalState().
 // A non-nil error aborts the test run immediately.
-type SetupHook func(ctx context.Context) (state map[string]any, err error)
+type SetupHook func(ctx ScenarioContext) (state map[string]any, err error)
 
 // PreTestHook is called once per VU goroutine before its iteration loop begins.
 // A non-nil error skips RunVU but still guarantees AfterTestHook execution for that VU.
@@ -288,7 +288,7 @@ type AfterTestHook func(ctx ScenarioContext) error
 // TeardownHook is called once after all VU goroutines have exited.
 // It receives the same global state produced by Setup.
 // A non-nil error is logged but does not affect the overall pass/fail verdict.
-type TeardownHook func(ctx context.Context, state map[string]any) error
+type TeardownHook func(ctx ScenarioContext, state map[string]any) error
 ```
 
 ### 4.5 `Scenario` Struct
@@ -445,6 +445,7 @@ used by test developers.
 | `--log-format` | string | `pretty` | Log output format: `pretty` (human-readable) or `json` |
 | `--report-format` | string | `console` | Report format: `console` or `json` |
 | `--report-out` | string | *(stdout)* | Write final report to this file path instead of stdout |
+| `--json-report-out` | string | *(disabled)* | Write an additional JSON report document to this file path. Console report is always printed to stdout regardless of this flag |
 | `--version` | bool | false | Print library version and exit |
 
 ---

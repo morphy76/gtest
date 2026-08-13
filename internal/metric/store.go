@@ -313,10 +313,13 @@ func (s *Store) MergedHistogramSnapshot(name string) HistogramSnapshot {
 		return all[0].Snapshot()
 	}
 
-	// Collect all sub-histograms from every tag variant.
+	// Collect shared + per-VU histograms from every tag variant.
 	merged := newHistogram()
 	for _, h := range all {
 		h.mu.Lock()
+		if h.shared != nil && h.shared.TotalCount() > 0 {
+			merged.histograms = append(merged.histograms, h.shared)
+		}
 		for _, sub := range h.histograms {
 			merged.histograms = append(merged.histograms, sub)
 		}

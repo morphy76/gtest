@@ -411,3 +411,42 @@ func TestSetupErrorAbortsExecution(t *testing.T) {
 	require.True(t, errors.As(err, &setupErr), "must return *gtest.SetupError")
 	assert.False(t, preTestCalled, "PreTest must not be called when Setup fails")
 }
+
+// AC-rampdown: ramp_down provides grace period for in-flight iterations.
+// A RunVU that takes 80ms with run_period=50ms and ramp_down=200ms should complete
+// at least one full iteration without being killed by context cancellation.
+func TestConstantVUsRampDownGracePeriod(t *testing.T) {
+	logger, metrics := newTestDeps()
+
+	var completedIterations atomic.Int64
+
+	scenario := gtest.Scenario{
+		RunVU: func(ctx gtest.ScenarioContext) error {
+			// Simulate work that takes longer than run_period
+			select {
+			case <-time.After(80 * time.Millisecond):
+				completedIterations.Add(1)
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	}
+
+	cfg := config.ScenarioConfig{
+		Type:      config.ScenarioTypeConstantVUs,
+		VUs:       2,
+		RunPeriod: 50 * time.Millisecond,
+		RampDown:  200 * time.Millisecond, // Grace period to let in-flight complete
+		VUTimeout: 500 * time.Millisecond,
+	}
+
+	exec := engine.NewExecutor("test_scenario", scenario, cfg, logger, metrics)
+	err := exec.Execute(context.Background())
+	require.NoError(t, err)
+
+	// With ramp_down, at least the first iteration per VU should complete
+	completed := completedIterations.Load()
+	assert.GreaterOrEqual(t, completed, int64(2),
+		"each VU should complete at least 1 iteration during ramp_down grace period")
+}

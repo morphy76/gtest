@@ -16,16 +16,21 @@ const (
 	histSignificantFigures = 3
 )
 
-// histogram implements gtest.Duration using per-VU HDR histograms merged at report time.
-// Each call to Observe records into a thread-local-style histogram to avoid contention.
+// histogram implements gtest.Duration using HDR histograms merged at report time.
+// The default path uses a single shared histogram protected by a mutex.
+// For zero-contention writes, callers can use CreateVUHistogram() per goroutine
+// and AddHistogram() at cleanup time.
 type histogram struct {
 	mu         sync.Mutex
+	shared     *hdrhistogram.Histogram // primary write target for Observe()
 	histograms []*hdrhistogram.Histogram
 }
 
-// newHistogram creates a new histogram container.
+// newHistogram creates a new histogram container with a shared write histogram.
 func newHistogram() *histogram {
-	return &histogram{}
+	return &histogram{
+		shared: hdrhistogram.New(histMinValue, histMaxValue, histSignificantFigures),
+	}
 }
 
 // Observe records one latency sample. Durations are stored in microseconds.
@@ -40,14 +45,8 @@ func (h *histogram) Observe(d time.Duration) {
 	}
 
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Append a new single-value histogram for each observation.
-	// For high-throughput use, the store provides per-VU histograms via CreateVUHistogram.
-	hist := hdrhistogram.New(histMinValue, histMaxValue, histSignificantFigures)
-	if err := hist.RecordValue(us); err == nil {
-		h.histograms = append(h.histograms, hist)
-	}
+	_ = h.shared.RecordValue(us)
+	h.mu.Unlock()
 }
 
 // CreateVUHistogram returns a new HDR histogram instance that a VU can use directly.
@@ -76,19 +75,24 @@ type HistogramSnapshot struct {
 	P99   time.Duration
 }
 
-// Snapshot merges all recorded histograms and extracts percentile statistics.
+// Snapshot merges all recorded histograms (shared + per-VU) and extracts percentile statistics.
 // Returns a zero snapshot if no data has been recorded.
 func (h *histogram) Snapshot() HistogramSnapshot {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if len(h.histograms) == 0 {
-		return HistogramSnapshot{}
-	}
-
+	// Merge the shared histogram and any per-VU histograms.
 	merged := hdrhistogram.New(histMinValue, histMaxValue, histSignificantFigures)
+
+	if h.shared != nil && h.shared.TotalCount() > 0 {
+		merged.Merge(h.shared)
+	}
 	for _, hist := range h.histograms {
 		merged.Merge(hist)
+	}
+
+	if merged.TotalCount() == 0 {
+		return HistogramSnapshot{}
 	}
 
 	return HistogramSnapshot{

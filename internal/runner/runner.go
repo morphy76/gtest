@@ -20,6 +20,13 @@ import (
 )
 
 func init() {
+	Register()
+}
+
+// Register wires the default suite executor. Called automatically via package init
+// when imported with `_ "github.com/morphy76/gtest/internal/runner"`.
+// Separated from init() to allow direct invocation in tests without blank imports.
+func Register() {
 	gtest.SetExecutor(RunSuite)
 }
 
@@ -81,7 +88,7 @@ func RunSuite(s *gtest.Suite, args []string, stdout io.Writer, exitFunc func(int
 	if parseErr != nil {
 		logLevel = zerolog.InfoLevel
 	}
-	logger := log.New(stdout, logLevel)
+	logger := log.NewWithFormat(stdout, logLevel, flags.LogFormat)
 	metricsStore := metric.NewStore()
 
 	startedAt := time.Now()

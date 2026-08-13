@@ -47,6 +47,14 @@ func (e *Executor) Execute(ctx context.Context) error {
 		if err != nil {
 			return &gtest.SetupError{Err: err}
 		}
+		// Shallow copy the state map so VUs cannot mutate the original (spec §4.3).
+		if globalState != nil {
+			safeCopy := make(map[string]any, len(globalState))
+			for k, v := range globalState {
+				safeCopy[k] = v
+			}
+			globalState = safeCopy
+		}
 	}
 
 	// 2. VU Pacing Engine phase

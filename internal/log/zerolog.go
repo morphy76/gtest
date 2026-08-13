@@ -20,6 +20,17 @@ func New(w io.Writer, level zerolog.Level) *Logger {
 	return &Logger{zlog: zlog}
 }
 
+// NewWithFormat creates a Logger that uses either human-readable console output ("pretty")
+// or structured JSON output ("json"). Defaults to JSON for unrecognized formats.
+func NewWithFormat(w io.Writer, level zerolog.Level, format string) *Logger {
+	var writer io.Writer = w
+	if format == "pretty" {
+		writer = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
+	}
+	zlog := zerolog.New(writer).Level(level).With().Timestamp().Logger()
+	return &Logger{zlog: zlog}
+}
+
 // NewWithZerolog wraps an existing zerolog.Logger into a gtest.Logger.
 func NewWithZerolog(zlog zerolog.Logger) *Logger {
 	return &Logger{zlog: zlog}

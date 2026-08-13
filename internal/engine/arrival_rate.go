@@ -22,9 +22,15 @@ func RunArrivalRate(
 	logger gtest.Logger,
 	metrics gtest.MetricsCollector,
 ) {
-	totalDuration := cfg.RampUp + cfg.RunPeriod
+	// Total context includes ramp_down as a grace period for in-flight workers.
+	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
 	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
 	defer cancel()
+
+	// Dispatch phase ends at ramp_up + run_period.
+	dispatchDuration := cfg.RampUp + cfg.RunPeriod
+	dispatchCtx, dispatchCancel := context.WithTimeout(ctx, dispatchDuration)
+	defer dispatchCancel()
 
 	sem := make(chan struct{}, cfg.MaxVUs)
 	var wg sync.WaitGroup
@@ -46,7 +52,7 @@ func RunArrivalRate(
 		// First token during linear ramp-up occurs at the midpoint of ramp_up
 		midpoint := cfg.RampUp / 2
 		select {
-		case <-runCtx.Done():
+		case <-dispatchCtx.Done():
 			wg.Wait()
 			return
 		case <-time.After(midpoint):
@@ -56,25 +62,25 @@ func RunArrivalRate(
 		// Wait remaining half of ramp_up before steady state
 		remainingRamp := cfg.RampUp - midpoint
 		select {
-		case <-runCtx.Done():
+		case <-dispatchCtx.Done():
 			wg.Wait()
 			return
 		case <-time.After(remainingRamp):
 		}
 	}
 
-	// 2. Steady-state phase
+	// 2. Steady-state phase — dispatch ends at ramp_up + run_period
 	limiter := rate.NewLimiter(rate.Limit(cfg.TargetTPS), 1)
 
 	for {
 		select {
-		case <-runCtx.Done():
+		case <-dispatchCtx.Done():
 			wg.Wait()
 			return
 		default:
 		}
 
-		if err := limiter.Wait(runCtx); err != nil {
+		if err := limiter.Wait(dispatchCtx); err != nil {
 			wg.Wait()
 			return
 		}
