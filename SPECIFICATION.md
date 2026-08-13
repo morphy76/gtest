@@ -798,7 +798,7 @@ Return structured errors for all failure modes.
 
 ---
 
-### Increment 1.4 — SLA Threshold Evaluator
+### Increment 1.4 — SLA Threshold Evaluator ✅ COMPLETED (2026-08-13)
 
 **Goal:** Evaluate a set of `ThresholdConfig` entries against an `InMemoryMetricsStore` snapshot.
 Return a structured result per threshold.
@@ -820,7 +820,7 @@ Return a structured result per threshold.
 
 ---
 
-### Increment 1.5 — Zerolog Logger Adapter
+### Increment 1.5 — Zerolog Logger Adapter ✅ COMPLETED (2026-08-13)
 
 **Goal:** Implement the public `Logger` / `LogEvent` interfaces backed by `zerolog`. Ensure automatic
 field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing.
@@ -841,7 +841,7 @@ field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing
 
 ---
 
-### Increment 1.6 — Constant VU Pacing Engine
+### Increment 1.6 — Constant VU Pacing Engine ✅ COMPLETED (2026-08-13)
 
 **Goal:** Implement the `constant_vus` execution engine: VU spawning, ramp-up, steady state,
 ramp-down, and lifecycle orchestration. Exercise all lifecycle hooks.
