@@ -60,7 +60,7 @@ jobs:
           MINOR="${BASH_REMATCH[2]}"
           PATCH="${BASH_REMATCH[3]}"
 
-          case "${{ github.event.inputs.bump_type }}" in
+          case "${{ inputs.bump_type }}" in
             patch)
               PATCH=$((PATCH + 1))
               ;;
@@ -74,7 +74,7 @@ jobs:
               PATCH=0
               ;;
             *)
-              echo "::error::Unsupported bump type: ${{ github.event.inputs.bump_type }}"
+              echo "::error::Unsupported bump type: ${{ inputs.bump_type }}"
               exit 1
               ;;
           esac
@@ -82,7 +82,7 @@ jobs:
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "previous_version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
           echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Calculated next version: ${NEW_VERSION} (bump type: ${{ github.event.inputs.bump_type }})"
+          echo "Calculated next version: ${NEW_VERSION} (bump type: ${{ inputs.bump_type }})"
 
       - name: Update VERSION.gtest
         run: |
@@ -90,7 +90,7 @@ jobs:
           cat VERSION.gtest
 
       - name: Commit, Tag, and Release
-        if: ${{ !github.event.inputs.dry_run }}
+        if: ${{ inputs.dry_run == false }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PREV_VER: ${{ steps.semver.outputs.previous_version }}
@@ -121,7 +121,7 @@ jobs:
           echo "### 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Bump Type** | \`${{ github.event.inputs.bump_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Bump Type** | \`${{ inputs.bump_type }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Previous Version** | \`v${{ steps.semver.outputs.previous_version }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Released Version** | \`v${{ steps.semver.outputs.new_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Dry Run** | \`${{ github.event.inputs.dry_run }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Dry Run** | \`${{ inputs.dry_run }}\` |" >> $GITHUB_STEP_SUMMARY
