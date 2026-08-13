@@ -103,13 +103,12 @@ jobs:
           git add VERSION.gtest
           git commit -m "chore(release): bump version from v${PREV_VER} to v${NEW_VER}"
           
-          # Create release tags
+          # Create release tag
           git tag -a "v${NEW_VER}" -m "Release v${NEW_VER}"
-          git tag -a "gtest-v${NEW_VER}" -m "Release gtest-v${NEW_VER}"
 
-          # Push changes and tags to main branch
+          # Push changes and tag to main branch
           git push origin main
-          git push origin "v${NEW_VER}" "gtest-v${NEW_VER}"
+          git push origin "v${NEW_VER}"
 
           # Create GitHub Release with auto-generated notes
           gh release create "v${NEW_VER}" \
