@@ -318,9 +318,7 @@ func (s *Store) MergedHistogramSnapshot(name string) HistogramSnapshot {
 		if h.shared != nil && h.shared.TotalCount() > 0 {
 			merged.histograms = append(merged.histograms, h.shared)
 		}
-		for _, sub := range h.histograms {
-			merged.histograms = append(merged.histograms, sub)
-		}
+		merged.histograms = append(merged.histograms, h.histograms...)
 		h.mu.Unlock()
 	}
 	return merged.Snapshot()
