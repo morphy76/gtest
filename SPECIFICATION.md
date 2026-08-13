@@ -872,7 +872,7 @@ completion assertions.
 
 ---
 
-### Increment 1.7 — Arrival Rate Pacing Engine
+### Increment 1.7 — Arrival Rate Pacing Engine ✅ COMPLETED (2026-08-13)
 
 **Goal:** Implement the `arrival_rate` execution engine with token bucket dispatch and `max_vus` pool cap.
 
@@ -892,7 +892,7 @@ completion assertions.
 
 ---
 
-### Increment 1.8 — CLI Adapter & Suite.Execute()
+### Increment 1.8 — CLI Adapter & Suite.Execute() ✅ COMPLETED (2026-08-13)
 
 **Goal:** Wire config loading, pacing engine selection, SLA evaluation, and reporting behind
 the `Execute()` entry point. Implement all CLI flags from §6.
@@ -917,7 +917,7 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 
 ---
 
-### Increment 1.9 — Reporting Adapters
+### Increment 1.9 — Reporting Adapters ✅ COMPLETED (2026-08-13)
 
 **Goal:** Implement console and JSON report formatters. Ensure the report output is deterministic
 (metrics sorted alphabetically by name).
@@ -949,6 +949,24 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 - `examples/grpc_user_service/gtest.yaml`
 
 **Build Validation:** `go build -tags=gtest_example ./examples/...` must succeed.
+
+---
+
+### Increment 1.11 — README & Documentation ✅ COMPLETED (2026-08-13)
+
+**Goal:** Create a comprehensive `README.md` file documenting `gtest`, load test creation, lifecycle facilities, configuration options, and execution workflows.
+
+**Deliverables:**
+- `README.md` — Complete documentation covering overview, scenario definition, lifecycle hooks, metrics, logging, configuration, and CLI execution.
+
+**Acceptance Criteria:**
+
+```go
+// AC-1.11.1: README.md provides clear library overview, key features, and clean Hexagonal architecture structure.
+// AC-1.11.2: README.md contains code examples for creating load tests, registering scenarios, and using lifecycle hooks.
+// AC-1.11.3: README.md details gtest.yaml configuration format for constant_vus and arrival_rate pacing modes, as well as SLA thresholds.
+// AC-1.11.4: README.md documents CLI flags, exit code contracts (exit 0 on pass, exit 1 on SLA breach), and report output options.
+```
 
 ---
 
