@@ -1012,3 +1012,516 @@ GET    /api/v1/tests/:id/report  → returns JSON report (same schema as §10.2)
 | 8 | PreTest Failure | Skip RunVU; AfterTest still runs via `defer` | AfterTest is a cleanup guarantee; PreTest failure is not a fatal scenario abort |
 | 9 | Histogram Impl | Per-VU HDR histogram; merged at report time | Eliminates hot-path contention; HDR provides accurate percentiles |
 | 10 | Global State Access | `ScenarioContext.GlobalState(key string) any` | Avoids Go's typed-key `context.Value` antipattern with raw strings |
+
+---
+
+## 14. Phase 3: Advanced Load Testing Capabilities (Draft)
+
+Phase 3 extends `gtest` with capabilities found in mature load testing frameworks (k6, Gatling, Locust) adapted to the Go library model.
+
+### 14.1 Checks (Inline Assertions)
+
+**Inspiration**: k6 `check()`, Gatling assertions.
+
+Checks are lightweight pass/fail assertions recorded inline during RunVU. Unlike thresholds (post-run gates), checks are real-time validations embedded in test logic. Check results are aggregated and reported as a dedicated metric.
+
+#### Public API
+
+```go
+// CheckFunc validates a condition and returns a human-readable failure reason.
+// Return "" for pass, non-empty string for fail.
+type CheckFunc func() string
+
+// Check records a named assertion. Multiple checks per iteration are allowed.
+// Pass/fail counts are stored as built-in metrics: gtest.checks.passed, gtest.checks.failed.
+func (ctx ScenarioContext) Check(name string, fn CheckFunc)
+```
+
+#### Usage
+
+```go
+ctx.Check("status is 200", func() string {
+    if resp.StatusCode != 200 {
+        return fmt.Sprintf("got %d", resp.StatusCode)
+    }
+    return ""
+})
+
+ctx.Check("body is not empty", func() string {
+    if len(body) == 0 {
+        return "empty body"
+    }
+    return ""
+})
+```
+
+#### Built-in Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `gtest.checks.passed` | Counter | Total passed checks |
+| `gtest.checks.failed` | Counter | Total failed checks |
+
+#### Reporting
+
+The console report adds a CHECKS section showing pass/fail counts per check name:
+
+```text
+CHECKS
+────────────────────────────────────────────────────────────────
+  ✓ status is 200              1450/1450 (100.00%)
+  ✗ body is not empty          1448/1450 (99.86%)
+```
+
+#### Threshold Integration
+
+Checks integrate with the existing threshold system:
+
+```yaml
+thresholds:
+  - metric: gtest.checks.failed
+    stat: count
+    operator: "<="
+    target: "10"
+```
+
+---
+
+### 14.2 Groups (Transaction Boundaries)
+
+**Inspiration**: k6 `group()`, Gatling `exec().group()`.
+
+Groups organize RunVU logic into named transaction boundaries with automatic duration tracking. This enables per-step latency reporting within multi-step user journeys.
+
+#### Public API
+
+```go
+// Group executes fn within a named transaction boundary.
+// Duration is automatically recorded to "gtest.group.<groupName>.duration".
+// Nested groups are allowed; names are concatenated with "::".
+func (ctx ScenarioContext) Group(name string, fn func(ctx ScenarioContext) error) error
+```
+
+#### Usage
+
+```go
+RunVU: func(ctx gtest.ScenarioContext) error {
+    return ctx.Group("checkout_flow", func(ctx gtest.ScenarioContext) error {
+        // Step 1
+        if err := ctx.Group("login", func(ctx gtest.ScenarioContext) error {
+            // ... login logic ...
+            return nil
+        }); err != nil {
+            return err
+        }
+
+        // Step 2
+        return ctx.Group("payment", func(ctx gtest.ScenarioContext) error {
+            // ... payment logic ...
+            return nil
+        })
+    })
+},
+```
+
+#### Automatic Metrics
+
+| Metric | Type | Naming |
+|--------|------|--------|
+| Group duration | Duration | `gtest.group.<name>.duration` |
+| Nested group duration | Duration | `gtest.group.<parent>::<child>.duration` |
+
+---
+
+### 14.3 HTTP Module (Built-in HTTP Client Helpers)
+
+**Inspiration**: k6 `k6/http`, Gatling `http()`.
+
+A convenience package providing an instrumented HTTP client that **automatically records** latency, status code counters, and error rates — eliminating boilerplate metric recording from every RunVU.
+
+#### Package: `pkg/gtest/http`
+
+```go
+import gtesthttp "github.com/morphy76/gtest/pkg/gtest/http"
+
+// Client wraps *http.Client with automatic metric instrumentation.
+type Client struct { /* ... */ }
+
+// NewClient creates an instrumented HTTP client.
+// All requests record:
+//   - "http_req_duration" (Duration, tagged with method, url, status)
+//   - "http_req_failed" (Rate, 1/1 on error or 4xx/5xx, 0/1 on success)
+//   - "http_reqs" (Counter)
+func NewClient(ctx ScenarioContext, opts ...Option) *Client
+
+// Request methods return *Response with parsed body helpers.
+func (c *Client) Get(ctx ScenarioContext, url string) (*Response, error)
+func (c *Client) Post(ctx ScenarioContext, url string, body io.Reader) (*Response, error)
+func (c *Client) Put(ctx ScenarioContext, url string, body io.Reader) (*Response, error)
+func (c *Client) Delete(ctx ScenarioContext, url string) (*Response, error)
+func (c *Client) Do(ctx ScenarioContext, req *http.Request) (*Response, error)
+
+// Response wraps *http.Response with convenience methods.
+type Response struct {
+    Status     int
+    Body       []byte
+    Headers    http.Header
+    Duration   time.Duration
+}
+
+func (r *Response) JSON(v any) error     // Unmarshal body as JSON
+func (r *Response) Text() string          // Body as string
+```
+
+#### Automatic Metrics (per request)
+
+| Metric | Type | Tags |
+|--------|------|------|
+| `http_req_duration` | Duration | `method`, `url`, `status` |
+| `http_req_failed` | Rate | `method`, `url` |
+| `http_reqs` | Counter | `method`, `url` |
+| `http_req_receiving` | Duration | `method`, `url` |
+| `http_req_sending` | Duration | `method`, `url` |
+| `http_req_tls_handshaking` | Duration | `method`, `url` |
+| `http_req_connecting` | Duration | `method`, `url` |
+
+#### Options
+
+```go
+gtesthttp.NewClient(ctx,
+    gtesthttp.WithTimeout(5 * time.Second),
+    gtesthttp.WithHeader("Authorization", "Bearer "+token),
+    gtesthttp.WithTLSInsecureSkipVerify(),
+    gtesthttp.WithCustomMetricPrefix("checkout_api"),  // overrides "http_req"
+)
+```
+
+---
+
+### 14.4 Ramping VUs Executor
+
+**Inspiration**: k6 `ramping-vus`, Gatling `rampUsersPerSec`.
+
+A third pacing mode that allows defining multiple stages of VU count over time, enabling load spike simulations.
+
+#### Configuration
+
+```yaml
+scenarios:
+  spike_test:
+    type: ramping_vus
+    stages:
+      - target: 10
+        duration: 30s      # ramp from 0 → 10 VUs over 30s
+      - target: 10
+        duration: 1m       # hold at 10 VUs for 1 minute
+      - target: 50
+        duration: 10s      # spike to 50 VUs over 10s
+      - target: 50
+        duration: 2m       # hold spike for 2 minutes
+      - target: 0
+        duration: 30s      # ramp down to 0
+    vu_timeout: 2s
+```
+
+#### Config Model
+
+```go
+type StageConfig struct {
+    Target   int           `mapstructure:"target"`    // target VU count at end of stage
+    Duration time.Duration `mapstructure:"duration"`  // stage duration
+}
+```
+
+#### Validation
+
+- `stages` must have at least one entry.
+- Each `target` must be `>= 0`.
+- Each `duration` must be `> 0`.
+- `vu_timeout` is required.
+
+---
+
+### 14.5 Scenarios (Multi-Scenario Concurrent Execution)
+
+**Inspiration**: k6 `scenarios`, Gatling `setUp().protocols()`.
+
+Allow running multiple named scenarios simultaneously within a single test binary invocation. Each scenario runs independently with its own pacing, VU pool, and lifecycle hooks. Metrics are tagged by scenario name for isolation.
+
+#### Configuration
+
+```yaml
+version: "1.0"
+
+scenarios:
+  browse_catalog:
+    type: constant_vus
+    vus: 20
+    run_period: 5m
+    vu_timeout: 2s
+
+  checkout_flow:
+    type: arrival_rate
+    target_tps: 10
+    max_vus: 15
+    run_period: 5m
+    vu_timeout: 5s
+
+# When --scenario is omitted and no default_scenario, run ALL scenarios concurrently
+```
+
+#### Behavior
+
+- Each scenario gets its own `Setup` / `Teardown` lifecycle.
+- Scenarios run **concurrently** with independent goroutine pools.
+- The overall test ends when the **longest** scenario completes.
+- Thresholds are evaluated per-scenario, not cross-scenario.
+- Console report shows a section per scenario.
+
+#### CLI
+
+```bash
+# Run all scenarios concurrently:
+go run main.go --config gtest.yaml
+
+# Run specific scenarios (comma-separated):
+go run main.go --scenario browse_catalog,checkout_flow
+
+# Run a single scenario (existing behavior):
+go run main.go --scenario browse_catalog
+```
+
+---
+
+### 14.6 Data Parameterization Module
+
+**Inspiration**: k6 `SharedArray`, k6 `papaparse`, Gatling `csv()`.
+
+A built-in package for loading test data from CSV, JSON, or JSON Lines files with configurable distribution strategies.
+
+#### Package: `pkg/gtest/data`
+
+```go
+import gtestdata "github.com/morphy76/gtest/pkg/gtest/data"
+
+// DataSet holds pre-loaded test data rows.
+type DataSet struct { /* ... */ }
+
+// LoadCSV reads a CSV file into a DataSet. First row is headers.
+func LoadCSV(path string) (*DataSet, error)
+
+// LoadJSON reads a JSON array file into a DataSet.
+func LoadJSON(path string) (*DataSet, error)
+
+// LoadJSONL reads a JSON Lines file (one JSON object per line).
+func LoadJSONL(path string) (*DataSet, error)
+
+// Rows returns the total number of data rows.
+func (ds *DataSet) Rows() int
+
+// Pick returns a row using the given strategy.
+func (ds *DataSet) Pick(strategy Strategy, vuid int64, iteration int64) map[string]string
+
+// Strategy defines how rows are selected.
+type Strategy int
+const (
+    Sequential   Strategy = iota  // round-robin through rows
+    Random                        // random selection (thread-safe)
+    UniquePerVU                   // each VU gets a unique row (wraps if VUs > rows)
+    SharedQueue                   // rows consumed from a shared queue (no reuse)
+)
+```
+
+#### Usage in Setup + RunVU
+
+```go
+Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+    ds, err := gtestdata.LoadCSV(ctx.Param("data_file"))
+    if err != nil {
+        return nil, err
+    }
+    return map[string]any{"users": ds}, nil
+},
+
+RunVU: func(ctx gtest.ScenarioContext) error {
+    ds := ctx.GlobalState("users").(*gtestdata.DataSet)
+    row := ds.Pick(gtestdata.Sequential, ctx.VUID(), ctx.Iteration())
+
+    username := row["username"]
+    password := row["password"]
+    // ... use in request ...
+    return nil
+},
+```
+
+---
+
+### 14.7 Real-Time Metrics Export
+
+**Inspiration**: k6 `--out influxdb`, k6 `--out prometheus-rw`, Gatling live Graphite.
+
+Allow streaming metrics to external observability systems during test execution for real-time monitoring dashboards.
+
+#### Public API
+
+```go
+// MetricsExporter is implemented by adapters that stream metrics externally.
+type MetricsExporter interface {
+    // OnMetric is called for each metric observation during the test.
+    OnMetric(name string, metricType string, value float64, tags Tags, timestamp time.Time)
+
+    // Flush is called periodically and at test end.
+    Flush(ctx context.Context) error
+
+    // Close releases resources.
+    Close() error
+}
+```
+
+#### CLI Flag
+
+```bash
+go run main.go --out prometheus-rw=http://localhost:9090/api/v1/write
+go run main.go --out influxdb=http://localhost:8086/gtest
+go run main.go --out json-stream=metrics.jsonl
+```
+
+#### Built-in Exporters
+
+| Exporter | Flag Value | Output |
+|----------|-----------|--------|
+| JSON Lines | `json-stream=<path>` | One JSON object per metric per flush interval |
+| Prometheus Remote Write | `prometheus-rw=<url>` | Standard Prometheus remote write protocol |
+| StatsD | `statsd=<host:port>` | UDP StatsD protocol |
+
+#### Configuration
+
+```yaml
+scenarios:
+  my_test:
+    # ... existing fields ...
+    export:
+      flush_interval: 5s   # how often to push metrics (default: 10s)
+```
+
+---
+
+### 14.8 Execution Summary Hooks
+
+**Inspiration**: k6 `handleSummary()`.
+
+Allow test developers to programmatically process the final summary data (e.g., to send a Slack notification, write custom report formats, or upload to a dashboard).
+
+#### Public API
+
+```go
+// SummaryHook receives the complete test results after execution completes.
+type SummaryHook func(ctx context.Context, summary SummaryData) error
+
+// SummaryData contains the full test run metadata, metrics, and threshold results.
+type SummaryData struct {
+    SuiteName   string
+    Scenario    string
+    Version     string
+    StartedAt   time.Time
+    EndedAt     time.Time
+    Metrics     MetricsSnapshot
+    Thresholds  []ThresholdResult
+    Passed      bool
+}
+
+// Register via Scenario:
+type Scenario struct {
+    // ... existing fields ...
+    HandleSummary SummaryHook  // optional, called after report generation
+}
+```
+
+#### Usage
+
+```go
+suite.RegisterScenario("my_test", gtest.Scenario{
+    RunVU: runVU,
+    HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+        // Post to Slack
+        msg := fmt.Sprintf("Load test %s: %s", summary.Scenario, verdictStr(summary.Passed))
+        return postSlack(ctx, webhookURL, msg)
+    },
+})
+```
+
+---
+
+### 14.9 Graceful Abort (Early Stop)
+
+**Inspiration**: k6 `abortOnFail` threshold option.
+
+Allow thresholds to trigger an **early abort** of the test if breached during execution (not just post-run evaluation).
+
+#### Configuration
+
+```yaml
+thresholds:
+  - metric: http_req_failed
+    stat: rate
+    operator: ">="
+    target: "0.50"
+    abort_on_fail: true         # NEW: stop the test immediately
+    delay_abort_eval: 30s       # NEW: wait this long before evaluating (warm-up)
+```
+
+#### Behavior
+
+- Thresholds with `abort_on_fail: true` are evaluated periodically during the run (every 5s by default).
+- If breached after `delay_abort_eval`, the framework cancels all VU contexts immediately.
+- The console report shows `ABORTED` instead of `PASSED/FAILED`.
+
+---
+
+### 14.10 Tagging and Filtering in Reports
+
+**Inspiration**: k6 tag filtering, Gatling assertions by group.
+
+Allow filtering the console and JSON reports by tag dimensions, and support per-tag threshold evaluation.
+
+#### Per-Tag Thresholds
+
+```yaml
+thresholds:
+  - metric: http_req_duration
+    stat: p95
+    operator: "<"
+    target: "100ms"
+    tags:
+      endpoint: "/api/fast"
+
+  - metric: http_req_duration
+    stat: p95
+    operator: "<"
+    target: "500ms"
+    tags:
+      endpoint: "/api/slow"
+```
+
+#### CLI Filtering
+
+```bash
+# Show only metrics with specific tags in the report:
+go run main.go --tag-filter endpoint=/api/checkout
+```
+
+---
+
+### Phase 3 Increment Delivery Plan
+
+| Increment | Scope | Dependencies |
+|-----------|-------|-------------|
+| **3.1** | Checks + Groups | None (pure framework addition) |
+| **3.2** | HTTP Module | 3.1 (uses checks for auto-assertions) |
+| **3.3** | Ramping VUs executor | None (new pacing engine) |
+| **3.4** | Data Parameterization module | None (utility package) |
+| **3.5** | Multi-Scenario execution | 3.3 (needs all executors) |
+| **3.6** | Real-Time Metrics Export | None (new output pipeline) |
+| **3.7** | Summary Hooks | None (post-run extension) |
+| **3.8** | Graceful Abort | 3.6 (needs periodic evaluation) |
+| **3.9** | Tag Filtering + Per-Tag Thresholds | None (config + SLA evaluator) |

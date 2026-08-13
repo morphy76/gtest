@@ -2,6 +2,8 @@
 
 `gtest` is a developer-centric, high-performance load testing library and execution framework built for Go 1.26+. It separates load profile configuration from scenario execution code, allowing developers to define test scenarios in Go with rich lifecycle hooks while managing concurrency, pacing profiles, and SLA assertions declaratively via YAML.
 
+> **New to gtest?** See the [Developer Guide](docs/GUIDE.md) for a step-by-step adoption walkthrough.
+
 ---
 
 ## Key Features
@@ -31,11 +33,11 @@ Test suites are created using `gtest.NewSuite("Suite Name")`. Each scenario regi
 
 ```go
 type Scenario struct {
-    Setup      func(ctx context.Context) (map[string]any, error)
+    Setup      func(ctx ScenarioContext) (map[string]any, error)
     PreTest    func(ctx ScenarioContext) error
     RunVU      func(ctx ScenarioContext) error
     AfterTest  func(ctx ScenarioContext) error
-    Teardown   func(ctx context.Context, state map[string]any) error
+    Teardown   func(ctx ScenarioContext, state map[string]any) error
 }
 ```
 
@@ -183,19 +185,19 @@ scenarios:
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/morphy76/gtest/pkg/gtest"
+	_ "github.com/morphy76/gtest/internal/runner" // registers the suite executor
 )
 
 func main() {
 	suite := gtest.NewSuite("E-Commerce Load Test Suite")
 
 	suite.RegisterScenario("http_checkout_flow", gtest.Scenario{
-		Setup: func(ctx context.Context) (map[string]any, error) {
+		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 5 * time.Second}
 			return map[string]any{"client": client}, nil
 		},
@@ -228,7 +230,7 @@ func main() {
 			ctx.Log().Debug().Msg("iteration finished")
 			return nil
 		},
-		Teardown: func(ctx context.Context, state map[string]any) error {
+		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 			return nil
 		},
 	})
