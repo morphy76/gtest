@@ -51,7 +51,7 @@ github.com/morphy76/gtest/               ← module root
 │   ├── version/
 │   │   └── version.go                   ← Version, Commit, BuildTime vars (ldflags target)
 │   ├── config/                          ← YAML loading, validation, Config/ScenarioConfig types
-│   ├── engine/                          ← VU lifecycle, pacing (constant_vus, arrival_rate)
+│   ├── engine/                          ← VU lifecycle, pacing (constant_vus, arrival_rate, ramping_vus)
 │   ├── metric/                          ← In-memory metrics engine (Registry, Collector, Aggregator, Reader, Store)
 │   ├── sla/                             ← Threshold evaluation and results
 │   ├── log/                             ← Zerolog adapter implementing gtest.Logger
@@ -66,6 +66,7 @@ github.com/morphy76/gtest/               ← module root
 └── examples/
     ├── http_checkout/                   ← REST API load test (constant_vus)
     ├── grpc_user_service/               ← RPC arrival rate pacing (arrival_rate)
+    ├── ramping_vus/                     ← Multi-stage spike test (ramping_vus)
     ├── conversation_flow/               ← Real-time SSE conversational AI
     ├── think_time/                      ← Thinking time & delay strategies
     ├── checks/                          ← Inline assertions (ctx.Check)
@@ -556,16 +557,18 @@ Built-in metric names are defined as exported package-level constants directly i
 |-------|------|----------|---------|------------|
 | `version` | string | yes | — | Must be `"1.0"` |
 | `default_scenario` | string | no | — | Must match a key in `scenarios` if present |
-| `scenarios.<name>.type` | string | yes | — | `"constant_vus"` or `"arrival_rate"` |
+| `scenarios.<name>.type` | string | yes | — | `"constant_vus"`, `"arrival_rate"`, or `"ramping_vus"` |
 | `scenarios.<name>.vus` | int | if `constant_vus` | — | > 0 |
 | `scenarios.<name>.target_tps` | int | if `arrival_rate` | — | > 0 |
 | `scenarios.<name>.max_vus` | int | if `arrival_rate` | — | > 0, ≥ 1 |
+| `scenarios.<name>.stages` | list of stage objects | if `ramping_vus` | — | ≥ 1 stage (each with `target` ≥ 0 and `duration` > 0) |
 | `scenarios.<name>.ramp_up` | duration string | no | `"0s"` | ≥ 0 |
-| `scenarios.<name>.run_period` | duration string | yes | — | > 0 |
+| `scenarios.<name>.run_period` | duration string | if `constant_vus`/`arrival_rate` | — | > 0 |
 | `scenarios.<name>.ramp_down` | duration string | no | `"0s"` | ≥ 0 |
 | `scenarios.<name>.vu_timeout` | duration string | yes | — | > 0 |
 | `scenarios.<name>.params` | map[string]string | no | `{}` | Keys and values must be non-empty strings |
 | `scenarios.<name>.interaction_delay` | object | no | — | Thinking time strategy explicitly invoked via `ctx.Sleep()` (see §11, Increment 1.12) |
+| `scenarios.<name>.think_time` | object | no | — | Inter-iteration pacing delay executed by engine loop |
 | `scenarios.<name>.thresholds` | list | no | `[]` | See §7.2 |
 
 

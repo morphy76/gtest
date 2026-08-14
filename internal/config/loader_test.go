@@ -792,4 +792,51 @@ scenarios:
 	})
 }
 
+func TestLoad_RampingVUs(t *testing.T) {
+	t.Run("valid ramping_vus config loading", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+default_scenario: spike_test
+scenarios:
+  spike_test:
+    type: ramping_vus
+    vu_timeout: 2s
+    ramp_down: 10s
+    stages:
+      - target: 10
+        duration: 30s
+      - target: 10
+        duration: 1m
+      - target: 50
+        duration: 10s
+      - target: 0
+        duration: 30s
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "1.0", cfg.Version)
+		assert.Equal(t, "spike_test", cfg.DefaultScenario)
+
+		sc, ok := cfg.Scenarios["spike_test"]
+		require.True(t, ok)
+		assert.Equal(t, config.ScenarioTypeRampingVUs, sc.Type)
+		assert.Equal(t, 2*time.Second, sc.VUTimeout)
+		assert.Equal(t, 10*time.Second, sc.RampDown)
+		require.Len(t, sc.Stages, 4)
+
+		assert.Equal(t, 10, sc.Stages[0].Target)
+		assert.Equal(t, 30*time.Second, sc.Stages[0].Duration)
+
+		assert.Equal(t, 10, sc.Stages[1].Target)
+		assert.Equal(t, 1*time.Minute, sc.Stages[1].Duration)
+
+		assert.Equal(t, 50, sc.Stages[2].Target)
+		assert.Equal(t, 10*time.Second, sc.Stages[2].Duration)
+
+		assert.Equal(t, 0, sc.Stages[3].Target)
+		assert.Equal(t, 30*time.Second, sc.Stages[3].Duration)
+	})
+}
+
 

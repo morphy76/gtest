@@ -54,6 +54,22 @@ func (p *ArrivalRatePacer) Run(
 	RunArrivalRate(ctx, scenario, cfg, scenarioName, globalState, logger, metrics)
 }
 
+// RampingVUsPacer executes the ramping_vus pacing strategy.
+type RampingVUsPacer struct{}
+
+// Run executes the ramping_vus pacing schedule.
+func (p *RampingVUsPacer) Run(
+	ctx context.Context,
+	scenario Scenario,
+	cfg config.ScenarioConfig,
+	scenarioName string,
+	globalState map[string]any,
+	logger log.Logger,
+	metrics metric.Collector,
+) {
+	RunRampingVUs(ctx, scenario, cfg, scenarioName, globalState, logger, metrics)
+}
+
 // PacingRegistry manages registered PacingEngine implementations indexed by ScenarioType.
 type PacingRegistry interface {
 	Register(scenarioType config.ScenarioType, pacer PacingEngine)
@@ -72,6 +88,7 @@ func NewPacingRegistry() PacingRegistry {
 	}
 	r.pacers[config.ScenarioTypeConstantVUs] = &ConstantVUsPacer{}
 	r.pacers[config.ScenarioTypeArrivalRate] = &ArrivalRatePacer{}
+	r.pacers[config.ScenarioTypeRampingVUs] = &RampingVUsPacer{}
 	return r
 }
 

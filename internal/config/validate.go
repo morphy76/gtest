@@ -230,6 +230,12 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 				Message: "must be > 0 for constant_vus scenario type",
 			}
 		}
+		if sc.RunPeriod <= 0 {
+			return &ValidationError{
+				Field:   prefix + ".run_period",
+				Message: "must be > 0",
+			}
+		}
 	case ScenarioTypeArrivalRate:
 		if sc.TargetTPS <= 0 {
 			return &ValidationError{
@@ -243,18 +249,38 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 				Message: "must be > 0 for arrival_rate scenario type",
 			}
 		}
+		if sc.RunPeriod <= 0 {
+			return &ValidationError{
+				Field:   prefix + ".run_period",
+				Message: "must be > 0",
+			}
+		}
+	case ScenarioTypeRampingVUs:
+		if len(sc.Stages) == 0 {
+			return &ValidationError{
+				Field:   prefix + ".stages",
+				Message: "at least one stage must be defined for ramping_vus scenario type",
+			}
+		}
+		for i, st := range sc.Stages {
+			stPrefix := fmt.Sprintf("%s.stages[%d]", prefix, i)
+			if st.Target < 0 {
+				return &ValidationError{
+					Field:   stPrefix + ".target",
+					Message: "must be >= 0",
+				}
+			}
+			if st.Duration <= 0 {
+				return &ValidationError{
+					Field:   stPrefix + ".duration",
+					Message: "must be > 0",
+				}
+			}
+		}
 	default:
 		return &ValidationError{
 			Field:   prefix + ".type",
-			Message: fmt.Sprintf("must be %q or %q, got %q", ScenarioTypeConstantVUs, ScenarioTypeArrivalRate, sc.Type),
-		}
-	}
-
-	// run_period is required and must be > 0.
-	if sc.RunPeriod <= 0 {
-		return &ValidationError{
-			Field:   prefix + ".run_period",
-			Message: "must be > 0",
+			Message: fmt.Sprintf("must be %q, %q, or %q, got %q", ScenarioTypeConstantVUs, ScenarioTypeArrivalRate, ScenarioTypeRampingVUs, sc.Type),
 		}
 	}
 
