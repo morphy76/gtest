@@ -19,6 +19,7 @@ A step-by-step guide for load test developers adopting the `gtest` framework.
 11. [Patterns & Recipes](#11-patterns--recipes)
 12. [Troubleshooting](#12-troubleshooting)
 13. [Reference Implementations (examples/)](#13-reference-implementations-examples)
+14. [Performance & Framework Overhead Optimization](#14-performance--framework-overhead-optimization)
 
 ---
 
@@ -948,4 +949,57 @@ Verify that all examples compile cleanly across the entire workspace:
 ```bash
 make test-examples
 ```
+
+---
+
+## 14. Performance & Framework Overhead Optimization
+
+When load testing high-throughput systems (generating 50,000–500,000+ transactions per second), framework execution overhead must be as close to zero as possible. Any CPU cycles spent in framework machinery delay request dispatch and distort latency histograms (coordinated omission).
+
+`gtest` incorporates extensive low-level optimizations across context lifecycle, metric ingestion, and pacing concurrency.
+
+### 14.1 Zero-Allocation Virtual User Execution Loop
+
+In steady-state execution, each Virtual User goroutine runs with **0 heap allocations per iteration**:
+
+1. **Context Reuse**: The `ScenarioContext` instance is allocated once when the VU starts and is reused across all subsequent iterations. Only the iteration counter and active context are updated in place.
+2. **Hoisted Configurations**: Static scenario configurations (e.g. `interaction_delay` / `think_time` generators) are initialized once per VU rather than re-instantiated per iteration.
+3. **Pre-Bound Logging Context**: VU ID and scenario names are bound to the logger once at VU startup, avoiding repetitive zerolog dictionary allocations during iterations.
+4. **Lightweight Timeout Management**: When `vu_timeout` is not set or handled at the protocol layer, per-iteration Go runtime timer registration (`context.WithTimeout`) is bypassed entirely.
+
+### 14.2 Lock-Free Metrics Architecture
+
+Telemetry collection is built for ultra-high concurrency across multi-core processors:
+
+| Mechanism | Implementation | Benefit |
+|---|---|---|
+| **Copy-on-Write Storage** | `atomic.Pointer[map[metricKey]V]` | Read lookups (`ctx.Metrics().Counter(...)`) are 100% lock-free, eliminating CPU cache-line bouncing across multi-core systems. |
+| **Sharded HDR Histograms** | 16-stripe mutex-guarded shards | `ctx.Metrics().Duration(...).Observe(d)` distributes observations across 16 shards, eliminating global mutex contention. |
+| **Fast Tag Key Generation** | Slice-free formatting | Empty tags (`Tags{}`) and single-tag lookups (`Tags{"name": "check"}`) allocate zero slices and skip string sorting. |
+| **Pre-Resolved Check Handles** | Internal `checkCounterPair` cache | Inline assertions (`ctx.Check`) resolve metric handles once and evaluate in **~6.4ns** with zero heap allocations. |
+
+### 14.3 Bounded Worker Pool Pacing (`arrival_rate`)
+
+In `arrival_rate` mode, `gtest` maintains a pre-allocated worker pool of up to `max_vus` persistent goroutines consuming iteration jobs from a bounded channel. This eliminates continuous goroutine creation and destruction under high TPS, preventing runtime scheduler thrashing and GC metadata overhead.
+
+### 14.4 Running Microbenchmarks
+
+`gtest` includes an extensive microbenchmark suite (`testing.B` with `-benchmem`) covering all engine pacing modes, context operations, and metric collection handles.
+
+Execute all microbenchmarks:
+
+```bash
+make test-bench
+```
+
+Expected baseline performance on modern hardware (e.g. Apple Silicon / Linux x86-64):
+
+| Benchmark Target | Latency / Throughput | Memory Allocation |
+|---|---|---|
+| `BenchmarkScenarioContext_Check` | **~6.4 ns/op** | **0 B/op (0 allocs/op)** |
+| `BenchmarkCollector_Counter_Parallel` | **~65 ns/op** | **0 B/op (0 allocs/op)** |
+| `BenchmarkCollector_Gauge_Parallel` | **~55 ns/op** | **0 B/op (0 allocs/op)** |
+| `BenchmarkCollector_Duration_Parallel` | **~115 ns/op** | **0 B/op (0 allocs/op)** |
+| `BenchmarkEngine_ConstantVUs_NoopIteration` | **> 1,000,000 iter/s** | **0 allocs/op steady-state** |
+
 

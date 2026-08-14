@@ -39,3 +39,6 @@ jobs:
 
       - name: Build Examples
         run: make test-examples
+
+      - name: Run Benchmarks
+        run: make test-bench

@@ -62,12 +62,17 @@ func (a *aggregator) MergedHistogramSnapshot(name string) HistogramSnapshot {
 		return all[0].Snapshot()
 	}
 
-	// Collect shared + per-VU histograms from every tag variant.
+	// Collect shards + per-VU histograms from every tag variant.
 	merged := newHistogram()
 	for _, h := range all {
 		h.mu.Lock()
-		if h.shared != nil && h.shared.TotalCount() > 0 {
-			merged.histograms = append(merged.histograms, h.shared)
+		for i := 0; i < histShards; i++ {
+			shard := &h.shards[i]
+			shard.mu.Lock()
+			if shard.hist != nil && shard.hist.TotalCount() > 0 {
+				merged.histograms = append(merged.histograms, shard.hist)
+			}
+			shard.mu.Unlock()
 		}
 		merged.histograms = append(merged.histograms, h.histograms...)
 		h.mu.Unlock()

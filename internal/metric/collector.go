@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // metricKey uniquely identifies a metric instance by name and sorted tags.
@@ -15,6 +16,14 @@ type metricKey struct {
 // makeKey produces a metricKey from a name and tags map.
 // Tags are sorted by key to ensure deterministic identity.
 func makeKey(name string, tags Tags) metricKey {
+	if len(tags) == 0 {
+		return metricKey{name: name, tagsKey: ""}
+	}
+	if len(tags) == 1 {
+		for k, v := range tags {
+			return metricKey{name: name, tagsKey: k + "=" + v}
+		}
+	}
 	return metricKey{name: name, tagsKey: sortedTagsKey(tags)}
 }
 
@@ -22,6 +31,11 @@ func makeKey(name string, tags Tags) metricKey {
 func sortedTagsKey(tags Tags) string {
 	if len(tags) == 0 {
 		return ""
+	}
+	if len(tags) == 1 {
+		for k, v := range tags {
+			return k + "=" + v
+		}
 	}
 	keys := make([]string, 0, len(tags))
 	for k := range tags {
@@ -41,33 +55,37 @@ func sortedTagsKey(tags Tags) string {
 	return b.String()
 }
 
-// syncStorage is a generic thread-safe map leveraging double-checked locking for fast read paths.
+// syncStorage is a thread-safe map leveraging copy-on-write atomic pointers for 100% lock-free reads.
 type syncStorage[K comparable, V any] struct {
-	mu    sync.RWMutex
-	items map[K]V
+	writeMu sync.Mutex
+	readMap atomic.Pointer[map[K]V]
 }
 
 func newSyncStorage[K comparable, V any]() *syncStorage[K, V] {
-	return &syncStorage[K, V]{
-		items: make(map[K]V),
-	}
+	s := &syncStorage[K, V]{}
+	empty := make(map[K]V)
+	s.readMap.Store(&empty)
+	return s
 }
 
 // GetOrCreate retrieves an existing item or creates a new one using factory.
-// It executes beforeCreate under the write lock before calling factory and storing the value.
+// Reads are 100% lock-free via atomic pointer load.
 func (s *syncStorage[K, V]) GetOrCreate(key K, beforeCreate func(), factory func() V) V {
-	s.mu.RLock()
-	if val, ok := s.items[key]; ok {
-		s.mu.RUnlock()
-		return val
+	m := s.readMap.Load()
+	if m != nil {
+		if val, ok := (*m)[key]; ok {
+			return val
+		}
 	}
-	s.mu.RUnlock()
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
-	if val, ok := s.items[key]; ok {
-		return val
+	m = s.readMap.Load()
+	if m != nil {
+		if val, ok := (*m)[key]; ok {
+			return val
+		}
 	}
 
 	if beforeCreate != nil {
@@ -75,23 +93,38 @@ func (s *syncStorage[K, V]) GetOrCreate(key K, beforeCreate func(), factory func
 	}
 
 	val := factory()
-	s.items[key] = val
+	var newMap map[K]V
+	if m != nil {
+		newMap = make(map[K]V, len(*m)+1)
+		for k, v := range *m {
+			newMap[k] = v
+		}
+	} else {
+		newMap = make(map[K]V, 1)
+	}
+	newMap[key] = val
+	s.readMap.Store(&newMap)
 	return val
 }
 
 // Get returns the item for key, or zero value and false if not found.
 func (s *syncStorage[K, V]) Get(key K) (V, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	val, ok := s.items[key]
+	m := s.readMap.Load()
+	if m == nil {
+		var zero V
+		return zero, false
+	}
+	val, ok := (*m)[key]
 	return val, ok
 }
 
-// ForEach iterates over all items in the storage.
+// ForEach iterates over all items in the storage in a lock-free snapshot.
 func (s *syncStorage[K, V]) ForEach(fn func(key K, val V)) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for k, v := range s.items {
+	m := s.readMap.Load()
+	if m == nil {
+		return
+	}
+	for k, v := range *m {
 		fn(k, v)
 	}
 }

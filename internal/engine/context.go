@@ -102,6 +102,11 @@ type scenarioBinder interface {
 	WithIteration(int64) any
 }
 
+type checkCounterPair struct {
+	passed metric.Counter
+	failed metric.Counter
+}
+
 type scenarioContext struct {
 	context.Context
 	vuid         int64
@@ -112,6 +117,7 @@ type scenarioContext struct {
 	logger       log.Logger
 	metrics      metric.Collector
 	delayGen     delay.DelayGenerator
+	checkCache   map[string]checkCounterPair
 }
 
 // NewScenarioContext constructs a ScenarioContext.
@@ -159,7 +165,6 @@ func newScenarioContext(
 		delayGen, _ = delay.NewDelayGenerator(delayCfg)
 	}
 
-
 	return &scenarioContext{
 		Context:      ctx,
 		vuid:         vuid,
@@ -170,7 +175,55 @@ func newScenarioContext(
 		logger:       boundLogger,
 		metrics:      metrics,
 		delayGen:     delayGen,
+		checkCache:   make(map[string]checkCounterPair, 4),
 	}
+}
+
+// newVUScenarioContext constructs a reusable ScenarioContext scoped to a VU goroutine.
+func newVUScenarioContext(
+	ctx context.Context,
+	vuid int64,
+	cfg config.ScenarioConfig,
+	scenarioName string,
+	globalState map[string]any,
+	logger log.Logger,
+	metrics metric.Collector,
+) *scenarioContext {
+	boundLogger := logger
+	if b, ok := logger.(scenarioBinder); ok {
+		if s, ok := b.WithScenario(scenarioName).(scenarioBinder); ok {
+			if v, ok := s.WithVU(int(vuid)).(log.Logger); ok {
+				boundLogger = v
+			}
+		}
+	}
+
+	var delayGen delay.DelayGenerator
+	delayCfg := cfg.InteractionDelay
+	if delayCfg == nil {
+		delayCfg = cfg.ThinkTime
+	}
+	if delayCfg != nil {
+		delayGen, _ = delay.NewDelayGenerator(delayCfg)
+	}
+
+	return &scenarioContext{
+		Context:      ctx,
+		vuid:         vuid,
+		iteration:    0,
+		scenarioName: scenarioName,
+		params:       cfg.Params,
+		globalState:  globalState,
+		logger:       boundLogger,
+		metrics:      metrics,
+		delayGen:     delayGen,
+		checkCache:   make(map[string]checkCounterPair, 4),
+	}
+}
+
+func (c *scenarioContext) prepareIteration(ctx context.Context, iteration int64) {
+	c.Context = ctx
+	c.iteration = iteration
 }
 
 
@@ -282,16 +335,31 @@ func (c *scenarioContext) Check(name string, fn CheckFunc) bool {
 		reason = fn()
 	}
 
-	if reason == "" {
-		if c.metrics != nil {
-			c.metrics.Counter(metric.MetricChecksPassed, metric.Tags{"name": name}).Inc()
+	if c.metrics == nil {
+		if reason != "" && c.logger != nil {
+			c.logger.Warn().Str("check", name).Str("reason", reason).Msg("check failed")
 		}
+		return reason == ""
+	}
+
+	pair, ok := c.checkCache[name]
+	if !ok {
+		pair = checkCounterPair{
+			passed: c.metrics.Counter(metric.MetricChecksPassed, metric.Tags{"name": name}),
+			failed: c.metrics.Counter(metric.MetricChecksFailed, metric.Tags{"name": name}),
+		}
+		if c.checkCache == nil {
+			c.checkCache = make(map[string]checkCounterPair, 4)
+		}
+		c.checkCache[name] = pair
+	}
+
+	if reason == "" {
+		pair.passed.Inc()
 		return true
 	}
 
-	if c.metrics != nil {
-		c.metrics.Counter(metric.MetricChecksFailed, metric.Tags{"name": name}).Inc()
-	}
+	pair.failed.Inc()
 	if c.logger != nil {
 		c.logger.Warn().Str("check", name).Str("reason", reason).Msg("check failed")
 	}
