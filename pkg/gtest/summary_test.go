@@ -47,8 +47,8 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	err := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout, func(int) {})
-	require.NoError(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout)
+	require.NoError(t, res.Error)
 
 	assert.True(t, handleSummaryCalled, "HandleSummary must be invoked after test execution")
 	assert.Equal(t, "Summary Test Suite", capturedSummary.SuiteName)
@@ -93,8 +93,8 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	err := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout, func(int) {})
-	require.NoError(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout)
+	require.NoError(t, res.Error)
 
 	// Validate metadata
 	assert.Equal(t, "Complete Summary Suite", capturedSummary.SuiteName)
@@ -168,16 +168,11 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	exitCode := -1
-
-	err := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout, func(code int) {
-
-		exitCode = code
-	})
-	require.NoError(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout)
+	require.NoError(t, res.Error)
 
 	// Since threshold passed, exit code must remain 0 despite HandleSummary error
-	assert.Equal(t, 0, exitCode, "HandleSummary error must not mutate exit code 0 to 1")
+	assert.Equal(t, 0, res.ExitCode(), "HandleSummary error must not mutate exit code 0 to 1")
 }
 
 func TestSummaryDataHelperMethods(t *testing.T) {

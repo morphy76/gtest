@@ -13,19 +13,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// AC-1.8.1: --version flag prints version string and returns nil (no os.Exit)
+// AC-1.8.1: --version flag prints version string and returns ExecutionResult (no os.Exit)
 func TestExecuteVersionFlagReturnsNil(t *testing.T) {
 	suite := gtest.NewSuite("Test Suite")
 	var stdout bytes.Buffer
-	var exitCalled bool
 
-	exitFunc := func(code int) {
-		exitCalled = true
-	}
-
-	err := suite.ExecuteWithArgs([]string{"--version"}, &stdout, exitFunc)
-	require.NoError(t, err, "--version should return nil error")
-	assert.False(t, exitCalled, "exitFunc must not be called for --version")
+	res := suite.ExecuteWithArgs([]string{"--version"}, &stdout)
+	require.NoError(t, res.Error, "--version should return nil error")
+	assert.True(t, res.Passed)
+	assert.False(t, res.Aborted)
+	assert.Equal(t, 0, res.ExitCode())
 	assert.Contains(t, stdout.String(), "gtest version")
 }
 
@@ -34,11 +31,12 @@ func TestExecuteNonexistentConfigReturnsConfigError(t *testing.T) {
 	suite := gtest.NewSuite("Test Suite")
 	var stdout bytes.Buffer
 
-	err := suite.ExecuteWithArgs([]string{"--config", "nonexistent_gtest.yaml"}, &stdout, nil)
-	require.Error(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", "nonexistent_gtest.yaml"}, &stdout)
+	require.Error(t, res.Error)
+	assert.Equal(t, 1, res.ExitCode())
 
 	var cfgErr *gtest.ConfigError
-	require.True(t, errors.As(err, &cfgErr), "must return *gtest.ConfigError, got %T", err)
+	require.True(t, errors.As(res.Error, &cfgErr), "must return *gtest.ConfigError, got %T", res.Error)
 	assert.Equal(t, "nonexistent_gtest.yaml", cfgErr.Path)
 }
 
@@ -67,11 +65,12 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	err := suite.ExecuteWithArgs([]string{"--config", configPath, "--scenario", "unconfigured_scenario"}, &stdout, nil)
-	require.Error(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", configPath, "--scenario", "unconfigured_scenario"}, &stdout)
+	require.Error(t, res.Error)
+	assert.Equal(t, 1, res.ExitCode())
 
 	var notFoundErr *gtest.ScenarioNotFoundError
-	require.True(t, errors.As(err, &notFoundErr), "must return *gtest.ScenarioNotFoundError")
+	require.True(t, errors.As(res.Error, &notFoundErr), "must return *gtest.ScenarioNotFoundError")
 	assert.Equal(t, "unconfigured_scenario", notFoundErr.Name)
 }
 
@@ -97,15 +96,16 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	err := suite.ExecuteWithArgs([]string{"--config", configPath, "--scenario", "unregistered_scenario"}, &stdout, nil)
-	require.Error(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", configPath, "--scenario", "unregistered_scenario"}, &stdout)
+	require.Error(t, res.Error)
+	assert.Equal(t, 1, res.ExitCode())
 
 	var notFoundErr *gtest.ScenarioNotFoundError
-	require.True(t, errors.As(err, &notFoundErr), "must return *gtest.ScenarioNotFoundError")
+	require.True(t, errors.As(res.Error, &notFoundErr), "must return *gtest.ScenarioNotFoundError")
 	assert.Equal(t, "unregistered_scenario", notFoundErr.Name)
 }
 
-// AC-1.8.5: All thresholds pass → report printed, os.Exit(0) called
+// AC-1.8.5: All thresholds pass → report printed, ExitCode() is 0
 func TestExecuteAllThresholdsPassExitsZero(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "gtest.yaml")
@@ -135,21 +135,17 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	exitCode := -1
-
-	exitFunc := func(code int) {
-		exitCode = code
-	}
-
-	err := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout, exitFunc)
-	require.NoError(t, err)
-	assert.Equal(t, 0, exitCode, "must call exitFunc(0) when all thresholds pass")
+	res := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout)
+	require.NoError(t, res.Error)
+	assert.True(t, res.Passed)
+	assert.False(t, res.Aborted)
+	assert.Equal(t, 0, res.ExitCode(), "must return ExitCode() == 0 when all thresholds pass")
 	assert.Contains(t, stdout.String(), "GTEST LOAD TEST SUMMARY")
 	assert.Contains(t, stdout.String(), "[PASS]")
 	assert.Contains(t, stdout.String(), "OVERALL: PASSED")
 }
 
-// AC-1.8.6: Any threshold fails → report printed with [FAIL] row, os.Exit(1) called
+// AC-1.8.6: Any threshold fails → report printed with [FAIL] row, ExitCode() is 1
 func TestExecuteThresholdBreachedExitsOne(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "gtest.yaml")
@@ -180,16 +176,10 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	exitCode := -1
-
-	exitFunc := func(code int) {
-		exitCode = code
-	}
-
-
-	err := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout, exitFunc)
-	require.NoError(t, err)
-	assert.Equal(t, 1, exitCode, "must call exitFunc(1) when a threshold breaches")
+	res := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout)
+	require.NoError(t, res.Error)
+	assert.False(t, res.Passed)
+	assert.Equal(t, 1, res.ExitCode(), "must return ExitCode() == 1 when a threshold breaches")
 	assert.Contains(t, stdout.String(), "GTEST LOAD TEST SUMMARY")
 	assert.Contains(t, stdout.String(), "[FAIL]")
 	assert.Contains(t, stdout.String(), "OVERALL: FAILED")
@@ -220,8 +210,10 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	err := suite.ExecuteWithArgs([]string{"--config", configPath, "--json-report-out", jsonReportPath}, &stdout, func(int) {})
-	require.NoError(t, err)
+	res := suite.ExecuteWithArgs([]string{"--config", configPath, "--json-report-out", jsonReportPath}, &stdout)
+	require.NoError(t, res.Error)
+	assert.True(t, res.Passed)
+	assert.Equal(t, 0, res.ExitCode())
 
 	assert.Contains(t, stdout.String(), "GTEST LOAD TEST SUMMARY", "console summary should be printed to stdout")
 
@@ -231,4 +223,5 @@ scenarios:
 	assert.Contains(t, string(jsonBytes), `"scenario": "scenario_a"`)
 	assert.Contains(t, string(jsonBytes), `"name": "http_requests"`)
 }
+
 

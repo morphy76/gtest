@@ -324,8 +324,19 @@ func NewSuite(name string) *Suite
 // RegisterScenario associates a named Scenario with the suite.
 // The name must exactly match a scenario key in gtest.yaml.
 // Panics if name is empty or if RunVU is nil.
-// Calling RegisterScenario after Execute has been called is undefined behavior.
+// Panics if called after Execute has been called.
 func (s *Suite) RegisterScenario(name string, scenario Scenario)
+
+// ExecutionResult represents the final outcome of running a test suite.
+type ExecutionResult struct {
+	Passed      bool
+	Aborted     bool
+	AbortReason string
+	Error       error
+}
+
+// ExitCode returns 0 if all thresholds passed and no error/abort occurred, or 1 otherwise.
+func (r ExecutionResult) ExitCode() int
 
 // Execute is the CLI entry point. It:
 //  1. Parses CLI flags (see §6 for the full flag inventory).
@@ -333,29 +344,25 @@ func (s *Suite) RegisterScenario(name string, scenario Scenario)
 //  3. Resolves the target scenario (--scenario flag or default_scenario).
 //  4. Executes the scenario lifecycle (Setup → ramp-up → run → ramp-down → Teardown).
 //  5. Evaluates SLA thresholds.
-//  6. Prints the terminal summary report.
-//  7. Returns an error if the scenario was not found, config was invalid,
-//     or Setup returned an error. Does NOT return an error for SLA threshold failures
-//     (those are expressed via os.Exit(1)).
-//
-// Execute calls os.Exit(1) directly if any SLA threshold is breached.
-// Execute calls os.Exit(0) on clean completion.
-// It returns a non-nil error only for fatal pre-execution failures (config, registration).
-func (s *Suite) Execute() error
+//  6. Prints the terminal summary report and executes HandleSummary if configured.
+//  7. Returns an ExecutionResult containing the execution outcome and does NOT
+//     terminate the host process via os.Exit.
+func (s *Suite) Execute() ExecutionResult
 ```
 
 **Error Taxonomy for `Execute()`:**
 
 | Condition | Behavior |
 |-----------|----------|
-| `--config` file not found | Returns `*gtest.ConfigError` |
-| YAML parse error | Returns `*gtest.ConfigError` |
-| Validation invariant violated | Returns `*gtest.ValidationError` |
-| Scenario in `--scenario` not registered | Returns `*gtest.ScenarioNotFoundError` |
-| Scenario registered but not in config | Returns `*gtest.ScenarioNotFoundError` |
-| `Setup` hook returns error | Returns `*gtest.SetupError` wrapping the hook error |
-| SLA threshold breached | Calls `os.Exit(1)` (does not return) |
-| Clean completion, all thresholds pass | Calls `os.Exit(0)` (does not return) |
+| `--config` file not found | Returns `ExecutionResult{Error: *gtest.ConfigError}` |
+| YAML parse error | Returns `ExecutionResult{Error: *gtest.ConfigError}` |
+| Validation invariant violated | Returns `ExecutionResult{Error: *gtest.ValidationError}` |
+| Scenario in `--scenario` not registered | Returns `ExecutionResult{Error: *gtest.ScenarioNotFoundError}` |
+| Scenario registered but not in config | Returns `ExecutionResult{Error: *gtest.ScenarioNotFoundError}` |
+| `Setup` hook returns error | Returns `ExecutionResult{Error: *gtest.SetupError}` wrapping the hook error |
+| SLA threshold breached | Returns `ExecutionResult{Passed: false}`, `ExitCode() == 1` |
+| Execution aborted via abort_on_fail | Returns `ExecutionResult{Passed: false, Aborted: true, AbortReason: "..."}`, `ExitCode() == 1` |
+| Clean completion, all thresholds pass | Returns `ExecutionResult{Passed: true}`, `ExitCode() == 0` |
 
 ---
 
@@ -406,8 +413,8 @@ func (s *Suite) Execute() error
         │
         ▼
  ┌─ SLA Threshold Evaluation ─────────────────┐
- │  breach → print report, os.Exit(1)         │
- │  pass   → print report, os.Exit(0)         │
+ │  breach → print report, Passed=false       │
+ │  pass   → print report, Passed=true        │
  └────────────────────────────────────────────┘
 ```
 
@@ -913,16 +920,16 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 **Acceptance Criteria:**
 
 ```go
-// AC-1.8.1: --version flag prints version string and returns nil (no os.Exit)
-// AC-1.8.2: --config pointing to nonexistent file returns *gtest.ConfigError
-// AC-1.8.3: --scenario not in config returns *gtest.ScenarioNotFoundError
-// AC-1.8.4: Scenario registered but not in config returns *gtest.ScenarioNotFoundError
-// AC-1.8.5: All thresholds pass → report printed, os.Exit(0) called
-// AC-1.8.6: Any threshold fails → report printed with [FAIL] row, os.Exit(1) called
+// AC-1.8.1: --version flag prints version string and returns ExecutionResult (no os.Exit)
+// AC-1.8.2: --config pointing to nonexistent file returns *gtest.ConfigError in ExecutionResult.Error
+// AC-1.8.3: --scenario not in config returns *gtest.ScenarioNotFoundError in ExecutionResult.Error
+// AC-1.8.4: Scenario registered but not in config returns *gtest.ScenarioNotFoundError in ExecutionResult.Error
+// AC-1.8.5: All thresholds pass → report printed, ExecutionResult.ExitCode() is 0
+// AC-1.8.6: Any threshold fails → report printed with [FAIL] row, ExecutionResult.ExitCode() is 1
 ```
 
-**Test Strategy:** For exit code tests, run `Execute()` in a subprocess (use `os/exec` or `testutil`
-subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitFunc` in the CLI adapter.
+**Test Strategy:** Assert `ExecutionResult` and `res.ExitCode()` values returned by `Execute()` / `ExecuteWithArgs()`.
+
 
 ---
 
@@ -1140,7 +1147,7 @@ GET    /api/v1/tests/:id/report  → returns JSON report (same schema as §10.2)
 | # | Decision | Selected Approach | Rationale |
 |---|----------|-------------------|-----------|
 | 1 | Pacing Model | Both `constant_vus` and `arrival_rate` in Phase 1 | Config-driven; covers both closed and open load profiles |
-| 2 | SLA Assertions | `thresholds` block in YAML; breach → `os.Exit(1)` | CI/CD automation via exit code is the idiomatic shell contract |
+| 2 | SLA Assertions | `thresholds` block in YAML; breach → `ExecutionResult.ExitCode() == 1` | CI/CD automation via exit code is the idiomatic shell contract |
 | 3 | Concurrent Scenarios | Single scenario per CLI invocation | Prevents resource interference; multi-scenario reserved for Phase 2 orchestration layer |
 | 4 | Metrics Export | In-memory only; reports as final summary | Metrics capture business outcomes, not infrastructure telemetry |
 | 5 | Logger Exposure | Minimal `Logger`/`LogEvent` interface | Keeps zerolog as an internal detail; test developers depend on a stable abstraction |

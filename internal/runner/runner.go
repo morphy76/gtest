@@ -18,6 +18,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Result represents the outcome of running a load test suite.
+type Result struct {
+	Passed      bool
+	Aborted     bool
+	AbortReason string
+	Error       error
+}
+
 // ScenarioNotFoundError indicates a scenario was not found in the config or not registered.
 type ScenarioNotFoundError struct {
 	Name    string
@@ -38,32 +46,34 @@ type ScenarioRegistry interface {
 }
 
 // RunSuite executes the suite CLI workflow.
-func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func(int)) error {
+func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
+	if stdout == nil {
+		stdout = io.Discard
+	}
 	flags, err := cli.ParseFlags(args, stdout)
 	if err != nil {
-		return &config.ConfigError{Err: err}
+		return Result{Error: &config.ConfigError{Err: err}}
 	}
 
 	if flags.ShowVersion {
 		if _, err := fmt.Fprintf(stdout, "gtest version %s (commit: %s, build_time: %s)\n",
 			version.Version, version.Commit, version.BuildTime); err != nil {
-			return err
+			return Result{Error: err}
 		}
-		return nil
+		return Result{Passed: true}
 	}
-
 
 	cfg, err := config.LoadFromFile(flags.ConfigPath)
 	if err != nil {
 		var valErr *config.ValidationError
 		if errors.As(err, &valErr) {
-			return valErr
+			return Result{Error: valErr}
 		}
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			return cfgErr
+			return Result{Error: cfgErr}
 		}
-		return &config.ConfigError{Path: flags.ConfigPath, Err: err}
+		return Result{Error: &config.ConfigError{Path: flags.ConfigPath, Err: err}}
 	}
 
 	targetScenario := flags.ScenarioName
@@ -71,9 +81,11 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 		targetScenario = cfg.DefaultScenario
 	}
 	if targetScenario == "" {
-		return &ScenarioNotFoundError{
-			Name:    "",
-			Message: "no scenario specified via --scenario flag or default_scenario in config",
+		return Result{
+			Error: &ScenarioNotFoundError{
+				Name:    "",
+				Message: "no scenario specified via --scenario flag or default_scenario in config",
+			},
 		}
 	}
 
@@ -81,15 +93,19 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 	scenario, registered := s.GetScenario(targetScenario)
 
 	if !registered {
-		return &ScenarioNotFoundError{
-			Name:    targetScenario,
-			Message: fmt.Sprintf("scenario %q is not registered in Suite", targetScenario),
+		return Result{
+			Error: &ScenarioNotFoundError{
+				Name:    targetScenario,
+				Message: fmt.Sprintf("scenario %q is not registered in Suite", targetScenario),
+			},
 		}
 	}
 	if !inConfig {
-		return &ScenarioNotFoundError{
-			Name:    targetScenario,
-			Message: fmt.Sprintf("scenario %q is registered in code but not defined in config file %q", targetScenario, flags.ConfigPath),
+		return Result{
+			Error: &ScenarioNotFoundError{
+				Name:    targetScenario,
+				Message: fmt.Sprintf("scenario %q is registered in code but not defined in config file %q", targetScenario, flags.ConfigPath),
+			},
 		}
 	}
 
@@ -110,9 +126,9 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 	if execErr != nil {
 		var setupErr *engine.SetupError
 		if errors.As(execErr, &setupErr) {
-			return setupErr
+			return Result{Error: setupErr}
 		}
-		return execErr
+		return Result{Error: execErr}
 	}
 
 	// Evaluate SLA thresholds
@@ -167,15 +183,12 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 		}
 	}
 
-	if exitFunc != nil {
-		if allPassed {
-			exitFunc(0)
-		} else {
-			exitFunc(1)
-		}
+	return Result{
+		Passed:      allPassed,
+		Aborted:     executor.Aborted,
+		AbortReason: executor.AbortReason,
+		Error:       nil,
 	}
-
-	return nil
 }
 
 func buildSummaryData(

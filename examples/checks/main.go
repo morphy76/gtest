@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"time"
 
@@ -95,7 +96,10 @@ func main() {
 		},
 	})
 
-	if err := suite.Execute(); err != nil {
-		fmt.Printf("Execution failed: %v\n", err)
+	res := suite.Execute()
+	if res.Error != nil {
+		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)
 	}
+	os.Exit(res.ExitCode())
 }
+

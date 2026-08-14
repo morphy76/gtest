@@ -7,10 +7,12 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"time"
 
 	"github.com/morphy76/gtest/pkg/gtest"
 )
+
 
 func main() {
 	// Start an in-process HTTP mock server simulating backend services with varied latency
@@ -131,7 +133,9 @@ func main() {
 		},
 	})
 
-	if err := suite.Execute(); err != nil {
-		fmt.Printf("Execution failed: %v\n", err)
+	res := suite.Execute()
+	if res.Error != nil {
+		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)
 	}
+	os.Exit(res.ExitCode())
 }

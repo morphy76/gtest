@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/morphy76/gtest/pkg/gtest"
 )
@@ -19,7 +20,10 @@ func main() {
 		Teardown:  Teardown,
 	})
 
-	if err := suite.Execute(); err != nil {
-		fmt.Printf("Execution failed: %v\n", err)
+	res := suite.Execute()
+	if res.Error != nil {
+		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)
 	}
+	os.Exit(res.ExitCode())
 }
+

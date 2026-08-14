@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/morphy76/gtest/pkg/gtest"
 	"github.com/morphy76/gtest/pkg/gtest/data"
 )
+
 
 // Sample CSV dataset: user credentials and roles
 const sampleCSV = `username,user_id,role
@@ -175,7 +177,9 @@ func main() {
 		},
 	})
 
-	if err := suite.Execute(); err != nil {
-		fmt.Printf("Execution failed: %v\n", err)
+	res := suite.Execute()
+	if res.Error != nil {
+		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)
 	}
+	os.Exit(res.ExitCode())
 }
