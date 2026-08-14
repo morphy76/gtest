@@ -194,5 +194,48 @@ func TestScenarioContextSleep(t *testing.T) {
 			assert.GreaterOrEqual(t, d, 55*time.Millisecond)
 		}
 	})
+
+	t.Run("zero or negative explicit duration returns nil immediately", func(t *testing.T) {
+		var sleptDuration time.Duration
+
+		scenario := engine.Scenario{
+			RunVU: func(ctx engine.ScenarioContext) error {
+				start := time.Now()
+				err1 := ctx.Sleep(0)
+				err2 := ctx.Sleep(-50 * time.Millisecond)
+				sleptDuration = time.Since(start)
+				if err1 != nil {
+					return err1
+				}
+				return err2
+			},
+		}
+
+		cfg := config.ScenarioConfig{
+			Type:      config.ScenarioTypeConstantVUs,
+			VUs:       1,
+			RunPeriod: 50 * time.Millisecond,
+			VUTimeout: 1 * time.Second,
+		}
+
+		exec := engine.NewExecutor("sleep_zero_negative", scenario, cfg, logger, metrics)
+		err := exec.Execute(context.Background())
+		require.NoError(t, err)
+
+		assert.Less(t, sleptDuration, 10*time.Millisecond)
+	})
+
+	t.Run("pre-cancelled context returns ctx.Err() immediately", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		sCtx := engine.NewScenarioContext(ctx, 1, 0, config.ScenarioConfig{}, "test", nil, logger, metrics)
+		err := sCtx.Sleep(1 * time.Second)
+
+		require.Error(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
 }
+
+
 

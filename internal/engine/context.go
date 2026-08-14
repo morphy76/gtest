@@ -29,6 +29,20 @@ type scenarioContext struct {
 	delayGen     delay.DelayGenerator
 }
 
+// NewScenarioContext constructs a ScenarioContext.
+func NewScenarioContext(
+	ctx context.Context,
+	vuid int64,
+	iteration int64,
+	cfg config.ScenarioConfig,
+	scenarioName string,
+	globalState map[string]any,
+	logger log.Logger,
+	metrics metric.Collector,
+) ScenarioContext {
+	return newScenarioContext(ctx, vuid, iteration, cfg, scenarioName, globalState, logger, metrics)
+}
+
 func newScenarioContext(
 	ctx context.Context,
 	vuid int64,
@@ -39,6 +53,7 @@ func newScenarioContext(
 	logger log.Logger,
 	metrics metric.Collector,
 ) *scenarioContext {
+
 	boundLogger := logger
 	if b, ok := logger.(scenarioBinder); ok {
 		if s, ok := b.WithScenario(scenarioName).(scenarioBinder); ok {
