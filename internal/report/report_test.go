@@ -195,22 +195,42 @@ func TestMetricsSortedAlphabeticallyInBothFormats(t *testing.T) {
 	}
 }
 
-// AC-1.9.5: --report-out writes to the specified file, not stdout
-func TestWriteReportToFile(t *testing.T) {
+// AC-1.9.5: WriteReport writes to the provided io.Writer
+func TestWriteReport_ConsoleFormat(t *testing.T) {
+	data := createTestReportData()
+	var buf bytes.Buffer
+
+	err := report.WriteReport(&buf, "console", data)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "GTEST LOAD TEST SUMMARY")
+}
+
+func TestWriteReport_JSONFormat(t *testing.T) {
+	data := createTestReportData()
+	var buf bytes.Buffer
+
+	err := report.WriteReport(&buf, "json", data)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `"suite_name": "Test Suite"`)
+}
+
+func TestWriteReport_ToFile(t *testing.T) {
 	data := createTestReportData()
 	tempDir := t.TempDir()
 	outFilePath := filepath.Join(tempDir, "custom_report.txt")
 
-	var stdoutBuf bytes.Buffer
-	err := report.WriteReport(&stdoutBuf, "console", outFilePath, data)
+	f, err := os.Create(outFilePath)
 	require.NoError(t, err)
+	defer f.Close()
 
-	assert.Empty(t, stdoutBuf.String(), "stdout buffer must remain empty when reportOut is specified")
+	err = report.WriteReport(f, "console", data)
+	require.NoError(t, err)
 
 	fileBytes, err := os.ReadFile(outFilePath)
 	require.NoError(t, err)
 	assert.Contains(t, string(fileBytes), "GTEST LOAD TEST SUMMARY")
 }
+
 
 func TestReportContainsChecksSection(t *testing.T) {
 	data := createTestReportData()
