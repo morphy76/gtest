@@ -652,7 +652,18 @@ scenarios:
       - metric: "payment_duration"
         stat: "p99"
         operator: "<"
-        target: "500ms"
+```
+
+### 7.4 JSON Schema & IDE Autocompletion
+
+`gtest` publishes an official JSON Schema (`schemas/gtest.schema.json`) supporting Draft 2020-12 / Draft-07 for IntelliSense, live validation, and documentation tooltips across VS Code, GoLand, Cursor, and Neovim.
+
+#### In-File Schema Directive
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json
+version: "1.0"
+default_scenario: payment_processing
+...
 ```
 
 ---

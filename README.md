@@ -147,11 +147,12 @@ Built-in framework metrics (`gtest.MetricIterationsTotal`, `gtest.MetricChecksPa
 
 ## Configuration (`gtest.yaml`)
 
-Configuration is managed declaratively in `gtest.yaml`.
+Configuration is managed declaratively in `gtest.yaml`. Add `# yaml-language-server: $schema=...` at the top of your configuration file for out-of-the-box IDE autocompletion and validation (see [IDE Integration Guide](docs/GUIDE.md#ide-autocompletion--schema-validation)):
 
 ### Example `gtest.yaml`
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json
 version: "1.0"
 default_scenario: http_checkout_flow
 
