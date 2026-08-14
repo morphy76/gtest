@@ -24,6 +24,9 @@ var ErrNilContext = errors.New("gtest/data: nil context accessor")
 
 // ContextAccessor provides access to execution context variables needed by dataset strategies.
 type ContextAccessor interface {
+	// VUID returns the 1-indexed Virtual User identifier.
 	VUID() int64
+
+	// Iteration returns the current zero-indexed iteration counter for the VU.
 	Iteration() int64
 }

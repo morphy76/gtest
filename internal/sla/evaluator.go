@@ -1,6 +1,7 @@
 package sla
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"time"
@@ -115,7 +116,17 @@ func EvaluateThreshold(th config.ThresholdConfig, reader MetricReader) Threshold
 	return res
 }
 
-func compareDuration(actual, target time.Duration, op string) bool {
+// compare evaluates whether the actual value satisfies the threshold target based on
+// the specified comparison operator op.
+//
+// Supported operators are:
+//   - "<"  : actual is strictly less than target
+//   - "<=" : actual is less than or equal to target
+//   - ">"  : actual is strictly greater than target
+//   - ">=" : actual is greater than or equal to target
+//
+// For any unrecognized operator string, compare returns false.
+func compare[T cmp.Ordered](actual, target T, op string) bool {
 	switch op {
 	case "<":
 		return actual < target
@@ -130,17 +141,12 @@ func compareDuration(actual, target time.Duration, op string) bool {
 	}
 }
 
+// compareDuration evaluates whether actual duration satisfies target duration using operator op (<, <=, >, >=).
+func compareDuration(actual, target time.Duration, op string) bool {
+	return compare(actual, target, op)
+}
+
+// compareFloat evaluates whether actual float satisfies target float using operator op (<, <=, >, >=).
 func compareFloat(actual, target float64, op string) bool {
-	switch op {
-	case "<":
-		return actual < target
-	case "<=":
-		return actual <= target
-	case ">":
-		return actual > target
-	case ">=":
-		return actual >= target
-	default:
-		return false
-	}
+	return compare(actual, target, op)
 }

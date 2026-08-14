@@ -33,10 +33,22 @@ type SummaryHook func(ctx context.Context, summary SummaryData) error
 // Scenario groups all lifecycle hooks for a named test scenario.
 // Only RunVU is required. All other hooks are optional and may be nil.
 type Scenario struct {
-	Setup         SetupHook
-	PreTest       PreTestHook
-	RunVU         VURunnerHook
-	AfterTest     AfterTestHook
-	Teardown      TeardownHook
+	// Setup is an optional hook executed once sequentially before any VU is spawned.
+	// It can return a global state map shared across all VUs.
+	Setup SetupHook
+
+	// PreTest is an optional hook executed once per VU goroutine before starting iterations.
+	PreTest PreTestHook
+
+	// RunVU is the mandatory per-iteration hook executed repeatedly by each VU during the run period.
+	RunVU VURunnerHook
+
+	// AfterTest is an optional hook executed once per VU in a deferred call after iterations complete.
+	AfterTest AfterTestHook
+
+	// Teardown is an optional hook executed once sequentially after all VUs have terminated.
+	Teardown TeardownHook
+
+	// HandleSummary is an optional hook executed post-test with structured execution summary data.
 	HandleSummary SummaryHook
 }

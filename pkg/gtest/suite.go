@@ -18,10 +18,17 @@ import (
 
 // ExecutionResult represents the final outcome of running a test suite.
 type ExecutionResult struct {
-	Passed      bool
-	Aborted     bool
+	// Passed indicates whether the scenario completed successfully and all SLA thresholds passed.
+	Passed bool
+
+	// Aborted indicates whether execution was terminated early due to abort_on_fail criteria.
+	Aborted bool
+
+	// AbortReason contains a human-readable explanation when execution is aborted early.
 	AbortReason string
-	Error       error
+
+	// Error contains any configuration, initialization, or execution error encountered.
+	Error error
 }
 
 // ExitCode returns 0 if the execution was successful and all SLA thresholds passed,

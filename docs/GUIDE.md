@@ -468,7 +468,7 @@ Optionally specify `delay_abort_eval` to establish a warm-up grace period before
 thresholds:
   - metric: gtest.vu.iterations_failed
     stat: count
-    operator: "=="
+    operator: "<="
     target: "0"
     abort_on_fail: true
     delay_abort_eval: 5s   # Ignore failures during first 5 seconds of ramp-up

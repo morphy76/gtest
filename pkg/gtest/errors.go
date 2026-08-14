@@ -4,8 +4,10 @@ import "fmt"
 
 // ConfigError represents a failure to load or parse the configuration file.
 type ConfigError struct {
+	// Path is the filesystem path to the configuration file that caused the error.
 	Path string
-	Err  error
+	// Err is the underlying parsing or I/O error.
+	Err error
 }
 
 func (e *ConfigError) Error() string {
@@ -21,7 +23,9 @@ func (e *ConfigError) Unwrap() error {
 
 // ValidationError represents a configuration validation failure.
 type ValidationError struct {
-	Field   string
+	// Field is the configuration field key that failed validation.
+	Field string
+	// Message provides a human-readable explanation of why validation failed.
 	Message string
 }
 
@@ -31,7 +35,9 @@ func (e *ValidationError) Error() string {
 
 // ScenarioNotFoundError indicates a scenario was not found in the config or not registered.
 type ScenarioNotFoundError struct {
-	Name    string
+	// Name is the name of the scenario that could not be found.
+	Name string
+	// Message describes the specific scenario resolution failure.
 	Message string
 }
 
@@ -44,6 +50,7 @@ func (e *ScenarioNotFoundError) Error() string {
 
 // SetupError wraps an error returned by the Setup hook.
 type SetupError struct {
+	// Err is the underlying error returned by the scenario's Setup hook.
 	Err error
 }
 
