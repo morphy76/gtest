@@ -325,9 +325,11 @@ func TestRateNoObservationsReturnsZero(t *testing.T) {
 	assert.InDelta(t, 0.0, ir.Value(), 1e-9)
 }
 
-// Additional: compile-time check that Store implements metric.Collector
-func TestStoreImplementsMetricsCollector(t *testing.T) {
+// Additional: compile-time check that Store implements metric.Collector, Registry, and Aggregator
+func TestStoreImplementsInterfaces(t *testing.T) {
 	var _ metric.Collector = (*metric.Store)(nil)
+	var _ metric.Registry = (*metric.Store)(nil)
+	var _ metric.Aggregator = (*metric.Store)(nil)
 }
 
 func TestCheckSummaries(t *testing.T) {

@@ -33,6 +33,11 @@ func newHistogram() *histogram {
 	}
 }
 
+// Type returns the metric type for histogram/duration.
+func (h *histogram) Type() MetricType {
+	return MetricTypeDuration
+}
+
 // Observe records one latency sample. Durations are stored in microseconds.
 // Values below 1µs are clamped to 1µs. Values above 60s are clamped to 60s.
 func (h *histogram) Observe(d time.Duration) {
@@ -106,3 +111,9 @@ func (h *histogram) Snapshot() HistogramSnapshot {
 		P99:   time.Duration(merged.ValueAtPercentile(99)) * time.Microsecond,
 	}
 }
+
+// Compile-time checks.
+var (
+	_ Duration = (*histogram)(nil)
+	_ Metric   = (*histogram)(nil)
+)
