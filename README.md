@@ -281,9 +281,9 @@ Feed external datasets into your load tests using the built-in `pkg/gtest/data` 
 
 | Strategy | Enum Constant | Behavior |
 |---|---|---|
-| **Sequential** | `data.Sequential` | Deterministic round-robin across rows based on VU ID and iteration index: `(vuid - 1 + iteration) % N`. |
-| **Random** | `data.Random` | Thread-safe uniform random selection across all rows. |
-| **UniquePerVU** | `data.UniquePerVU` | Partitions rows to avoid VU overlap where possible. |
+| **Sequential** | `data.Sequential` | Deterministic round-robin across rows based on VU ID and iteration index: `(vuid - 1 + iteration) % N` (requires context). |
+| **Random** | `data.Random` | Lock-free, thread-safe uniform random selection across all rows. |
+| **UniquePerVU** | `data.UniquePerVU` | Partitions rows to avoid VU overlap where possible (requires context). |
 | **SharedQueue** | `data.SharedQueue` | Thread-safe atomic single-consumption queue. Returns `data.ErrDatasetExhausted` when depleted. |
 
 ### Example Usage

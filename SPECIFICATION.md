@@ -1542,6 +1542,8 @@ Provide a dedicated data loading and parameterization package for CSV, JSON, and
 #### Public API (`pkg/gtest/data`)
 - `type Record = map[string]string`
 - `type Strategy int` (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`)
+- `var ErrDatasetExhausted = errors.New(...)`
+- `var ErrNilContext = errors.New(...)`
 - `LoadCSV(r io.Reader, strategy Strategy) (*DataSet, error)` / `LoadCSVFile(path, strategy)`
 - `LoadJSON(r io.Reader, strategy Strategy) (*DataSet, error)` / `LoadJSONFile(path, strategy)`
 - `LoadJSONL(r io.Reader, strategy Strategy) (*DataSet, error)` / `LoadJSONLFile(path, strategy)`
@@ -1551,8 +1553,8 @@ Provide a dedicated data loading and parameterization package for CSV, JSON, and
 - **AC-1.14.1**: `LoadCSV` parses CSV with headers into string key-value maps.
 - **AC-1.14.2**: `LoadJSON` parses JSON array of objects into key-value maps.
 - **AC-1.14.3**: `LoadJSONL` parses newline-delimited JSON objects into key-value maps.
-- **AC-1.14.4**: Sequential strategy round-robins across rows deterministically by VU ID and iteration.
-- **AC-1.14.5**: Random strategy selects rows uniformly with thread safety.
+- **AC-1.14.4**: Sequential and UniquePerVU strategies round-robin / partition across rows deterministically by VU ID and iteration, returning `ErrNilContext` when `ctx == nil`.
+- **AC-1.14.5**: Random strategy selects rows uniformly with lock-free thread safety (`math/rand/v2`).
 - **AC-1.14.6**: SharedQueue strategy dispenses each row exactly once across concurrent VUs and returns `ErrDatasetExhausted` when depleted.
 
 ---

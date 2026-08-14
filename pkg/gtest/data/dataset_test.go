@@ -220,3 +220,98 @@ func TestStrategyUniquePerVU(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1", r2["id"])
 }
+
+func TestDataSet_Next_NilContextValidation(t *testing.T) {
+	records := []data.Record{
+		{"id": "0"},
+		{"id": "1"},
+	}
+
+	t.Run("Sequential returns ErrNilContext when ctx is nil", func(t *testing.T) {
+		ds := data.NewDataSet(records, data.Sequential)
+		rec, err := ds.Next(nil)
+		assert.Nil(t, rec)
+		assert.ErrorIs(t, err, data.ErrNilContext)
+	})
+
+	t.Run("UniquePerVU returns ErrNilContext when ctx is nil", func(t *testing.T) {
+		ds := data.NewDataSet(records, data.UniquePerVU)
+		rec, err := ds.Next(nil)
+		assert.Nil(t, rec)
+		assert.ErrorIs(t, err, data.ErrNilContext)
+	})
+
+	t.Run("Random succeeds when ctx is nil", func(t *testing.T) {
+		ds := data.NewDataSet(records, data.Random)
+		rec, err := ds.Next(nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, rec)
+	})
+
+	t.Run("SharedQueue succeeds when ctx is nil", func(t *testing.T) {
+		ds := data.NewDataSet(records, data.SharedQueue)
+		rec, err := ds.Next(nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, rec)
+	})
+}
+
+func TestStrategyRandom_HighConcurrency(t *testing.T) {
+	records := make([]data.Record, 20)
+	for i := range 20 {
+		records[i] = data.Record{"id": fmt.Sprintf("%d", i)}
+	}
+	ds := data.NewDataSet(records, data.Random)
+
+	const goroutines = 50
+	const iterations = 200
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := range goroutines {
+		go func(vuid int) {
+			defer wg.Done()
+			for iter := range iterations {
+				rec, err := ds.Next(mockContext{vuid: int64(vuid + 1), iteration: int64(iter)})
+				assert.NoError(t, err)
+				assert.NotEmpty(t, rec["id"])
+			}
+		}(g)
+	}
+
+	wg.Wait()
+}
+
+func BenchmarkStrategyRandom(b *testing.B) {
+	records := make([]data.Record, 100)
+	for i := range 100 {
+		records[i] = data.Record{"id": fmt.Sprintf("%d", i)}
+	}
+	ds := data.NewDataSet(records, data.Random)
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		ctx := mockContext{vuid: 1, iteration: 1}
+		for pb.Next() {
+			_, _ = ds.Next(ctx)
+		}
+	})
+}
+
+func BenchmarkStrategySequential(b *testing.B) {
+	records := make([]data.Record, 100)
+	for i := range 100 {
+		records[i] = data.Record{"id": fmt.Sprintf("%d", i)}
+	}
+	ds := data.NewDataSet(records, data.Sequential)
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		ctx := mockContext{vuid: 1, iteration: 1}
+		for pb.Next() {
+			_, _ = ds.Next(ctx)
+		}
+	})
+}
+
+

@@ -589,9 +589,9 @@ Use the dedicated `github.com/morphy76/gtest/pkg/gtest/data` package to load CSV
 
 - **Loaders**: `data.LoadCSV`, `data.LoadJSON`, `data.LoadJSONL` (or `data.LoadCSVFile`, etc.)
 - **Strategies**:
-  - `data.Sequential`: Round-robins across records deterministically by VU ID and iteration.
-  - `data.Random`: Uniform thread-safe random record selection.
-  - `data.UniquePerVU`: Distributes records deterministically per Virtual User ID.
+  - `data.Sequential`: Round-robins across records deterministically by VU ID and iteration (requires non-nil context; returns `data.ErrNilContext` if missing).
+  - `data.Random`: Lock-free, thread-safe uniform random record selection powered by `math/rand/v2`.
+  - `data.UniquePerVU`: Distributes records deterministically per Virtual User ID (requires non-nil context; returns `data.ErrNilContext` if missing).
   - `data.SharedQueue`: Dispenses each record exactly once across concurrent VUs until exhausted (`data.ErrDatasetExhausted`).
 
 ```go
