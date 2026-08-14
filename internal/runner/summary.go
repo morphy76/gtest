@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
 	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/sla"
 )
 
@@ -27,16 +27,16 @@ type SummaryParams struct {
 	AbortReason      string
 }
 
-// BuildSummaryData constructs engine.SummaryData from SummaryParams using standard library sorting.
-func BuildSummaryData(p SummaryParams) engine.SummaryData {
+// BuildSummaryData constructs report.SummaryData from SummaryParams using standard library sorting.
+func BuildSummaryData(p SummaryParams) report.SummaryData {
 	duration := p.EndedAt.Sub(p.StartedAt)
 	if duration < 0 {
 		duration = 0
 	}
 
-	thresholds := make([]engine.ThresholdSummary, 0, len(p.ThresholdResults))
+	thresholds := make([]report.ThresholdSummary, 0, len(p.ThresholdResults))
 	for _, th := range p.ThresholdResults {
-		thresholds = append(thresholds, engine.ThresholdSummary{
+		thresholds = append(thresholds, report.ThresholdSummary{
 			Metric:   th.Metric,
 			Stat:     th.Stat,
 			Operator: th.Operator,
@@ -48,7 +48,7 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 
 	type namedEntry struct {
 		name string
-		item engine.MetricSummary
+		item report.MetricSummary
 	}
 	var entries []namedEntry
 
@@ -58,7 +58,7 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 			snap := p.MetricsStore.MergedHistogramSnapshot(name)
 			entries = append(entries, namedEntry{
 				name: name,
-				item: engine.MetricSummary{
+				item: report.MetricSummary{
 					Name:  name,
 					Type:  "duration",
 					Count: snap.Count,
@@ -78,7 +78,7 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 			val := p.MetricsStore.AggregatedCounterValue(name)
 			entries = append(entries, namedEntry{
 				name: name,
-				item: engine.MetricSummary{
+				item: report.MetricSummary{
 					Name:  name,
 					Type:  "counter",
 					Count: val,
@@ -91,7 +91,7 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 			val := p.MetricsStore.LastGaugeValue(name)
 			entries = append(entries, namedEntry{
 				name: name,
-				item: engine.MetricSummary{
+				item: report.MetricSummary{
 					Name:  name,
 					Type:  "gauge",
 					Value: val,
@@ -104,7 +104,7 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 			val := p.MetricsStore.AggregatedRateValue(name)
 			entries = append(entries, namedEntry{
 				name: name,
-				item: engine.MetricSummary{
+				item: report.MetricSummary{
 					Name: name,
 					Type: "rate",
 					Rate: val,
@@ -118,15 +118,15 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 		return cmp.Compare(a.name, b.name)
 	})
 
-	metrics := make([]engine.MetricSummary, 0, len(entries))
+	metrics := make([]report.MetricSummary, 0, len(entries))
 	for _, e := range entries {
 		metrics = append(metrics, e.item)
 	}
 
-	var checks []engine.CheckSummary
+	var checks []report.CheckSummary
 	if p.MetricsStore != nil {
 		for _, cs := range p.MetricsStore.CheckSummaries() {
-			checks = append(checks, engine.CheckSummary{
+			checks = append(checks, report.CheckSummary{
 				Name:    cs.Name,
 				Passed:  cs.Passed,
 				Failed:  cs.Failed,
@@ -136,7 +136,7 @@ func BuildSummaryData(p SummaryParams) engine.SummaryData {
 		}
 	}
 
-	return engine.SummaryData{
+	return report.SummaryData{
 		SuiteName:   p.SuiteName,
 		Scenario:    p.ScenarioName,
 		Version:     p.Version,

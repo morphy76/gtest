@@ -13,6 +13,7 @@ import (
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/engine"
 	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/runner"
 	"github.com/morphy76/gtest/internal/sla"
 	"github.com/rs/zerolog"
@@ -368,11 +369,11 @@ func TestReportExecution_ConsoleAndJSONAndHook(t *testing.T) {
 	cnt.Inc()
 
 	hookInvoked := false
-	var capturedSummary engine.SummaryData
+	var capturedSummary report.SummaryData
 
 	hookScenario := engine.Scenario{
 		RunVU: func(ctx engine.ScenarioContext) error { return nil },
-		HandleSummary: func(ctx context.Context, summary engine.SummaryData) error {
+		HandleSummary: func(ctx context.Context, summary report.SummaryData) error {
 			hookInvoked = true
 			capturedSummary = summary
 			return nil
@@ -427,7 +428,7 @@ func TestReportExecution_ConsoleAndJSONAndHook(t *testing.T) {
 func TestReportExecution_HookErrorDoesNotPanic(t *testing.T) {
 	hookScenario := engine.Scenario{
 		RunVU: func(ctx engine.ScenarioContext) error { return nil },
-		HandleSummary: func(ctx context.Context, summary engine.SummaryData) error {
+		HandleSummary: func(ctx context.Context, summary report.SummaryData) error {
 			return errors.New("slack webhook failed")
 		},
 	}

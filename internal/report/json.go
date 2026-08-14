@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/metric"
 )
 
 type jsonMetricEntry struct {
@@ -36,6 +35,14 @@ type jsonThresholdEntry struct {
 	Passed   bool   `json:"passed"`
 }
 
+type jsonCheckEntry struct {
+	Name    string  `json:"name"`
+	Passed  int64   `json:"passed"`
+	Failed  int64   `json:"failed"`
+	Total   int64   `json:"total"`
+	PassPct float64 `json:"pass_pct"`
+}
+
 type jsonReportDocument struct {
 	SuiteName   string                `json:"suite_name"`
 	Scenario    string                `json:"scenario"`
@@ -45,7 +52,7 @@ type jsonReportDocument struct {
 	EndedAt     time.Time             `json:"ended_at"`
 	Config      config.ScenarioConfig `json:"config"`
 	Metrics     []jsonMetricEntry     `json:"metrics"`
-	Checks      []metric.CheckSummary `json:"checks,omitempty"`
+	Checks      []jsonCheckEntry      `json:"checks,omitempty"`
 	Thresholds  []jsonThresholdEntry  `json:"thresholds"`
 	Passed      bool                  `json:"passed"`
 	Aborted     bool                  `json:"aborted"`
@@ -54,9 +61,17 @@ type jsonReportDocument struct {
 
 // GenerateJSONReport formats and writes the JSON report document to w.
 func GenerateJSONReport(w io.Writer, data ReportData) error {
-	var checks []metric.CheckSummary
+	var checks []jsonCheckEntry
 	if data.Metrics != nil {
-		checks = data.Metrics.CheckSummaries()
+		for _, cs := range data.Metrics.CheckSummaries() {
+			checks = append(checks, jsonCheckEntry{
+				Name:    cs.Name,
+				Passed:  cs.Passed,
+				Failed:  cs.Failed,
+				Total:   cs.Total,
+				PassPct: cs.PassPct,
+			})
+		}
 	}
 
 	doc := jsonReportDocument{

@@ -916,6 +916,8 @@ ramp-down, and lifecycle orchestration. Exercise all lifecycle hooks.
 - `internal/engine/pacer.go` — `PacingEngine` interface, `ConstantVUsPacer`, `ArrivalRatePacer`, and `PacingRegistry`
 - `internal/engine/constant_vus.go` — constant VU pacing and ramp-up/ramp-down
 - `internal/engine/executor.go` — scenario lifecycle orchestration (Setup → VUs → Teardown)
+- `internal/engine/scenario.go` — scenario definition, lifecycle hook types, and error wrappers
+- `internal/engine/context.go` — ScenarioContext capability interfaces and context implementation
 
 **Acceptance Criteria:**
 
@@ -991,6 +993,7 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 
 **Deliverables:**
 - `internal/report/model.go` — report data model and format dispatcher
+- `internal/report/summary.go` — summary data models without serialization tags and query helper methods
 - `internal/report/console.go` — console summary formatter
 - `internal/report/json.go` — JSON report formatter
 

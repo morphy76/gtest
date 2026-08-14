@@ -7,11 +7,11 @@ import (
 
 // CheckSummary holds aggregated metrics for a named check.
 type CheckSummary struct {
-	Name    string  `json:"name"`
-	Passed  int64   `json:"passed"`
-	Failed  int64   `json:"failed"`
-	Total   int64   `json:"total"`
-	PassPct float64 `json:"pass_pct"`
+	Name    string
+	Passed  int64
+	Failed  int64
+	Total   int64
+	PassPct float64
 }
 
 // MetricProvider provides read-only traversal over recorded metrics.
