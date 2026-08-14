@@ -160,6 +160,13 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 		}
 	}
 
+	// Validate interaction_delay if specified.
+	if sc.InteractionDelay != nil {
+		if err := validateInteractionDelay(prefix, sc.InteractionDelay); err != nil {
+			return err
+		}
+	}
+
 	// Validate thresholds.
 	for i := range sc.Thresholds {
 		if err := validateThreshold(prefix, i, &sc.Thresholds[i]); err != nil {
@@ -169,6 +176,104 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 
 	return nil
 }
+
+// validateInteractionDelay checks the interaction delay configuration.
+func validateInteractionDelay(prefix string, delay *InteractionDelayConfig) error {
+	delayPrefix := fmt.Sprintf("%s.interaction_delay", prefix)
+
+	switch delay.Type {
+	case "fixed":
+		if delay.Duration <= 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".duration",
+				Message: "must be > 0 for fixed delay",
+			}
+		}
+	case "range":
+		if delay.Min < 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".min",
+				Message: "must be >= 0 for range delay",
+			}
+		}
+		if delay.Max <= 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".max",
+				Message: "must be > 0 for range delay",
+			}
+		}
+		if delay.Max < delay.Min {
+			return &ValidationError{
+				Field:   delayPrefix + ".max",
+				Message: "must be >= min for range delay",
+			}
+		}
+	case "expo":
+		if delay.Mean <= 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".mean",
+				Message: "must be > 0 for expo delay",
+			}
+		}
+		if delay.Min < 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".min",
+				Message: "must be >= 0",
+			}
+		}
+		if delay.Max < 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".max",
+				Message: "must be >= 0",
+			}
+		}
+		if delay.Min > 0 && delay.Max > 0 && delay.Max < delay.Min {
+			return &ValidationError{
+				Field:   delayPrefix + ".max",
+				Message: "must be >= min for expo delay",
+			}
+		}
+	case "gaussian":
+		if delay.Mean <= 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".mean",
+				Message: "must be > 0 for gaussian delay",
+			}
+		}
+		if delay.StdDev <= 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".std_dev",
+				Message: "must be > 0 for gaussian delay",
+			}
+		}
+		if delay.Min < 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".min",
+				Message: "must be >= 0",
+			}
+		}
+		if delay.Max < 0 {
+			return &ValidationError{
+				Field:   delayPrefix + ".max",
+				Message: "must be >= 0",
+			}
+		}
+		if delay.Min > 0 && delay.Max > 0 && delay.Max < delay.Min {
+			return &ValidationError{
+				Field:   delayPrefix + ".max",
+				Message: "must be >= min for gaussian delay",
+			}
+		}
+	default:
+		return &ValidationError{
+			Field:   delayPrefix + ".type",
+			Message: fmt.Sprintf("must be one of {fixed, range, expo, gaussian}, got %q", delay.Type),
+		}
+	}
+
+	return nil
+}
+
 
 // validateThreshold checks a single threshold configuration and parses its target value.
 func validateThreshold(prefix string, idx int, th *ThresholdConfig) error {

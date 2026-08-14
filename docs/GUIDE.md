@@ -209,7 +209,14 @@ scenarios:
       timeout_ms: "500"
       messages_file: "data/prompts.csv"
 
+    # --- interaction_delay (think time between actions/iterations) ---
+    interaction_delay:
+      type: range                # "fixed", "range", "expo", or "gaussian"
+      min: 200ms
+      max: 1s
+
     # --- SLA thresholds ---
+
     thresholds:
       - metric: http_latency
         stat: p95
@@ -242,6 +249,9 @@ All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1
 | `GlobalState(key)` | `any` | Read value from Setup's returned map (read-only) |
 | `Log()` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration |
 | `Metrics()` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
+| `Sleep(d ...time.Duration)` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
+
+
 
 ### Using as context.Context
 
@@ -505,22 +515,76 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 },
 ```
 
-### 11.3 Think Time Between Iterations
+### 11.3 Think Time & Interaction Delay
+
+Use `ctx.Sleep()` to pause execution between user actions or iterations. It automatically respects `ctx.Done()` for immediate cancellation during ramp-down or teardown.
+
+#### Option A: Declarative via `gtest.yaml`
+
+Configure an `interaction_delay` strategy in `gtest.yaml`:
+
+```yaml
+scenarios:
+  checkout:
+    type: constant_vus
+    vus: 10
+    run_period: 1m
+    vu_timeout: 5s
+    interaction_delay:
+      type: range        # "fixed" | "range" | "expo" | "gaussian"
+      min: 200ms
+      max: 1s
+```
+
+Then call `ctx.Sleep()` with no arguments inside `RunVU`:
 
 ```go
 RunVU: func(ctx gtest.ScenarioContext) error {
-    // ... do work ...
+    // Step 1: browse
+    // ...
 
-    // Simulate user think time (respects context cancellation)
-    delay := ctx.ParamDuration("think_time", 500*time.Millisecond)
-    select {
-    case <-time.After(delay):
-    case <-ctx.Done():
-        return ctx.Err()
+    // Pause using scenario-configured interaction delay (e.g. uniform random 200ms-1s)
+    if err := ctx.Sleep(); err != nil {
+        return err // Context was cancelled
+    }
+
+    // Step 2: add to cart
+    return nil
+},
+```
+
+#### Option B: Explicit Duration
+
+Pass an explicit duration to override scenario defaults:
+
+```go
+RunVU: func(ctx gtest.ScenarioContext) error {
+    if err := ctx.Sleep(300 * time.Millisecond); err != nil {
+        return err
     }
     return nil
 },
 ```
+
+#### Option C: Custom Mathematical Delay Generators
+
+`gtest` provides 4 distribution generators:
+- `gtest.FixedDelay(d)` — constant duration
+- `gtest.RangeDelay(min, max)` — uniform random $U(\text{min}, \text{max})$
+- `gtest.ExpoDelay(mean, min, max)` — exponential distribution (Poisson arrival) with optional clamping
+- `gtest.GaussianDelay(mean, stdDev, min, max)` — normal distribution $N(\mu, \sigma)$ with non-negative guarantee and optional clamping
+
+```go
+thinkTimer := gtest.ExpoDelay(500*time.Millisecond, 100*time.Millisecond, 2*time.Second)
+
+RunVU: func(ctx gtest.ScenarioContext) error {
+    if err := ctx.Sleep(thinkTimer.Next()); err != nil {
+        return err
+    }
+    return nil
+},
+```
+
 
 ### 11.4 Multi-Step User Journey
 

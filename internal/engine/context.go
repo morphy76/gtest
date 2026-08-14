@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/gtest/internal/delay"
 	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
 )
@@ -25,6 +26,7 @@ type scenarioContext struct {
 	globalState  map[string]any
 	logger       log.Logger
 	metrics      metric.Collector
+	delayGen     delay.DelayGenerator
 }
 
 func newScenarioContext(
@@ -48,6 +50,11 @@ func newScenarioContext(
 		}
 	}
 
+	var delayGen delay.DelayGenerator
+	if cfg.InteractionDelay != nil {
+		delayGen, _ = delay.NewDelayGenerator(cfg.InteractionDelay)
+	}
+
 	return &scenarioContext{
 		Context:      ctx,
 		vuid:         vuid,
@@ -57,8 +64,10 @@ func newScenarioContext(
 		globalState:  globalState,
 		logger:       boundLogger,
 		metrics:      metrics,
+		delayGen:     delayGen,
 	}
 }
+
 
 func (c *scenarioContext) VUID() int64 {
 	return c.vuid
@@ -118,5 +127,34 @@ func (c *scenarioContext) Metrics() metric.Collector {
 	return c.metrics
 }
 
+func (c *scenarioContext) Sleep(d ...time.Duration) error {
+	var duration time.Duration
+	if len(d) > 0 {
+		duration = d[0]
+	} else if c.delayGen != nil {
+		duration = c.delayGen.Next()
+	}
+
+	if duration <= 0 {
+		select {
+		case <-c.Context.Done():
+			return c.Context.Err()
+		default:
+			return nil
+		}
+	}
+
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-c.Context.Done():
+		return c.Context.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // Compile-time interface satisfaction check.
 var _ ScenarioContext = (*scenarioContext)(nil)
+

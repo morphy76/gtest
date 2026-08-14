@@ -57,9 +57,34 @@ type ScenarioConfig struct {
 	// Params is an arbitrary key-value map available to test code via ScenarioContext.Param().
 	Params map[string]string `mapstructure:"params"`
 
+	// InteractionDelay defines think time strategy between actions and iterations.
+	InteractionDelay *InteractionDelayConfig `mapstructure:"interaction_delay"`
+
 	// Thresholds defines SLA assertions evaluated after the test run.
 	Thresholds []ThresholdConfig `mapstructure:"thresholds"`
 }
+
+// InteractionDelayConfig holds configuration for think time delays.
+type InteractionDelayConfig struct {
+	// Type is the strategy type: "fixed", "range", "expo", "gaussian".
+	Type string `mapstructure:"type"`
+
+	// Duration is the static pause duration (used for "fixed").
+	Duration time.Duration `mapstructure:"duration"`
+
+	// Min is the minimum duration (used for "range", optional clamp for "expo" and "gaussian").
+	Min time.Duration `mapstructure:"min"`
+
+	// Max is the maximum duration (used for "range", optional clamp for "expo" and "gaussian").
+	Max time.Duration `mapstructure:"max"`
+
+	// Mean is the average duration (used for "expo" and "gaussian").
+	Mean time.Duration `mapstructure:"mean"`
+
+	// StdDev is the standard deviation (used for "gaussian").
+	StdDev time.Duration `mapstructure:"std_dev"`
+}
+
 
 // ThresholdConfig defines a single SLA threshold assertion.
 type ThresholdConfig struct {
