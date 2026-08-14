@@ -247,6 +247,54 @@ scenarios:
 
 All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1h30m`.
 
+### IDE Autocompletion & Schema Validation
+
+`gtest` provides an official JSON Schema (`schemas/gtest.schema.json`) that enables IntelliSense, field auto-completion, real-time validation, and rich documentation tooltips across VS Code, GoLand / IntelliJ IDEA, Cursor, Neovim, and other editors.
+
+#### Option 1: In-File Model Directive (Zero IDE Setup)
+
+Add the standard schema comment at the top of your `gtest.yaml` file:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json
+version: "1.0"
+default_scenario: http_checkout_flow
+
+scenarios:
+  http_checkout_flow:
+    type: constant_vus
+    vus: 10
+    run_period: 30s
+    vu_timeout: 2s
+```
+
+#### Option 2: VS Code Workspace Settings (`.vscode/settings.json`)
+
+Configure schema mapping for all `gtest.yaml` files automatically via YAML language server:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json": [
+      "gtest.yaml",
+      "gtest.yml",
+      "*gtest*.yaml",
+      "*gtest*.yml"
+    ]
+  }
+}
+```
+
+#### Option 3: JetBrains (GoLand / IntelliJ IDEA)
+
+1. Open **Settings** / **Preferences** (`Cmd+,` on macOS or `Ctrl+Alt+S` on Linux/Windows).
+2. Navigate to **Languages & Frameworks** > **Schemas and DTDs** > **JSON Schema Mappings**.
+3. Click `+` to add a new mapping:
+   - **Name**: `gtest Configuration Schema`
+   - **Schema file or URL**: `https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json`
+   - **Schema version**: `JSON Schema version 7` or `2020-12`
+   - **File path pattern**: `*gtest*.yaml;*gtest*.yml`
+
 ---
 
 ## 5. Context Hierarchy & Role-Specific Interfaces
