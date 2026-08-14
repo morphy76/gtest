@@ -83,10 +83,11 @@ func RunRampingVUs(
 	}
 
 	startVU := 0
+stagesLoop:
 	for _, stage := range cfg.Stages {
 		select {
 		case <-runCtx.Done():
-			break
+			break stagesLoop
 		default:
 		}
 
