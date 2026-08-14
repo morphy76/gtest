@@ -18,108 +18,107 @@ const (
 // Config is the top-level configuration loaded from gtest.yaml.
 type Config struct {
 	// Version must be "1.0".
-	Version string `mapstructure:"version"`
+	Version string
 
 	// DefaultScenario is the name of the scenario to run when --scenario is not provided.
 	// Must match a key in Scenarios if present.
-	DefaultScenario string `mapstructure:"default_scenario"`
+	DefaultScenario string
 
 	// Scenarios maps scenario names to their configurations.
-	Scenarios map[string]ScenarioConfig `mapstructure:"scenarios"`
+	Scenarios map[string]ScenarioConfig
 }
 
 // ScenarioConfig holds the configuration for a single load test scenario.
 type ScenarioConfig struct {
 	// Type is the execution model: "constant_vus" or "arrival_rate".
-	Type ScenarioType `mapstructure:"type"`
+	Type ScenarioType
 
 	// VUs is the number of virtual user goroutines (required for constant_vus).
-	VUs int `mapstructure:"vus"`
+	VUs int
 
 	// TargetTPS is the target transactions per second (required for arrival_rate).
-	TargetTPS int `mapstructure:"target_tps"`
+	TargetTPS int
 
 	// MaxVUs is the hard cap on concurrent goroutines (required for arrival_rate).
-	MaxVUs int `mapstructure:"max_vus"`
+	MaxVUs int
 
 	// RampUp is the duration to linearly ramp up to the target level.
-	RampUp time.Duration `mapstructure:"ramp_up"`
+	RampUp time.Duration
 
 	// RunPeriod is the steady-state execution duration (required).
-	RunPeriod time.Duration `mapstructure:"run_period"`
+	RunPeriod time.Duration
 
 	// RampDown is the duration for graceful ramp-down.
-	RampDown time.Duration `mapstructure:"ramp_down"`
+	RampDown time.Duration
 
 	// VUTimeout is the per-iteration context timeout (required).
-	VUTimeout time.Duration `mapstructure:"vu_timeout"`
+	VUTimeout time.Duration
 
 	// Params is an arbitrary key-value map available to test code via ScenarioContext.Param().
-	Params map[string]string `mapstructure:"params"`
+	Params map[string]string
 
 	// InteractionDelay defines think time strategy between actions (via ctx.Sleep).
-	InteractionDelay *InteractionDelayConfig `mapstructure:"interaction_delay"`
+	InteractionDelay *InteractionDelayConfig
 
 	// ThinkTime defines inter-iteration pacing delay automatically executed by the engine loop.
-	ThinkTime *ThinkTimeConfig `mapstructure:"think_time"`
+	ThinkTime *ThinkTimeConfig
 
 	// Thresholds defines SLA assertions evaluated after the test run.
-	Thresholds []ThresholdConfig `mapstructure:"thresholds"`
+	Thresholds []ThresholdConfig
 }
 
 // ThinkTimeConfig holds configuration for inter-iteration think time delays.
 type ThinkTimeConfig struct {
 	// Type is the strategy type: "fixed", "range", "expo", "gaussian".
-	Type string `mapstructure:"type"`
+	Type string
 
 	// Duration is the static pause duration (used for "fixed").
-	Duration time.Duration `mapstructure:"duration"`
+	Duration time.Duration
 
 	// Min is the minimum duration (used for "range", optional clamp for "expo" and "gaussian").
-	Min time.Duration `mapstructure:"min"`
+	Min time.Duration
 
 	// Max is the maximum duration (used for "range", optional clamp for "expo" and "gaussian").
-	Max time.Duration `mapstructure:"max"`
+	Max time.Duration
 
 	// Mean is the average duration (used for "expo" and "gaussian").
-	Mean time.Duration `mapstructure:"mean"`
+	Mean time.Duration
 
 	// StdDev is the standard deviation (used for "gaussian").
-	StdDev time.Duration `mapstructure:"std_dev"`
+	StdDev time.Duration
 }
 
 // InteractionDelayConfig holds configuration for in-iteration think time delays.
 type InteractionDelayConfig = ThinkTimeConfig
 
-
-
 // ThresholdConfig defines a single SLA threshold assertion.
 type ThresholdConfig struct {
 	// Metric is the exact metric name as recorded by the test developer.
-	Metric string `mapstructure:"metric"`
+	Metric string
 
 	// Stat is the statistic to evaluate (p50, p90, p95, p99, mean, max, count, rate, value).
-	Stat string `mapstructure:"stat"`
+	Stat string
 
 	// Operator is the comparison operator: <, <=, >, >=.
-	Operator string `mapstructure:"operator"`
+	Operator string
 
 	// Target is the threshold value as a raw string.
 	// Parsed as time.Duration for duration stats (p50, p90, p95, p99, mean, max),
 	// or as float64 for non-duration stats (count, rate, value).
-	Target string `mapstructure:"target"`
+	Target string
 
 	// AbortOnFail triggers early test termination if breached during execution.
-	AbortOnFail bool `mapstructure:"abort_on_fail"`
+	AbortOnFail bool
 
 	// DelayAbortEval is a warm-up grace period before abort evaluation begins.
-	DelayAbortEval time.Duration `mapstructure:"delay_abort_eval"`
+	DelayAbortEval time.Duration
 
 	// TargetDuration is the parsed target when Stat is a duration stat.
 	// Populated by validation; zero value if not applicable.
-	TargetDuration time.Duration `mapstructure:"-"`
+	TargetDuration time.Duration
 
 	// TargetFloat is the parsed target when Stat is a non-duration stat.
 	// Populated by validation; zero value if not applicable.
-	TargetFloat float64 `mapstructure:"-"`
+	TargetFloat float64
 }
+
