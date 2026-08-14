@@ -79,7 +79,13 @@ func (e *Executor) Execute(ctx context.Context) error {
 		if err != nil {
 			return &SetupError{Err: err}
 		}
-		// Shallow copy the state map so VUs cannot mutate the original (spec §4.3).
+		// Shallow copy the state map so VUs cannot mutate the keys of the original map (spec §4.3).
+		// NOTE ON SHALLOW COPY LIMITATION:
+		// The shallow copy creates a new map containing the same values returned by Setup.
+		// It does NOT deep-copy nested mutable objects (slices, maps, pointer structs).
+		// If Setup returns shared mutable objects, concurrent VU access may cause data races.
+		// Complex or nested structures stored in globalState must either be immutable or protected
+		// with appropriate synchronization (e.g., sync.RWMutex, atomic types, or thread-safe containers).
 		if globalState != nil {
 			safeCopy := make(map[string]any, len(globalState))
 			for k, v := range globalState {

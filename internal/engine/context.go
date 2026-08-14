@@ -115,6 +115,14 @@ func (c *scenarioContext) ParamInt(key string, defaultValue int) int {
 	}
 	i, err := strconv.Atoi(v)
 	if err != nil {
+		if c.logger != nil {
+			c.logger.Warn().
+				Str("key", key).
+				Str("value", v).
+				Err(err).
+				Int("default", defaultValue).
+				Msg("failed to parse param as integer; using default value")
+		}
 		return defaultValue
 	}
 	return i
@@ -127,6 +135,14 @@ func (c *scenarioContext) ParamDuration(key string, defaultValue time.Duration) 
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil {
+		if c.logger != nil {
+			c.logger.Warn().
+				Str("key", key).
+				Str("value", v).
+				Err(err).
+				Dur("default", defaultValue).
+				Msg("failed to parse param as duration; using default value")
+		}
 		return defaultValue
 	}
 	return d
