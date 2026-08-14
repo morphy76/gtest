@@ -130,19 +130,7 @@ func runVUGoroutine(
 			}()
 
 			err := scenario.RunVU(sCtx)
-
-			if iterCtx.Err() == context.DeadlineExceeded {
-				metrics.Counter(metric.MetricIterationsTimeout, metric.Tags{}).Inc()
-				metrics.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
-				metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
-				logger.Error().Err(iterCtx.Err()).Msg("RunVU iteration timed out")
-			} else if err != nil {
-				metrics.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
-				metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
-				logger.Error().Err(err).Msg("RunVU returned error")
-			} else {
-				metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
-			}
+			recordIterationResult(ctx, iterCtx, err, metrics, logger)
 		}()
 
 		iteration++

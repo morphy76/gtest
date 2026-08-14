@@ -477,6 +477,8 @@ test developers):
 
 Built-in metric names are defined as exported package-level constants in `internal/metric/names.go` and re-exported in `pkg/gtest/metrics.go` for public use. All framework metrics are prefixed with `MetricPrefix = "gtest."` and must not be used as names for test-developer-defined custom metrics.
 
+> **Note on In-Flight Iterations:** `MetricIterationsTimeout` only counts iterations that exceed `vu_timeout` during active scenario execution. In-flight iterations interrupted mid-flight by scenario completion (e.g. `run_period` / `ramp_down` expiration or early scenario abort/cancellation) are discarded as incomplete and are not recorded as timeouts or failed iterations.
+
 ---
 
 ## 6. CLI Flag Inventory
@@ -618,12 +620,9 @@ Ramp-up uses **linear interpolation** of the target level over `ramp_up` duratio
 
 ### 8.2 Ramp-Down Algorithm
 
-- **`constant_vus`:** Context cancellation signal is sent to all VU goroutines. VUs finish their current
-  `RunVU` call before exiting (they are not killed mid-iteration). Ramp-down completes when all goroutines
-  return from their deferred `AfterTest`.
+- **`constant_vus`:** When `ramp_up + run_period` elapses, VUs stop starting new iterations. In-flight iterations are allowed up to `ramp_down` duration to complete gracefully. When `ramp_down` expires (or immediately if `ramp_down` is `0s`), remaining in-flight iterations are interrupted via context cancellation and discarded (not reported as timeouts or failures). Ramp-down completes when all goroutines return from their deferred `AfterTest`.
 
-- **`arrival_rate`:** Token budget is set to 0 immediately. In-flight goroutines complete their current
-  iteration. The engine waits for all goroutines to return before declaring ramp-down complete.
+- **`arrival_rate`:** Token dispatch ends at `ramp_up + run_period`. In-flight worker goroutines are allowed up to `ramp_down` duration to complete. When `ramp_down` expires (or immediately if `ramp_down` is `0s`), remaining in-flight workers are interrupted via context cancellation and discarded (not reported as timeouts or failures). The engine waits for all goroutines to return before declaring ramp-down complete.
 
 ### 8.3 Arrival Rate — Pool Saturation
 

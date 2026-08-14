@@ -160,3 +160,43 @@ func TestArrivalRateLifecycleHooks(t *testing.T) {
 	assert.Greater(t, preTestCount.Load(), int64(0), "PreTest must be called for dispatched workers")
 	assert.Equal(t, preTestCount.Load(), afterTestCount.Load(), "AfterTest must match PreTest count")
 }
+
+// Issue #70: With ramp_down=0s, in-flight workers interrupted by test duration expiration
+// must not be reported as timeouts or failures.
+func TestArrivalRateZeroRampDownInFlightWorkersNotReportedAsTimeoutsOrFailures(t *testing.T) {
+	logger, metrics := newTestDeps()
+
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
+			// Simulate context-aware iteration work (25ms)
+			select {
+			case <-time.After(25 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	}
+
+	cfg := config.ScenarioConfig{
+		Type:      config.ScenarioTypeArrivalRate,
+		TargetTPS: 50,
+		MaxVUs:    10,
+		RunPeriod: 60 * time.Millisecond,
+		RampDown:  0,
+		VUTimeout: 1 * time.Second,
+	}
+
+	exec := engine.NewExecutor("test_arrival_rate", scenario, cfg, logger, metrics)
+	err := exec.Execute(context.Background())
+	require.NoError(t, err)
+
+	timeoutCount := metrics.AggregatedCounterValue(metric.MetricIterationsTimeout)
+	failedCount := metrics.AggregatedCounterValue(metric.MetricIterationsFailed)
+	totalCount := metrics.AggregatedCounterValue(metric.MetricIterationsTotal)
+
+	assert.Equal(t, int64(0), timeoutCount, "interrupted in-flight workers must not be counted as timeouts")
+	assert.Equal(t, int64(0), failedCount, "interrupted in-flight workers must not be counted as failures")
+	assert.Greater(t, totalCount, int64(0), "completed iterations before expiration should be recorded in total")
+}
+

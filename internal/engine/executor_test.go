@@ -449,3 +449,42 @@ func TestConstantVUsRampDownGracePeriod(t *testing.T) {
 	assert.GreaterOrEqual(t, completed, int64(2),
 		"each VU should complete at least 1 iteration during ramp_down grace period")
 }
+
+// Issue #70: With ramp_down=0s, in-flight iterations interrupted by test duration expiration
+// must not be reported as timeouts or failures.
+func TestConstantVUsZeroRampDownInFlightIterationsNotReportedAsTimeoutsOrFailures(t *testing.T) {
+	logger, metrics := newTestDeps()
+
+	scenario := engine.Scenario{
+		RunVU: func(ctx engine.ScenarioContext) error {
+			// Simulate context-aware iteration work (10ms)
+			select {
+			case <-time.After(10 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	}
+
+	cfg := config.ScenarioConfig{
+		Type:      config.ScenarioTypeConstantVUs,
+		VUs:       5,
+		RunPeriod: 60 * time.Millisecond,
+		RampDown:  0,
+		VUTimeout: 1 * time.Second,
+	}
+
+	exec := engine.NewExecutor("test_scenario", scenario, cfg, logger, metrics)
+	err := exec.Execute(context.Background())
+	require.NoError(t, err)
+
+	timeoutCount := metrics.AggregatedCounterValue(metric.MetricIterationsTimeout)
+	failedCount := metrics.AggregatedCounterValue(metric.MetricIterationsFailed)
+	totalCount := metrics.AggregatedCounterValue(metric.MetricIterationsTotal)
+
+	assert.Equal(t, int64(0), timeoutCount, "interrupted in-flight iterations must not be counted as timeouts")
+	assert.Equal(t, int64(0), failedCount, "interrupted in-flight iterations must not be counted as failures")
+	assert.Greater(t, totalCount, int64(0), "completed iterations before expiration should be recorded in total")
+}
+

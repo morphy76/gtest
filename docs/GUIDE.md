@@ -414,6 +414,8 @@ All built-in metrics are exported as typed constants in `pkg/gtest` (e.g. `gtest
 | `gtest.MetricChecksPassed` | `gtest.checks.passed` | Counter | Total inline checks that passed |
 | `gtest.MetricChecksFailed` | `gtest.checks.failed` | Counter | Total inline checks that failed |
 
+> **In-Flight Iterations on Shutdown:** `gtest.vu.iterations_timeout` tracks only genuine per-iteration timeouts where `RunVU` exceeded `vu_timeout` during active execution. In-flight iterations that are interrupted when the overall scenario completes (`run_period` / `ramp_down` expiration or early abort) are cleanly cancelled and discarded without being counted as timeouts or failures.
+
 ---
 
 ## 8. SLA Thresholds (Quality Gates)
@@ -511,6 +513,8 @@ VU 3 ···············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 
 **Best for**: simulating a fixed number of concurrent users.
 
+> **Graceful Completion:** When `run_period` ends, VUs stop starting new iterations. In-flight iterations are allowed up to `ramp_down` duration to finish. Any iterations still in-flight after `ramp_down` expires (or immediately if `ramp_down: 0s`) are interrupted and discarded without incrementing timeout or failure metrics.
+
 ### arrival_rate (Open System)
 
 Dispatches iterations at a target TPS using a token bucket. A bounded worker pool (`max_vus`) prevents goroutine explosion.
@@ -521,10 +525,11 @@ target_tps: 100       # 100 iterations/second
 max_vus: 50           # max concurrent workers
 ramp_up: 10s
 run_period: 1m
+ramp_down: 5s         # optional grace period for in-flight workers
 vu_timeout: 2s
 ```
 
-If all `max_vus` workers are busy when a token arrives, the iteration is **dropped** and `gtest.pacing.dropped_iterations` is incremented.
+If all `max_vus` workers are busy when a token arrives, the iteration is **dropped** and `gtest.pacing.dropped_iterations` is incremented. In-flight workers interrupted when the scenario finishes are discarded without false timeout or error reporting.
 
 **Best for**: testing at a specific throughput regardless of response time.
 

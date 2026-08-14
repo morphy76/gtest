@@ -199,13 +199,14 @@ scenarios:
    - `vus`: Number of concurrent VUs (`int > 0`).
    - `ramp_up`: Staggered linear VU spawn duration (`time.Duration`).
    - `run_period`: Steady-state load duration (`time.Duration`).
-   - `ramp_down`: Graceful exit duration (`time.Duration`).
+   - `ramp_down`: Graceful exit duration for in-flight iterations (`time.Duration`, default `0s`).
 
 2. **`arrival_rate`**:
    - `target_tps`: Desired transactions/iterations per second (`int > 0`).
    - `max_vus`: Maximum size of the worker pool (`int > 0`). If the pool saturates, unhandled tokens increment `gtest.pacing.dropped_iterations`.
    - `ramp_up`: Linear rate ramp-up duration (`time.Duration`).
    - `run_period`: Steady-state arrival duration (`time.Duration`).
+   - `ramp_down`: Graceful exit duration for in-flight workers (`time.Duration`, default `0s`).
 
 ---
 
