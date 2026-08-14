@@ -95,7 +95,7 @@ func TestAbortOnFail_InFlightVUsNotCountedAsTimeouts(t *testing.T) {
 	var vu1Failed atomic.Bool
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			if ctx.VUID() == 1 {
 				if vu1Failed.CompareAndSwap(false, true) {
 					// Trigger the failure on VU 1 once

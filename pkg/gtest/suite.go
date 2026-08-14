@@ -1,7 +1,6 @@
 package gtest
 
 import (
-	"context"
 	"errors"
 	"io"
 	"os"
@@ -200,23 +199,59 @@ func (m *publicMetricsAdapter) Rate(name string, tags Tags) Rate {
 	return m.collector.Rate(name, metric.Tags(tags))
 }
 
-type publicContextAdapter struct {
-	engine.ScenarioContext
+type publicSetupContextAdapter struct {
+	engine.SetupContext
 }
 
-func (a *publicContextAdapter) Log() Logger {
-	return &publicLoggerAdapter{logger: a.ScenarioContext.Log()}
+func (a *publicSetupContextAdapter) Log() Logger {
+	return &publicLoggerAdapter{logger: a.SetupContext.Log()}
 }
 
-func (a *publicContextAdapter) Metrics() MetricsCollector {
-	return &publicMetricsAdapter{collector: a.ScenarioContext.Metrics()}
+func (a *publicSetupContextAdapter) Metrics() MetricsCollector {
+	return &publicMetricsAdapter{collector: a.SetupContext.Metrics()}
 }
 
-func (a *publicContextAdapter) Check(name string, fn CheckFunc) bool {
+type publicVUContextAdapter struct {
+	engine.VUContext
+}
+
+func (a *publicVUContextAdapter) Log() Logger {
+	return &publicLoggerAdapter{logger: a.VUContext.Log()}
+}
+
+func (a *publicVUContextAdapter) Metrics() MetricsCollector {
+	return &publicMetricsAdapter{collector: a.VUContext.Metrics()}
+}
+
+func (a *publicVUContextAdapter) Check(name string, fn CheckFunc) bool {
 	if fn == nil {
-		return a.ScenarioContext.Check(name, nil)
+		return a.VUContext.Check(name, nil)
 	}
-	return a.ScenarioContext.Check(name, engine.CheckFunc(fn))
+	return a.VUContext.Check(name, engine.CheckFunc(fn))
+}
+
+type publicTeardownContextAdapter struct {
+	engine.TeardownContext
+}
+
+func (a *publicTeardownContextAdapter) Log() Logger {
+	return &publicLoggerAdapter{logger: a.TeardownContext.Log()}
+}
+
+func (a *publicTeardownContextAdapter) Metrics() MetricsCollector {
+	return &publicMetricsAdapter{collector: a.TeardownContext.Metrics()}
+}
+
+type publicSummaryContextAdapter struct {
+	engine.SummaryContext
+}
+
+func (a *publicSummaryContextAdapter) Log() Logger {
+	return &publicLoggerAdapter{logger: a.SummaryContext.Log()}
+}
+
+func (a *publicSummaryContextAdapter) Metrics() MetricsCollector {
+	return &publicMetricsAdapter{collector: a.SummaryContext.Metrics()}
 }
 
 type runnerSuiteAdapter struct {
@@ -235,43 +270,43 @@ func (a *runnerSuiteAdapter) GetScenario(name string) (engine.Scenario, bool) {
 
 	var setup engine.SetupHook
 	if sc.Setup != nil {
-		setup = func(ctx engine.ScenarioContext) (map[string]any, error) {
-			return sc.Setup(&publicContextAdapter{ScenarioContext: ctx})
+		setup = func(ctx engine.SetupContext) (map[string]any, error) {
+			return sc.Setup(&publicSetupContextAdapter{SetupContext: ctx})
 		}
 	}
 
 	var preTest engine.PreTestHook
 	if sc.PreTest != nil {
-		preTest = func(ctx engine.ScenarioContext) error {
-			return sc.PreTest(&publicContextAdapter{ScenarioContext: ctx})
+		preTest = func(ctx engine.VUContext) error {
+			return sc.PreTest(&publicVUContextAdapter{VUContext: ctx})
 		}
 	}
 
 	var runVU engine.VURunnerHook
 	if sc.RunVU != nil {
-		runVU = func(ctx engine.ScenarioContext) error {
-			return sc.RunVU(&publicContextAdapter{ScenarioContext: ctx})
+		runVU = func(ctx engine.VUContext) error {
+			return sc.RunVU(&publicVUContextAdapter{VUContext: ctx})
 		}
 	}
 
 	var afterTest engine.AfterTestHook
 	if sc.AfterTest != nil {
-		afterTest = func(ctx engine.ScenarioContext) error {
-			return sc.AfterTest(&publicContextAdapter{ScenarioContext: ctx})
+		afterTest = func(ctx engine.VUContext) error {
+			return sc.AfterTest(&publicVUContextAdapter{VUContext: ctx})
 		}
 	}
 
 	var teardown engine.TeardownHook
 	if sc.Teardown != nil {
-		teardown = func(ctx engine.ScenarioContext, state map[string]any) error {
-			return sc.Teardown(&publicContextAdapter{ScenarioContext: ctx}, state)
+		teardown = func(ctx engine.TeardownContext, state map[string]any) error {
+			return sc.Teardown(&publicTeardownContextAdapter{TeardownContext: ctx}, state)
 		}
 	}
 
 	var handleSummary engine.SummaryHook
 	if sc.HandleSummary != nil {
-		handleSummary = func(ctx context.Context, summary report.SummaryData) error {
-			return sc.HandleSummary(ctx, convertReportSummaryToPublic(summary))
+		handleSummary = func(ctx engine.SummaryContext, summary report.SummaryData) error {
+			return sc.HandleSummary(&publicSummaryContextAdapter{SummaryContext: ctx}, convertReportSummaryToPublic(summary))
 		}
 	}
 

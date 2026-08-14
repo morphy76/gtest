@@ -133,19 +133,19 @@ A scenario is a struct with up to 6 lifecycle hooks. Only `RunVU` is required:
 ```go
 suite.RegisterScenario("checkout_flow", gtest.Scenario{
     // (1) Setup — runs ONCE before any VU spawns
-    Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+    Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
         client := &http.Client{Timeout: 5 * time.Second}
         return map[string]any{"client": client}, nil
     },
 
     // (2) PreTest — runs ONCE per VU before its iteration loop
-    PreTest: func(ctx gtest.ScenarioContext) error {
+    PreTest: func(ctx gtest.VUContext) error {
         ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("VU starting")
         return nil
     },
 
     // (3) RunVU — called repeatedly in a loop per VU during run_period
-    RunVU: func(ctx gtest.ScenarioContext) error {
+    RunVU: func(ctx gtest.VUContext) error {
         baseURL := ctx.Param("base_url")
         client := ctx.GlobalState("client").(*http.Client)
 
@@ -170,21 +170,19 @@ suite.RegisterScenario("checkout_flow", gtest.Scenario{
     },
 
     // (4) AfterTest — runs ONCE per VU after loop ends (defer-guaranteed)
-    AfterTest: func(ctx gtest.ScenarioContext) error {
+    AfterTest: func(ctx gtest.VUContext) error {
         ctx.Log().Info().Int64("vu", ctx.VUID()).Msg("VU finished")
         return nil
     },
 
     // (5) Teardown — runs ONCE after ALL VUs exit
-    Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+    Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
         ctx.Log().Info().Msg("cleaning up shared resources")
         return nil
     },
 
     // (6) HandleSummary — runs ONCE after report generation with structured results
-    HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
-        ctx := context.Background()
-        _ = ctx
+    HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
         fmt.Printf("Scenario %s ended in %v, passed=%v\n", summary.Scenario, summary.Duration, summary.Passed)
         return nil
     },
@@ -251,12 +249,24 @@ All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1
 
 ---
 
-## 5. ScenarioContext API Reference
+## 5. Context Hierarchy & Role-Specific Interfaces
 
-`ScenarioContext` embeds `context.Context` and composes 5 focused capability interfaces adhering to the **Interface Segregation Principle (ISP)**:
+To adhere strictly to the **Interface Segregation Principle (ISP)** and prevent meaningless/dummy method calls during non-VU lifecycle phases, the framework aggregates granular capability interfaces into role-specific composed context interfaces:
 
-| Method | Interface | Return | Description |
-|--------|-----------|--------|-------------|
+### Role-Specific Composed Interfaces
+
+| Context Interface | Lifecycle Phase | Composed Capability Interfaces | Available Capabilities |
+|-------------------|-----------------|--------------------------------|------------------------|
+| **`SetupContext`** | `Setup` | `context.Context`, `ConfigProvider`, `ObservabilityProvider` | Params, Structured Logging, Metrics |
+| **`VUContext`** | `PreTest`, `RunVU`, `AfterTest` | `context.Context`, `ExecutionIdentity`, `ConfigProvider`, `StateProvider`, `ObservabilityProvider`, `WorkflowController` | VUID, Iteration, Params, GlobalState, Log, Metrics, Sleep, Check |
+| **`TeardownContext`** | `Teardown` | `context.Context`, `ConfigProvider`, `StateProvider`, `ObservabilityProvider` | Params, GlobalState (read-only), Log, Metrics |
+| **`SummaryContext`** | `HandleSummary` | `context.Context`, `ConfigProvider`, `ObservabilityProvider` | Params, Structured Logging, Cancellation |
+| **`ScenarioContext`** | *Backward compatibility* | *Identical to `VUContext`* | Full VU capability set |
+
+### Capability Interfaces Reference
+
+| Method | Capability Interface | Return | Description |
+|--------|----------------------|--------|-------------|
 | `VUID()` | `ExecutionIdentity` | `int64` | 1-based virtual user ID |
 | `Iteration()` | `ExecutionIdentity` | `int64` | 0-based iteration count (0 in PreTest/AfterTest) |
 | `ScenarioName()` | `ExecutionIdentity` | `string` | Active scenario name from YAML |
@@ -264,14 +274,14 @@ All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1
 | `ParamInt(key, default)` | `ConfigProvider` | `int` | Parse param as int; logs warning and returns default on parse failure |
 | `ParamDuration(key, default)` | `ConfigProvider` | `time.Duration` | Parse param as duration; logs warning and returns default on parse failure |
 | `GlobalState(key)` | `StateProvider` | `any` | Read value from Setup's returned map (shallow-copied, read-only) |
-| `Log()` | `ObservabilityProvider` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration |
+| `Log()` | `ObservabilityProvider` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration context |
 | `Metrics()` | `ObservabilityProvider` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
 | `Sleep(d ...time.Duration)` | `WorkflowController` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
 | `Check(name, fn)` | `WorkflowController` | `bool` | Evaluate inline pass/fail assertion (`CheckFunc`) without stopping VU iteration |
 
 ### Interface Segregation & Modular Helpers
 
-Because `ScenarioContext` is decomposed into discrete interfaces, helper functions and custom components can accept only the specific capability they need instead of depending on the entire fat context:
+Because context interfaces are decomposed into discrete interfaces, helper functions and custom components can accept only the specific capability they need instead of depending on the entire fat context:
 
 ```go
 // Accepts only execution identity (e.g. for deterministic data partition or logging correlation)
@@ -297,18 +307,18 @@ func PerformHealthCheck(wf gtest.WorkflowController, client *http.Client, url st
 }
 ```
 
-This also makes unit testing helper functions trivial, as test authors only need to stub 1-3 methods rather than the full `ScenarioContext`.
+This also makes unit testing helper functions trivial, as test authors only need to stub 1-3 methods rather than the full context.
 
 ### Using as context.Context
 
-Because `ScenarioContext` embeds `context.Context`, you can pass it directly to stdlib and third-party calls:
+Because all role-specific context interfaces embed standard Go `context.Context`, you can pass them directly to stdlib and third-party calls:
 
 ```go
 req, _ := http.NewRequestWithContext(ctx, "POST", url, body)
 resp, err := client.Do(req)
 ```
 
-The context carries the `vu_timeout` deadline. When it expires, `ctx.Err() == context.DeadlineExceeded`.
+The context carries the `vu_timeout` deadline during VU iterations. When it expires, `ctx.Err() == context.DeadlineExceeded`.
 
 ---
 
@@ -317,27 +327,27 @@ The context carries the `vu_timeout` deadline. When it expires, `ctx.Err() == co
 ### Execution order
 
 ```text
-Setup(ctx) ─────────────────────── runs once
+Setup(ctx SetupContext) ─────────────────── runs once
   │
-  ├── VU 1: PreTest → RunVU loop → AfterTest (defer)
-  ├── VU 2: PreTest → RunVU loop → AfterTest (defer)
-  └── VU N: PreTest → RunVU loop → AfterTest (defer)
+  ├── VU 1: PreTest(VUContext) → RunVU(VUContext) loop → AfterTest(VUContext) [defer]
+  ├── VU 2: PreTest(VUContext) → RunVU(VUContext) loop → AfterTest(VUContext) [defer]
+  └── VU N: PreTest(VUContext) → RunVU(VUContext) loop → AfterTest(VUContext) [defer]
   │
-Teardown(ctx, state) ──────────── runs once
+Teardown(ctx TeardownContext, state) ───── runs once
   │
-HandleSummary(summary) ────────── runs once (post-report generation)
+HandleSummary(ctx SummaryContext, summary) ─ runs once (post-report generation)
 ```
 
 ### Key guarantees
 
-| Hook | Cardinality | Error behavior |
-|------|-------------|----------------|
-| **Setup** | Once | Non-nil error **aborts** entire test (returns `*SetupError`) |
-| **PreTest** | Once per VU | Non-nil error **skips** RunVU; AfterTest still runs |
-| **RunVU** | Loop per VU | Errors and panics are **caught, logged, counted**; loop continues |
-| **AfterTest** | Once per VU | Runs via `defer` — **guaranteed** even after RunVU panic |
-| **Teardown** | Once | Error is **logged** but does not affect pass/fail verdict |
-| **HandleSummary** | Once | Error is **logged** but does not affect exit code or SLA verdict |
+| Hook | Parameter Signature | Cardinality | Error behavior |
+|------|---------------------|-------------|----------------|
+| **Setup** | `ctx SetupContext` | Once | Non-nil error **aborts** entire test (returns `*SetupError`) |
+| **PreTest** | `ctx VUContext` | Once per VU | Non-nil error **skips** RunVU; AfterTest still runs |
+| **RunVU** | `ctx VUContext` | Loop per VU | Errors and panics are **caught, logged, counted**; loop continues |
+| **AfterTest** | `ctx VUContext` | Once per VU | Runs via `defer` — **guaranteed** even after RunVU panic |
+| **Teardown** | `ctx TeardownContext, state map[string]any` | Once | Error is **logged** but does not affect pass/fail verdict |
+| **HandleSummary** | `ctx SummaryContext, summary SummaryData` | Once | Error is **logged** but does not affect exit code or SLA verdict |
 
 
 ### Panic recovery

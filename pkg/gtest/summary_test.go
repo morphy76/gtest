@@ -2,7 +2,6 @@ package gtest_test
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,13 +34,16 @@ scenarios:
 
 	suite := gtest.NewSuite("Summary Test Suite")
 	suite.RegisterScenario("summary_test", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			ctx.Metrics().Counter("custom_counter", gtest.Tags{}).Inc()
 			return nil
 		},
-		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			handleSummaryCalled = true
 			capturedSummary = summary
+			// Test SummaryContext methods
+			_ = ctx.Param("nonexistent")
+			ctx.Log().Debug().Msg("summary hook execution")
 			return nil
 		},
 	})
@@ -80,13 +82,13 @@ scenarios:
 
 	suite := gtest.NewSuite("Complete Summary Suite")
 	suite.RegisterScenario("metrics_summary_test", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			ctx.Metrics().Counter("requests", gtest.Tags{}).Inc()
 			ctx.Metrics().Duration("latency", gtest.Tags{}).Observe(10 * time.Millisecond)
 			ctx.Metrics().Rate("success_rate", gtest.Tags{}).Add(1, 1)
 			return nil
 		},
-		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			capturedSummary = summary
 			return nil
 		},
@@ -158,11 +160,11 @@ scenarios:
 
 	suite := gtest.NewSuite("Summary Error Suite")
 	suite.RegisterScenario("summary_err_test", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			ctx.Metrics().Counter("requests", gtest.Tags{}).Inc()
 			return nil
 		},
-		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			return errors.New("slack webhook timeout")
 		},
 	})

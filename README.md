@@ -34,72 +34,72 @@ Test suites are created using `gtest.NewSuite("Suite Name")`. Each scenario regi
 
 ```go
 type Scenario struct {
-    Setup          func(ctx ScenarioContext) (map[string]any, error)
-    PreTest        func(ctx ScenarioContext) error
-    RunVU          func(ctx ScenarioContext) error
-    AfterTest      func(ctx ScenarioContext) error
-    Teardown       func(ctx ScenarioContext, state map[string]any) error
-    HandleSummary  func(ctx context.Context, summary SummaryData) error
+    Setup          func(ctx SetupContext) (map[string]any, error)
+    PreTest        func(ctx VUContext) error
+    RunVU          func(ctx VUContext) error
+    AfterTest      func(ctx VUContext) error
+    Teardown       func(ctx TeardownContext, state map[string]any) error
+    HandleSummary  func(ctx SummaryContext, summary SummaryData) error
 }
 ```
 
 ### Lifecycle Hook Sequence
 
 ```text
-       ┌────────────────────────┐
-       │   Setup(ctx)           │  (Runs once per scenario before VUs spawn)
-       └───────────┬────────────┘
-                   │  returns globalState map[string]any
-                   ▼
+       ┌────────────────────────────┐
+       │   Setup(ctx SetupContext)  │  (Runs once per scenario before VUs spawn)
+       └─────────────┬──────────────┘
+                     │  returns globalState map[string]any
+                     ▼
 ┌──────────────────────────────────────────────┐
 │ For each VU Iteration:                       │
 │                                              │
 │   ┌────────────────────────┐                 │
-│   │   PreTest(sCtx)        │                 │
+│   │   PreTest(ctx VUContext│                 │
 │   └───────────┬────────────┘                 │
 │               │ (if err != nil, skips RunVU) │
 │               ▼                              │
 │   ┌────────────────────────┐                 │
-│   │   RunVU(sCtx)          │                 │
+│   │   RunVU(ctx VUContext) │                 │
 │   └───────────┬────────────┘                 │
 │               │                              │
 │               ▼                              │
 │   ┌────────────────────────┐                 │
-│   │   AfterTest(sCtx)      │ (defer guarantee│
+│   │  AfterTest(ctx VUContxt│ (defer guarantee│
 │   └────────────────────────┘  runs always)   │
 └──────────────────┬───────────────────────────┘
                    │
                    ▼
-       ┌────────────────────────┐
-       │  Teardown(ctx, state)  │  (Runs once after all VUs exit)
-       └───────────┬────────────┘
+       ┌──────────────────────────────────────┐
+       │ Teardown(ctx TeardownContext, state) │  (Runs once after all VUs exit)
+       └───────────┬──────────────────────────┘
                    │
                    ▼
-       ┌────────────────────────┐
-       │  HandleSummary(summary)│  (Runs post-report with full execution summary)
-       └────────────────────────┘
+       ┌──────────────────────────────────────┐
+       │ HandleSummary(ctx SummaryCtx, summ.) │  (Runs post-report with full execution summary)
+       └──────────────────────────────────────┘
 ```
 
 
 ---
 
-## ScenarioContext API
+## Context Hierarchy & Capabilities
 
-`ScenarioContext` is the execution context passed to VU lifecycle hooks (`PreTest`, `RunVU`, `AfterTest`), composing focused capability interfaces (`ExecutionIdentity`, `ConfigProvider`, `StateProvider`, `ObservabilityProvider`, `WorkflowController`) and embedding standard `context.Context`:
+Adhering to the **Interface Segregation Principle (ISP)**, gtest provides role-specific context interfaces (`SetupContext`, `VUContext`, `TeardownContext`, `SummaryContext`) composing granular capability interfaces. `ScenarioContext` is preserved as an alias to `VUContext` for backward compatibility.
 
-| Method | Description |
-|--------|-------------|
-| `ctx.VUID()` | Returns the 1-based Virtual User ID (`int64`). |
-| `ctx.Iteration()` | Returns the 0-based iteration index (`int64`). |
-| `ctx.ScenarioName()` | Returns the scenario string identifier. |
-| `ctx.Param(key)` | Returns scenario param string from YAML config. |
-| `ctx.ParamInt(key, default)` | Parses scenario param as integer (logs warning and returns default on parse failure). |
-| `ctx.ParamDuration(key, default)` | Parses scenario param as `time.Duration` (e.g. `200ms`, logs warning and returns default on parse failure). |
-| `ctx.GlobalState(key)` | Accesses values returned by the `Setup` hook (shallow-copied, read-only). |
-| `ctx.Log()` | Structured `Logger` instance bound with VU ID and iteration context. |
-| `ctx.Metrics()` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
-| `ctx.Sleep(d ...time.Duration)` | Pauses for explicit duration or configured `interaction_delay` strategy (respects `ctx.Done()`). |
-| `ctx.Check(name, fn)` | Evaluates inline pass/fail assertion (`CheckFunc`) without stopping VU iteration execution. |
+| Method | Capability Interface | Description |
+|--------|----------------------|-------------|
+| `ctx.VUID()` | `ExecutionIdentity` | Returns the 1-based Virtual User ID (`int64`). |
+| `ctx.Iteration()` | `ExecutionIdentity` | Returns the 0-based iteration index (`int64`). |
+| `ctx.ScenarioName()` | `ExecutionIdentity` | Returns the scenario string identifier. |
+| `ctx.Param(key)` | `ConfigProvider` | Returns scenario param string from YAML config. |
+| `ctx.ParamInt(key, default)` | `ConfigProvider` | Parses scenario param as integer (logs warning and returns default on parse failure). |
+| `ctx.ParamDuration(key, default)` | `ConfigProvider` | Parses scenario param as `time.Duration` (e.g. `200ms`, logs warning and returns default on parse failure). |
+| `ctx.GlobalState(key)` | `StateProvider` | Accesses values returned by the `Setup` hook (shallow-copied, read-only). |
+| `ctx.Log()` | `ObservabilityProvider` | Structured `Logger` instance bound with VU ID and iteration context. |
+| `ctx.Metrics()` | `ObservabilityProvider` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
+| `ctx.Sleep(d ...time.Duration)` | `WorkflowController` | Pauses for explicit duration or configured `interaction_delay` strategy (respects `ctx.Done()`). |
+| `ctx.Check(name, fn)` | `WorkflowController` | Evaluates inline pass/fail assertion (`CheckFunc`) without stopping VU iteration execution. |
 
 
 ---
@@ -242,7 +242,7 @@ scenarios:
 ### Usage in Code
 
 ```go
-RunVU: func(ctx gtest.ScenarioContext) error {
+RunVU: func(ctx gtest.VUContext) error {
     // Step 1: Browse catalog / receive message
     // ...
 
@@ -289,14 +289,14 @@ Feed external datasets into your load tests using the built-in `pkg/gtest/data` 
 ### Example Usage
 
 ```go
-Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
     ds, err := data.LoadCSVFile("data/users.csv", data.Sequential)
     if err != nil {
         return nil, err
     }
     return map[string]any{"users": ds}, nil
 },
-RunVU: func(ctx gtest.ScenarioContext) error {
+RunVU: func(ctx gtest.VUContext) error {
     ds := ctx.GlobalState("users").(*data.DataSet)
     user, err := ds.Next(ctx)
     if err != nil {
@@ -335,15 +335,15 @@ func main() {
 	suite := gtest.NewSuite("E-Commerce Load Test Suite")
 
 	suite.RegisterScenario("http_checkout_flow", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 5 * time.Second}
 			return map[string]any{"client": client}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("preparing iteration")
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			baseURL := ctx.Param("base_url")
 			client := ctx.GlobalState("client").(*http.Client)
 
@@ -365,14 +365,14 @@ func main() {
 			return nil
 
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("iteration finished")
 			return nil
 		},
-		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
 			return nil
 		},
-		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			fmt.Printf("Summary Hook: %s completed in %v, passed=%v\n", summary.Scenario, summary.Duration, summary.Passed)
 			return nil
 		},

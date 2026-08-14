@@ -42,20 +42,20 @@ func main() {
 	suite := gtest.NewSuite("SLA Thresholds & Error Handling Suite")
 
 	suite.RegisterScenario("sla_quality_gates", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
 			return map[string]any{
 				"client":     client,
 				"server_url": ts.URL,
 			}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating SLA evaluation iteration")
 			// Initialize counter so the metric exists in the store with value 0 before any errors occur
 			ctx.Metrics().Counter("api_errors_total", gtest.Tags{}).Add(0)
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
@@ -127,7 +127,7 @@ func main() {
 
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed SLA evaluation iteration")
 			return nil
 		},

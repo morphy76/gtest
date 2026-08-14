@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,7 +45,7 @@ func main() {
 	suite := gtest.NewSuite("Execution Summary Hook Demo Suite")
 
 	suite.RegisterScenario("summary_hook_demo", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
 			return map[string]any{
 				"client":      client,
@@ -54,7 +53,7 @@ func main() {
 				"webhook_url": ts.URL + "/webhook/alerts",
 			}, nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
@@ -82,7 +81,7 @@ func main() {
 			ctx.Metrics().Counter("tasks_completed_total", gtest.Tags{}).Inc()
 			return nil
 		},
-		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			// HandleSummary executes ONCE post-test run after all reports have been generated.
 			// It receives the full SummaryData model with metadata, metrics, and threshold outcomes.
 

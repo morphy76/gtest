@@ -37,7 +37,7 @@ func main() {
 	suite := gtest.NewSuite("Thinking Time & User Delay Demo Suite")
 
 	suite.RegisterScenario("user_journey_with_think_time", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 3 * time.Second}
 			// Initialize a custom exponential delay generator for intra-step decision modeling
 			expoGen := gtest.ExpoDelay(25*time.Millisecond, 10*time.Millisecond, 50*time.Millisecond)
@@ -48,11 +48,11 @@ func main() {
 				"expo_delay": expoGen,
 			}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("initiating user journey iteration")
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 			expoGen := ctx.GlobalState("expo_delay").(gtest.DelayGenerator)
@@ -119,7 +119,7 @@ func main() {
 
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("completed user journey iteration")
 			return nil
 		},

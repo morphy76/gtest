@@ -19,7 +19,7 @@ func main() {
 	suite := gtest.NewSuite("gRPC User Service Load Test")
 
 	suite.RegisterScenario("grpc_user_service_flow", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			db := &userDB{
 				users: map[int]string{
 					1: "Alice",
@@ -31,11 +31,11 @@ func main() {
 				"db": db,
 			}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("preparing RPC invocation")
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			db := ctx.GlobalState("db").(*userDB)
 			serviceName := ctx.Param("service_name")
 			method := ctx.Param("method")
@@ -62,11 +62,11 @@ func main() {
 			ctx.Metrics().Counter("grpc_calls_total", gtest.Tags{"status": "OK"}).Inc()
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("completed RPC invocation")
 			return nil
 		},
-		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
 			return nil
 		},
 	})

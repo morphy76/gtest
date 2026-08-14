@@ -83,7 +83,7 @@ func main() {
 	suite := gtest.NewSuite("Data Parameterization Demo Suite")
 
 	suite.RegisterScenario("data_parameterization_flow", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			// 1. Load CSV dataset with Sequential round-robin strategy (deterministic per VU + iteration)
 			csvDS, err := data.LoadCSV(strings.NewReader(sampleCSV), data.Sequential)
 			if err != nil {
@@ -111,11 +111,11 @@ func main() {
 				"server_url":    ts.URL,
 			}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("starting parameterized iteration")
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			csvDS := ctx.GlobalState("csv_dataset").(*data.DataSet)
 			jsonDS := ctx.GlobalState("json_dataset").(*data.DataSet)
 			client := ctx.GlobalState("client").(*http.Client)
@@ -171,7 +171,7 @@ func main() {
 
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed parameterized iteration")
 			return nil
 		},

@@ -30,7 +30,7 @@ func TestConstantVUsActiveCount(t *testing.T) {
 	var activeVUIDs sync.Map
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			activeVUIDs.Store(ctx.VUID(), true)
 			time.Sleep(10 * time.Millisecond)
 			return nil
@@ -66,14 +66,14 @@ func TestSetupCalledOnceBeforePreTest(t *testing.T) {
 	var mu sync.Mutex
 
 	scenario := engine.Scenario{
-		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx engine.SetupContext) (map[string]any, error) {
 			mu.Lock()
 			setupTime = time.Now()
 			mu.Unlock()
 			setupCount.Add(1)
 			return map[string]any{"key": "val"}, nil
 		},
-		PreTest: func(ctx engine.ScenarioContext) error {
+		PreTest: func(ctx engine.VUContext) error {
 			mu.Lock()
 			if preTestTime.IsZero() {
 				preTestTime = time.Now()
@@ -82,7 +82,7 @@ func TestSetupCalledOnceBeforePreTest(t *testing.T) {
 			assert.Equal(t, "val", ctx.GlobalState("key"))
 			return nil
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			return nil
 		},
 	}
@@ -111,11 +111,11 @@ func TestPreTestCalledOncePerVU(t *testing.T) {
 	var preTestCount atomic.Int64
 
 	scenario := engine.Scenario{
-		PreTest: func(ctx engine.ScenarioContext) error {
+		PreTest: func(ctx engine.VUContext) error {
 			preTestCount.Add(1)
 			return nil
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			return nil
 		},
 	}
@@ -141,7 +141,7 @@ func TestRunVUExecutedAtLeastOncePerVU(t *testing.T) {
 	var executedVUs sync.Map
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			executedVUs.Store(ctx.VUID(), true)
 			return nil
 		},
@@ -171,10 +171,10 @@ func TestAfterTestCalledEvenOnRunVUError(t *testing.T) {
 	var afterTestCount atomic.Int64
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			return errors.New("iteration failed")
 		},
-		AfterTest: func(ctx engine.ScenarioContext) error {
+		AfterTest: func(ctx engine.VUContext) error {
 			afterTestCount.Add(1)
 			return nil
 		},
@@ -202,11 +202,11 @@ func TestTeardownCalledOnceAfterVUsExit(t *testing.T) {
 	var activeVUsAtTeardown int64
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
-		Teardown: func(ctx engine.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx engine.TeardownContext, state map[string]any) error {
 			teardownCount.Add(1)
 			activeVUsAtTeardown = int64(metrics.LastGaugeValue(metric.MetricVUActive))
 			return nil
@@ -235,7 +235,7 @@ func TestRunVUPanicDoesNotTerminateOtherVUs(t *testing.T) {
 	var vu1Panicked atomic.Bool
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			if ctx.VUID() == 1 && !vu1Panicked.Swap(true) {
 				panic("boom")
 			}
@@ -267,17 +267,17 @@ func TestPreTestFailureSkipsRunVUButCallsAfterTest(t *testing.T) {
 	var afterTestCount atomic.Int64
 
 	scenario := engine.Scenario{
-		PreTest: func(ctx engine.ScenarioContext) error {
+		PreTest: func(ctx engine.VUContext) error {
 			if ctx.VUID() == 2 {
 				return errors.New("pretest failed for VU 2")
 			}
 			return nil
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			runVUCount.Add(1)
 			return nil
 		},
-		AfterTest: func(ctx engine.ScenarioContext) error {
+		AfterTest: func(ctx engine.VUContext) error {
 			afterTestCount.Add(1)
 			return nil
 		},
@@ -306,7 +306,7 @@ func TestVUTimeoutCountsAsFailedIterationAndContinuesLoop(t *testing.T) {
 	var runVUCallCount atomic.Int64
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			runVUCallCount.Add(1)
 			<-ctx.Done()
 			return ctx.Err()
@@ -337,13 +337,13 @@ func TestRampUpSpawnsAtIntervals(t *testing.T) {
 	var mu sync.Mutex
 
 	scenario := engine.Scenario{
-		PreTest: func(ctx engine.ScenarioContext) error {
+		PreTest: func(ctx engine.VUContext) error {
 			mu.Lock()
 			startTimes[ctx.VUID()] = time.Now()
 			mu.Unlock()
 			return nil
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
@@ -383,14 +383,14 @@ func TestSetupErrorAbortsExecution(t *testing.T) {
 	var preTestCalled bool
 
 	scenario := engine.Scenario{
-		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx engine.SetupContext) (map[string]any, error) {
 			return nil, errors.New("database connection failed")
 		},
-		PreTest: func(ctx engine.ScenarioContext) error {
+		PreTest: func(ctx engine.VUContext) error {
 			preTestCalled = true
 			return nil
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			return nil
 		},
 	}
@@ -420,7 +420,7 @@ func TestConstantVUsRampDownGracePeriod(t *testing.T) {
 	var completedIterations atomic.Int64
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			// Simulate work that takes longer than run_period
 			select {
 			case <-time.After(80 * time.Millisecond):
@@ -456,7 +456,7 @@ func TestConstantVUsZeroRampDownInFlightIterationsNotReportedAsTimeoutsOrFailure
 	logger, metrics := newTestDeps()
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			// Simulate context-aware iteration work (10ms)
 			select {
 			case <-time.After(10 * time.Millisecond):
