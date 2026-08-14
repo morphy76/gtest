@@ -467,7 +467,9 @@ used by test developers.
 | `scenarios.<name>.ramp_down` | duration string | no | `"0s"` | ≥ 0 |
 | `scenarios.<name>.vu_timeout` | duration string | yes | — | > 0 |
 | `scenarios.<name>.params` | map[string]string | no | `{}` | Keys and values must be non-empty strings |
+| `scenarios.<name>.interaction_delay` | object | no | — | See §11 (Increment 1.12) |
 | `scenarios.<name>.thresholds` | list | no | `[]` | See §7.2 |
+
 
 Duration strings follow Go's `time.ParseDuration` format (e.g., `"15s"`, `"2m30s"`, `"500ms"`).
 
@@ -974,7 +976,8 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 
 ---
 
-### Increment 1.12 — Interaction Delay Strategies (Think Time)
+### Increment 1.12 — Interaction Delay Strategies (Think Time) ✅ COMPLETED (2026-08-14)
+
 
 **Goal:** Provide configurable user interaction delay (think time) strategies to simulate realistic user pauses between actions and iterations.
 

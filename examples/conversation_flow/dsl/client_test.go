@@ -36,8 +36,10 @@ func (m *mockScenarioContext) ParamDuration(key string, def time.Duration) time.
 func (m *mockScenarioContext) GlobalState(key string) any              { return nil }
 func (m *mockScenarioContext) Log() gtest.Logger                        { return noopLogger{} }
 func (m *mockScenarioContext) Metrics() gtest.MetricsCollector         { return noopMetrics{} }
+func (m *mockScenarioContext) Sleep(d ...time.Duration) error          { return nil }
 
 type noopLogger struct{}
+
 
 func (l noopLogger) Debug() gtest.LogEvent { return noopLogEvent{} }
 func (l noopLogger) Info() gtest.LogEvent  { return noopLogEvent{} }

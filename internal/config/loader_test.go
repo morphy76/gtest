@@ -508,3 +508,196 @@ func TestLoadFromFileNotFoundReturnsConfigError(t *testing.T) {
 	require.True(t, errors.As(err, &cfgErr), "expected *config.ConfigError, got %T", err)
 	assert.Equal(t, "/nonexistent/path/gtest.yaml", cfgErr.Path)
 }
+
+func TestInteractionDelayConfigLoading(t *testing.T) {
+	t.Run("valid fixed delay", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "fixed"
+      duration: "500ms"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Scenarios["s1"].InteractionDelay)
+		assert.Equal(t, "fixed", cfg.Scenarios["s1"].InteractionDelay.Type)
+		assert.Equal(t, 500*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Duration)
+	})
+
+	t.Run("valid range delay", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "range"
+      min: "200ms"
+      max: "1s"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Scenarios["s1"].InteractionDelay)
+		assert.Equal(t, "range", cfg.Scenarios["s1"].InteractionDelay.Type)
+		assert.Equal(t, 200*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Min)
+		assert.Equal(t, 1*time.Second, cfg.Scenarios["s1"].InteractionDelay.Max)
+	})
+
+	t.Run("valid expo delay", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "expo"
+      mean: "500ms"
+      min: "100ms"
+      max: "2s"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Scenarios["s1"].InteractionDelay)
+		assert.Equal(t, "expo", cfg.Scenarios["s1"].InteractionDelay.Type)
+		assert.Equal(t, 500*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Mean)
+		assert.Equal(t, 100*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Min)
+		assert.Equal(t, 2*time.Second, cfg.Scenarios["s1"].InteractionDelay.Max)
+	})
+
+	t.Run("valid gaussian delay", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "gaussian"
+      mean: "500ms"
+      std_dev: "50ms"
+      min: "300ms"
+      max: "700ms"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Scenarios["s1"].InteractionDelay)
+		assert.Equal(t, "gaussian", cfg.Scenarios["s1"].InteractionDelay.Type)
+		assert.Equal(t, 500*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Mean)
+		assert.Equal(t, 50*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.StdDev)
+		assert.Equal(t, 300*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Min)
+		assert.Equal(t, 700*time.Millisecond, cfg.Scenarios["s1"].InteractionDelay.Max)
+	})
+
+	t.Run("invalid delay type", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "unknown_delay"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.interaction_delay.type", valErr.Field)
+	})
+
+	t.Run("invalid fixed delay without duration", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "fixed"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.interaction_delay.duration", valErr.Field)
+	})
+
+	t.Run("invalid range delay max less than min", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "range"
+      min: "500ms"
+      max: "100ms"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.interaction_delay.max", valErr.Field)
+	})
+
+	t.Run("invalid expo delay without mean", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "expo"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.interaction_delay.mean", valErr.Field)
+	})
+
+	t.Run("invalid gaussian delay without std_dev", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    interaction_delay:
+      type: "gaussian"
+      mean: "500ms"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.interaction_delay.std_dev", valErr.Field)
+	})
+}
+

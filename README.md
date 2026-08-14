@@ -90,6 +90,8 @@ Inside `PreTest`, `RunVU`, and `AfterTest`, developers interact with `ScenarioCo
 | `ctx.GlobalState(key)` | Accesses values returned by the `Setup` hook. |
 | `ctx.Log()` | Structured `Logger` instance bound with VU ID and iteration context. |
 | `ctx.Metrics()` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
+| `ctx.Sleep(d ...time.Duration)` | Pauses for explicit duration or configured `interaction_delay` strategy (respects `ctx.Done()`). |
+
 
 ---
 
@@ -178,6 +180,61 @@ scenarios:
    - `run_period`: Steady-state arrival duration (`time.Duration`).
 
 ---
+
+## Think Time & Interaction Delay Strategies
+
+Simulate realistic user pauses between actions and iterations using configurable delay strategies that respect context cancellation via `ctx.Sleep()`.
+
+### Supported Delay Strategies
+
+| Strategy | YAML Type | Key Parameters | Description |
+|---|---|---|---|
+| **Fixed** | `fixed` | `duration: 500ms` | Static deterministic pause. |
+| **Range** | `range` | `min: 200ms`, `max: 1s` | Uniform random distribution $U(\text{min}, \text{max})$. |
+| **Exponential** | `expo` | `mean: 500ms`, `min`, `max` (optional) | Exponential distribution (Poisson arrival modeling) $D = -\text{mean} \cdot \ln(U)$ with optional clamping. |
+| **Gaussian** | `gaussian` | `mean: 500ms`, `std_dev: 100ms`, `min`, `max` (optional) | Normal distribution $N(\mu, \sigma)$ with non-negative guarantee and optional clamping. |
+
+### Configuration in `gtest.yaml`
+
+```yaml
+scenarios:
+  user_checkout:
+    type: constant_vus
+    vus: 10
+    run_period: 1m
+    vu_timeout: 5s
+    interaction_delay:
+      type: range
+      min: 200ms
+      max: 1s
+```
+
+### Usage in Code
+
+```go
+RunVU: func(ctx gtest.ScenarioContext) error {
+    // Perform step 1
+    // ...
+
+    // Pause using scenario-configured interaction_delay strategy
+    if err := ctx.Sleep(); err != nil {
+        return err // aborted due to context cancellation
+    }
+
+    // Or pause for an explicit duration
+    if err := ctx.Sleep(250 * time.Millisecond); err != nil {
+        return err
+    }
+
+    // Perform step 2
+    return nil
+}
+```
+
+Programmatic generators are also available: `gtest.FixedDelay(d)`, `gtest.RangeDelay(min, max)`, `gtest.ExpoDelay(mean, min, max)`, `gtest.GaussianDelay(mean, stdDev, min, max)`.
+
+---
+
 
 ## Writing a Load Test (Code Example)
 

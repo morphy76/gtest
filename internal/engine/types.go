@@ -46,7 +46,9 @@ type ScenarioContext interface {
 	GlobalState(key string) any
 	Log() log.Logger
 	Metrics() metric.Collector
+	Sleep(d ...time.Duration) error
 }
+
 
 // SetupError wraps an error returned by the Setup hook.
 type SetupError struct {
