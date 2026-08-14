@@ -701,3 +701,95 @@ scenarios:
 	})
 }
 
+func TestThinkTimeConfigLoading(t *testing.T) {
+	t.Run("valid fixed think time", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    think_time:
+      type: "fixed"
+      duration: "500ms"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		sc := cfg.Scenarios["s1"]
+		require.NotNil(t, sc.ThinkTime)
+		assert.Equal(t, "fixed", sc.ThinkTime.Type)
+		assert.Equal(t, 500*time.Millisecond, sc.ThinkTime.Duration)
+	})
+
+	t.Run("valid range think time and interaction delay together", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    think_time:
+      type: "range"
+      min: "200ms"
+      max: "1s"
+    interaction_delay:
+      type: "fixed"
+      duration: "50ms"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		sc := cfg.Scenarios["s1"]
+		require.NotNil(t, sc.ThinkTime)
+		assert.Equal(t, "range", sc.ThinkTime.Type)
+		assert.Equal(t, 200*time.Millisecond, sc.ThinkTime.Min)
+		assert.Equal(t, 1*time.Second, sc.ThinkTime.Max)
+
+		require.NotNil(t, sc.InteractionDelay)
+		assert.Equal(t, "fixed", sc.InteractionDelay.Type)
+		assert.Equal(t, 50*time.Millisecond, sc.InteractionDelay.Duration)
+	})
+
+	t.Run("invalid think time unknown type", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    think_time:
+      type: "unknown"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.think_time.type", valErr.Field)
+	})
+
+	t.Run("invalid think time fixed missing duration", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+    think_time:
+      type: "fixed"
+`
+		_, err := config.Load(strings.NewReader(yaml))
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.think_time.duration", valErr.Field)
+	})
+}
+
+

@@ -143,4 +143,45 @@ func TestScenarioContextSleep(t *testing.T) {
 
 		assert.Less(t, sleptDuration, 10*time.Millisecond)
 	})
+
+	t.Run("uses configured think_time when called with no arguments", func(t *testing.T) {
+		var durations []time.Duration
+		var mu sync.Mutex
+
+		scenario := engine.Scenario{
+			RunVU: func(ctx engine.ScenarioContext) error {
+				start := time.Now()
+				err := ctx.Sleep()
+				if err == nil {
+					mu.Lock()
+					durations = append(durations, time.Since(start))
+					mu.Unlock()
+				}
+				return err
+			},
+		}
+
+		cfg := config.ScenarioConfig{
+			Type:      config.ScenarioTypeConstantVUs,
+			VUs:       1,
+			RunPeriod: 150 * time.Millisecond,
+			VUTimeout: 1 * time.Second,
+			ThinkTime: &config.ThinkTimeConfig{
+				Type:     "fixed",
+				Duration: 60 * time.Millisecond,
+			},
+		}
+
+		exec := engine.NewExecutor("sleep_think_time_configured", scenario, cfg, logger, metrics)
+		err := exec.Execute(context.Background())
+		require.NoError(t, err)
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.NotEmpty(t, durations, "must have completed at least one sleep")
+		for _, d := range durations {
+			assert.GreaterOrEqual(t, d, 55*time.Millisecond)
+		}
+	})
 }
+

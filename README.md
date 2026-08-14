@@ -188,9 +188,9 @@ scenarios:
 
 ---
 
-## Think Time & Interaction Delay Strategies
+## Thinking Time & Interaction Delay Strategies
 
-Simulate realistic user pauses between actions and iterations using configurable delay strategies that respect context cancellation via `ctx.Sleep()`.
+Simulate realistic human reading and decision pauses between user actions, conversation turns, or multi-step requests. Thinking time is **explicitly invoked by the test developer** using `ctx.Sleep()` and configured declaratively in `gtest.yaml` (or generated programmatically).
 
 ### Supported Delay Strategies
 
@@ -210,6 +210,7 @@ scenarios:
     vus: 10
     run_period: 1m
     vu_timeout: 5s
+    # Thinking time strategy used when calling ctx.Sleep() without arguments:
     interaction_delay:
       type: range
       min: 200ms
@@ -220,10 +221,10 @@ scenarios:
 
 ```go
 RunVU: func(ctx gtest.ScenarioContext) error {
-    // Perform step 1
+    // Step 1: Browse catalog / receive message
     // ...
 
-    // Pause using scenario-configured interaction_delay strategy
+    // Explicitly execute thinking time using scenario-configured strategy (respects ctx.Done())
     if err := ctx.Sleep(); err != nil {
         return err // aborted due to context cancellation
     }
@@ -233,7 +234,7 @@ RunVU: func(ctx gtest.ScenarioContext) error {
         return err
     }
 
-    // Perform step 2
+    // Step 2: Next action (e.g. add to cart / next customer message)
     return nil
 }
 ```
@@ -241,6 +242,8 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 Programmatic generators are also available: `gtest.FixedDelay(d)`, `gtest.RangeDelay(min, max)`, `gtest.ExpoDelay(mean, min, max)`, `gtest.GaussianDelay(mean, stdDev, min, max)`.
 
 ---
+
+
 
 
 ## Writing a Load Test (Code Example)

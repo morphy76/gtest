@@ -192,23 +192,31 @@ func (f *ConversationFlow) handleMessage(ctx gtest.ScenarioContext, evt *SSEEven
 		f.metrics.RecordBotMessageReceived(rtt)
 
 		if f.currentTurn >= f.config.Turns {
-			// All turns completed — close conversation
+			// All turns completed (exhausted) — close conversation immediately without thinking time
 			if err := f.closeConversation(ctx); err != nil {
 				return flowActionDone, err
 			}
 			return flowActionDone, nil
 		}
 
-		// Inter-turn delay
+		// Thinking time: executed after receiving the bot message, before the next customer message
+		// only if turns are not exhausted.
 		if f.config.InteractionDelay > 0 {
-			time.Sleep(f.config.InteractionDelay)
+			if err := ctx.Sleep(f.config.InteractionDelay); err != nil {
+				return flowActionDone, err
+			}
+		} else {
+			if err := ctx.Sleep(); err != nil {
+				return flowActionDone, err
+			}
 		}
 
-		// Send next message
+		// Send next customer message
 		if err := f.sendNextMessage(ctx); err != nil {
 			return flowActionDone, err
 		}
 		return flowActionContinue, nil
+
 
 	default:
 		return flowActionContinue, nil
