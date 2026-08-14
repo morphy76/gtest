@@ -1474,4 +1474,27 @@ Enable real-time inline pass/fail assertions inside `RunVU` without terminating 
 - **AC-1.13.4**: Console and JSON reports display per-check pass/fail counts and percentages.
 - **AC-1.13.5**: SLA Thresholds evaluate `gtest.checks.failed` and `gtest.checks.passed`.
 
+---
+
+### 14.8 Increment 1.14 — Data Parameterization Module (`pkg/gtest/data`)
+
+Provide a dedicated data loading and parameterization package for CSV, JSON, and JSON Lines datasets with thread-safe distribution strategies.
+
+#### Public API (`pkg/gtest/data`)
+- `type Record = map[string]string`
+- `type Strategy int` (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`)
+- `LoadCSV(r io.Reader, strategy Strategy) (*DataSet, error)` / `LoadCSVFile(path, strategy)`
+- `LoadJSON(r io.Reader, strategy Strategy) (*DataSet, error)` / `LoadJSONFile(path, strategy)`
+- `LoadJSONL(r io.Reader, strategy Strategy) (*DataSet, error)` / `LoadJSONLFile(path, strategy)`
+- `(ds *DataSet) Next(ctx ContextAccessor) (Record, error)`
+
+#### Acceptance Criteria
+- **AC-1.14.1**: `LoadCSV` parses CSV with headers into string key-value maps.
+- **AC-1.14.2**: `LoadJSON` parses JSON array of objects into key-value maps.
+- **AC-1.14.3**: `LoadJSONL` parses newline-delimited JSON objects into key-value maps.
+- **AC-1.14.4**: Sequential strategy round-robins across rows deterministically by VU ID and iteration.
+- **AC-1.14.5**: Random strategy selects rows uniformly with thread safety.
+- **AC-1.14.6**: SharedQueue strategy dispenses each row exactly once across concurrent VUs and returns `ErrDatasetExhausted` when depleted.
+
+
 
