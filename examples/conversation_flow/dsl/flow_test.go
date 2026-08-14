@@ -364,10 +364,10 @@ func TestConversationFlow_MessageSendFailure(t *testing.T) {
 }
 
 func TestConversationFlow_ThinkingTimeOnlyBeforeNextMessage(t *testing.T) {
-	server := fullProtocolMockServer(t)
-	defer server.Close()
-
 	t.Run("three turns executes thinking time twice", func(t *testing.T) {
+		server := fullProtocolMockServer(t)
+		defer server.Close()
+
 		ctx := newMockScenarioContext()
 		client := NewConversationClient(server.URL, "token", "tenant", nil)
 		messages := []Message{
@@ -397,6 +397,9 @@ func TestConversationFlow_ThinkingTimeOnlyBeforeNextMessage(t *testing.T) {
 	})
 
 	t.Run("one turn does not execute thinking time after completion", func(t *testing.T) {
+		server := fullProtocolMockServer(t)
+		defer server.Close()
+
 		ctx := newMockScenarioContext()
 		client := NewConversationClient(server.URL, "token", "tenant", nil)
 		messages := []Message{
