@@ -130,7 +130,7 @@ func (a *aggregator) CheckSummaries() []CheckSummary {
 	checkMap := make(map[string]*CheckSummary)
 
 	a.provider.ForEachCounter(func(key metricKey, c *counter) {
-		if key.name != "gtest.checks.passed" && key.name != "gtest.checks.failed" {
+		if key.name != MetricChecksPassed && key.name != MetricChecksFailed {
 			return
 		}
 		checkName := strings.TrimPrefix(key.tagsKey, "name=")
@@ -144,7 +144,7 @@ func (a *aggregator) CheckSummaries() []CheckSummary {
 			checkMap[checkName] = entry
 		}
 
-		if key.name == "gtest.checks.passed" {
+		if key.name == MetricChecksPassed {
 			entry.Passed += c.Value()
 		} else {
 			entry.Failed += c.Value()

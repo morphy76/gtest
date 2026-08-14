@@ -68,8 +68,8 @@ func NewRegistry() Registry {
 	r := &registry{
 		nameTypes: make(map[string]MetricType),
 	}
-	r.nameTypes["gtest.checks.passed"] = MetricTypeCounter
-	r.nameTypes["gtest.checks.failed"] = MetricTypeCounter
+	r.nameTypes[MetricChecksPassed] = MetricTypeCounter
+	r.nameTypes[MetricChecksFailed] = MetricTypeCounter
 	return r
 }
 

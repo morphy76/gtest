@@ -25,7 +25,7 @@ func TestAbortOnFail_TriggersCancellation(t *testing.T) {
 
 	thresholds := []config.ThresholdConfig{
 		{
-			Metric:         "gtest.vu.iterations_failed",
+			Metric:         metric.MetricIterationsFailed,
 			Stat:           "count",
 			Operator:       "==",
 			Target:         "0",
@@ -38,7 +38,7 @@ func TestAbortOnFail_TriggersCancellation(t *testing.T) {
 	abortedCh, breachReason := engine.MonitorAbortThresholds(ctx, cancel, time.Now(), thresholds, store, logger)
 
 	// Simulate failure breach
-	store.Counter("gtest.vu.iterations_failed", metric.Tags{}).Inc()
+	store.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
 
 	select {
 	case <-abortedCh:
@@ -60,7 +60,7 @@ func TestAbortOnFail_RespectsWarmupGracePeriod(t *testing.T) {
 
 	thresholds := []config.ThresholdConfig{
 		{
-			Metric:         "gtest.vu.iterations_failed",
+			Metric:         metric.MetricIterationsFailed,
 			Stat:           "count",
 			Operator:       "==",
 			Target:         "0",
@@ -73,7 +73,7 @@ func TestAbortOnFail_RespectsWarmupGracePeriod(t *testing.T) {
 	abortedCh, _ := engine.MonitorAbortThresholds(ctx, cancel, time.Now(), thresholds, store, logger)
 
 	// Simulate immediate failure breach during warm-up period
-	store.Counter("gtest.vu.iterations_failed", metric.Tags{}).Inc()
+	store.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
 
 	select {
 	case <-abortedCh:

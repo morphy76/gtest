@@ -36,8 +36,8 @@ func TestCheck_Passing(t *testing.T) {
 	passed := ctx.Check("status is 200", checkFn)
 
 	assert.True(t, passed, "passing check should return true")
-	assert.Equal(t, int64(1), store.AggregatedCounterValue("gtest.checks.passed"))
-	assert.Equal(t, int64(0), store.AggregatedCounterValue("gtest.checks.failed"))
+	assert.Equal(t, int64(1), store.AggregatedCounterValue(gtest.MetricChecksPassed))
+	assert.Equal(t, int64(0), store.AggregatedCounterValue(gtest.MetricChecksFailed))
 }
 
 func TestCheck_Failing(t *testing.T) {
@@ -59,8 +59,8 @@ func TestCheck_Failing(t *testing.T) {
 	})
 
 	assert.False(t, passed, "failing check should return false")
-	assert.Equal(t, int64(0), store.AggregatedCounterValue("gtest.checks.passed"))
-	assert.Equal(t, int64(1), store.AggregatedCounterValue("gtest.checks.failed"))
+	assert.Equal(t, int64(0), store.AggregatedCounterValue(gtest.MetricChecksPassed))
+	assert.Equal(t, int64(1), store.AggregatedCounterValue(gtest.MetricChecksFailed))
 }
 
 func TestCheck_MultipleIndependent(t *testing.T) {
@@ -85,6 +85,6 @@ func TestCheck_MultipleIndependent(t *testing.T) {
 	assert.False(t, res2)
 	assert.True(t, res3)
 
-	assert.Equal(t, int64(2), store.AggregatedCounterValue("gtest.checks.passed"))
-	assert.Equal(t, int64(1), store.AggregatedCounterValue("gtest.checks.failed"))
+	assert.Equal(t, int64(2), store.AggregatedCounterValue(gtest.MetricChecksPassed))
+	assert.Equal(t, int64(1), store.AggregatedCounterValue(gtest.MetricChecksFailed))
 }
