@@ -124,7 +124,7 @@ my-load-test/
 
 ## 3. Writing Your First Scenario
 
-A scenario is a struct with up to 5 lifecycle hooks. Only `RunVU` is required:
+A scenario is a struct with up to 6 lifecycle hooks. Only `RunVU` is required:
 
 ```go
 suite.RegisterScenario("checkout_flow", gtest.Scenario{
@@ -173,8 +173,17 @@ suite.RegisterScenario("checkout_flow", gtest.Scenario{
         ctx.Log().Info().Msg("cleaning up shared resources")
         return nil
     },
+
+    // (6) HandleSummary — runs ONCE after report generation with structured results
+    HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+        ctx := context.Background()
+        _ = ctx
+        fmt.Printf("Scenario %s ended in %v, passed=%v\n", summary.Scenario, summary.Duration, summary.Passed)
+        return nil
+    },
 })
 ```
+
 
 ---
 
@@ -268,6 +277,8 @@ Setup(ctx) ───────────────────────
   └── VU N: PreTest → RunVU loop → AfterTest (defer)
   │
 Teardown(ctx, state) ──────────── runs once
+  │
+HandleSummary(summary) ────────── runs once (post-report generation)
 ```
 
 ### Key guarantees
@@ -279,6 +290,8 @@ Teardown(ctx, state) ──────────── runs once
 | **RunVU** | Loop per VU | Errors and panics are **caught, logged, counted**; loop continues |
 | **AfterTest** | Once per VU | Runs via `defer` — **guaranteed** even after RunVU panic |
 | **Teardown** | Once | Error is **logged** but does not affect pass/fail verdict |
+| **HandleSummary** | Once | Error is **logged** but does not affect exit code or SLA verdict |
+
 
 ### Panic recovery
 
@@ -562,7 +575,39 @@ if resp.StatusCode == http.StatusOK {
 }
 ```
 
+### 11.6 Execution Summary Hook (Slack Webhooks & Custom Metrics)
+
+Use `HandleSummary` to receive the full structured summary after report generation for notifications, metrics export, or CI artifact generation:
+
+```go
+HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+    // 1. Check overall SLA pass/fail status
+    if !summary.Passed {
+        postSlackAlert(fmt.Sprintf("❌ Load test SLA breached for %s (%s)", summary.Scenario, summary.SuiteName))
+    }
+
+    // 2. Read specific metric aggregates
+    totalRequests := summary.Counter("http_requests_total")
+    successRate := summary.Rate("success_rate")
+    latency := summary.Metric("http_request_duration")
+
+    if latency != nil {
+        fmt.Printf("Summary: %d reqs, success rate: %.2f%%, p95 latency: %v\n",
+            totalRequests, successRate*100, latency.P95)
+    }
+
+    // 3. Export custom JSON document
+    jsonBytes, err := summary.JSON()
+    if err == nil {
+        _ = os.WriteFile("ci-summary.json", jsonBytes, 0644)
+    }
+
+    return nil
+},
+```
+
 ---
+
 
 ## 12. Troubleshooting
 

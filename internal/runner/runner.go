@@ -139,6 +139,24 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 		}
 	}
 
+	if scenario.HandleSummary != nil {
+		summaryData := buildSummaryData(
+			s.Name(),
+			targetScenario,
+			version.Version,
+			version.Commit,
+			startedAt,
+			endedAt,
+			scenarioCfg,
+			metricsStore,
+			thresholdResults,
+			allPassed,
+		)
+		if err := scenario.HandleSummary(context.Background(), summaryData); err != nil {
+			logger.Error().Err(err).Msg("HandleSummary hook error")
+		}
+	}
+
 	if exitFunc != nil {
 		if allPassed {
 			exitFunc(0)
@@ -149,3 +167,126 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 
 	return nil
 }
+
+func buildSummaryData(
+	suiteName string,
+	scenarioName string,
+	versionStr string,
+	commitStr string,
+	startedAt time.Time,
+	endedAt time.Time,
+	cfg config.ScenarioConfig,
+	metricsStore *metric.Store,
+	thresholdResults []sla.ThresholdResult,
+	allPassed bool,
+) engine.SummaryData {
+	duration := endedAt.Sub(startedAt)
+	if duration < 0 {
+		duration = 0
+	}
+
+	var thresholds []engine.ThresholdSummary
+	for _, th := range thresholdResults {
+		thresholds = append(thresholds, engine.ThresholdSummary{
+			Metric:   th.Metric,
+			Stat:     th.Stat,
+			Operator: th.Operator,
+			Target:   th.Target,
+			Actual:   th.Actual,
+			Passed:   th.Passed,
+		})
+	}
+
+	type namedEntry struct {
+		name string
+		item engine.MetricSummary
+	}
+	var entries []namedEntry
+
+	// Histograms
+	for _, name := range metricsStore.HistogramNames() {
+		snap := metricsStore.MergedHistogramSnapshot(name)
+		entries = append(entries, namedEntry{
+			name: name,
+			item: engine.MetricSummary{
+				Name:  name,
+				Type:  "duration",
+				Count: snap.Count,
+				Min:   snap.Min,
+				Mean:  snap.Mean,
+				P50:   snap.P50,
+				P90:   snap.P90,
+				P95:   snap.P95,
+				P99:   snap.P99,
+				Max:   snap.Max,
+			},
+		})
+	}
+
+	// Counters
+	for _, name := range metricsStore.CounterNames() {
+		val := metricsStore.AggregatedCounterValue(name)
+		entries = append(entries, namedEntry{
+			name: name,
+			item: engine.MetricSummary{
+				Name:  name,
+				Type:  "counter",
+				Count: val,
+			},
+		})
+	}
+
+	// Gauges
+	for _, name := range metricsStore.GaugeNames() {
+		val := metricsStore.LastGaugeValue(name)
+		entries = append(entries, namedEntry{
+			name: name,
+			item: engine.MetricSummary{
+				Name:  name,
+				Type:  "gauge",
+				Value: val,
+			},
+		})
+	}
+
+	// Rates
+	for _, name := range metricsStore.RateNames() {
+		val := metricsStore.AggregatedRateValue(name)
+		entries = append(entries, namedEntry{
+			name: name,
+			item: engine.MetricSummary{
+				Name: name,
+				Type: "rate",
+				Rate: val,
+			},
+		})
+	}
+
+	for i := 0; i < len(entries)-1; i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[i].name > entries[j].name {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+
+	var metrics []engine.MetricSummary
+	for _, e := range entries {
+		metrics = append(metrics, e.item)
+	}
+
+	return engine.SummaryData{
+		SuiteName:  suiteName,
+		Scenario:   scenarioName,
+		Version:    versionStr,
+		Commit:     commitStr,
+		StartedAt:  startedAt,
+		EndedAt:    endedAt,
+		Duration:   duration,
+		Config:     cfg,
+		Metrics:    metrics,
+		Thresholds: thresholds,
+		Passed:     allPassed,
+	}
+}
+
