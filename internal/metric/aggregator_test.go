@@ -12,7 +12,7 @@ import (
 func TestAggregator_InterfaceSatisfaction(t *testing.T) {
 	reg := metric.NewRegistry()
 	coll := metric.NewCollector(reg)
-	var _ metric.Aggregator = metric.NewAggregator(coll)
+	_ = metric.NewAggregator(coll)
 }
 
 func TestAggregator_MergedHistogramSnapshot(t *testing.T) {
