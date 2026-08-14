@@ -47,11 +47,16 @@ github.com/morphy76/gtest/               ← module root
 │   │   └── version.go                   ← Version, Commit, BuildTime vars (ldflags target)
 │   ├── config/                          ← YAML loading, validation, Config/ScenarioConfig types
 │   ├── engine/                          ← VU lifecycle, pacing (constant_vus, arrival_rate)
-│   ├── metric/                          ← In-memory metrics store (Counter, Gauge, Histogram, Rate)
+│   ├── metric/                          ← In-memory metrics engine (Registry, Collector, Aggregator, Store)
 │   ├── sla/                             ← Threshold evaluation and results
 │   ├── log/                             ← Zerolog adapter implementing gtest.Logger
 │   ├── cli/                             ← CLI flag parsing
-│   └── report/                          ← Console and JSON report formatters
+│   ├── report/                          ← Console and JSON report formatters
+│   └── runner/                          ← Execution orchestration & lifecycle dispatch
+│       ├── resolver.go                  ← Scenario & config resolution
+│       ├── summary.go                   ← Summary data aggregation & sorting
+│       ├── reporter.go                  ← Report generation & summary hook dispatch
+│       └── runner.go                    ← Suite execution coordinator
 │
 └── examples/
     ├── http_checkout/                   ← REST API load test (constant_vus)
@@ -793,7 +798,10 @@ Return structured errors for all failure modes.
 **Goal:** Implement `MetricsCollector` with all four metric types. Verify thread safety.
 
 **Deliverables:**
-- `internal/metric/store.go` — `InMemoryMetricsStore` implementing `gtest.MetricsCollector`
+- `internal/metric/registry.go` — `Registry` interface & thread-safe type registry
+- `internal/metric/collector.go` — `Collector` interface & metric ingestion with generic double-checked locking sync helper
+- `internal/metric/aggregator.go` — `Aggregator` interface & summary statistics computation
+- `internal/metric/store.go` — `Store` composing Registry, Collector, and Aggregator
 - `internal/metric/counter.go`, `gauge.go`, `histogram.go`, `rate.go` — concrete metric types
 - HDR histogram per-VU lifetime management and merge API for report time
 
@@ -1085,7 +1093,7 @@ scenarios:
 **Deliverables:**
 - `pkg/gtest/scenario.go` — `SummaryHook` type (`func(ctx context.Context, summary SummaryData) error`) and `Scenario.HandleSummary` field
 - `pkg/gtest/summary.go` — `SummaryData` export struct containing run metadata, metrics snapshot, and SLA results
-- `internal/runner/runner.go` — post-report execution of `HandleSummary`
+- `internal/runner/reporter.go` & `internal/runner/runner.go` — post-report execution of `HandleSummary`
 
 **Acceptance Criteria:**
 

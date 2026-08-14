@@ -1,0 +1,98 @@
+package runner
+
+import (
+	"context"
+	"io"
+	"time"
+
+	"github.com/morphy76/gtest/internal/cli"
+	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/gtest/internal/engine"
+	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/gtest/internal/report"
+	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/gtest/internal/version"
+	"github.com/rs/zerolog"
+)
+
+// ReportParams holds all parameters required to generate reports and invoke summary hooks.
+type ReportParams struct {
+	SuiteName        string
+	ScenarioName     string
+	Scenario         engine.Scenario
+	ScenarioCfg      config.ScenarioConfig
+	Flags            *cli.Flags
+	MetricsStore     *metric.Store
+	ThresholdResults []sla.ThresholdResult
+	AllPassed        bool
+	Aborted          bool
+	AbortReason      string
+	StartedAt        time.Time
+	EndedAt          time.Time
+	Stdout           io.Writer
+	Logger           zerolog.Logger
+}
+
+// ReportExecution formats and writes test reports and triggers the HandleSummary hook.
+func ReportExecution(ctx context.Context, p ReportParams) {
+	reportData := report.ReportData{
+		SuiteName:   p.SuiteName,
+		Scenario:    p.ScenarioName,
+		Version:     version.Version,
+		Commit:      version.Commit,
+		StartedAt:   p.StartedAt,
+		EndedAt:     p.EndedAt,
+		Config:      p.ScenarioCfg,
+		Metrics:     p.MetricsStore,
+		Thresholds:  p.ThresholdResults,
+		Passed:      p.AllPassed,
+		Aborted:     p.Aborted,
+		AbortReason: p.AbortReason,
+	}
+
+	reportFormat := "console"
+	reportOut := ""
+	jsonReportOut := ""
+	if p.Flags != nil {
+		if p.Flags.ReportFormat != "" {
+			reportFormat = p.Flags.ReportFormat
+		}
+		reportOut = p.Flags.ReportOut
+		jsonReportOut = p.Flags.JSONReportOut
+	}
+
+	if err := report.WriteReport(p.Stdout, reportFormat, reportOut, reportData); err != nil {
+		p.Logger.Error().Err(err).Msg("failed to write report")
+	}
+
+	if jsonReportOut != "" {
+		if err := report.WriteReport(p.Stdout, "json", jsonReportOut, reportData); err != nil {
+			p.Logger.Error().Err(err).Msg("failed to write JSON report")
+		}
+	}
+
+	if p.Scenario.HandleSummary != nil {
+		summaryData := BuildSummaryData(SummaryParams{
+			SuiteName:        p.SuiteName,
+			ScenarioName:     p.ScenarioName,
+			Version:          version.Version,
+			Commit:           version.Commit,
+			StartedAt:        p.StartedAt,
+			EndedAt:          p.EndedAt,
+			Config:           p.ScenarioCfg,
+			MetricsStore:     p.MetricsStore,
+			ThresholdResults: p.ThresholdResults,
+			AllPassed:        p.AllPassed,
+			Aborted:          p.Aborted,
+			AbortReason:      p.AbortReason,
+		})
+		if err := p.Scenario.HandleSummary(ctx, summaryData); err != nil {
+			p.Logger.Error().Err(err).Msg("HandleSummary hook error")
+		}
+	}
+}
+
+// reportExecution is a package-private alias for ReportExecution.
+func reportExecution(ctx context.Context, p ReportParams) {
+	ReportExecution(ctx, p)
+}

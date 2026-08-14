@@ -10,6 +10,11 @@ type rate struct {
 	denominator atomic.Int64
 }
 
+// Type returns the metric type for rate.
+func (r *rate) Type() MetricType {
+	return MetricTypeRate
+}
+
 // Add records numerator events out of denominator total attempts.
 // Both must be >= 0. Denominator == 0 is ignored (no observation recorded).
 func (r *rate) Add(numerator, denominator int64) {
@@ -42,3 +47,9 @@ func (r *rate) Numerator() int64 {
 func (r *rate) Denominator() int64 {
 	return r.denominator.Load()
 }
+
+// Compile-time checks.
+var (
+	_ Rate   = (*rate)(nil)
+	_ Metric = (*rate)(nil)
+)

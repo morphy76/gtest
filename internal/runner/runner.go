@@ -3,18 +3,13 @@ package runner
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
-	"github.com/morphy76/gtest/internal/cli"
-	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/engine"
 	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/sla"
-	"github.com/morphy76/gtest/internal/version"
 	"github.com/rs/zerolog"
 )
 
@@ -47,6 +42,15 @@ type ScenarioRegistry interface {
 
 // RunSuite executes the suite CLI workflow.
 func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
+	resolved, err := resolveScenario(s, args, stdout)
+	if err != nil {
+		return err
+	}
+
+	if resolved.ShowVersion {
+		return nil
+	}
+  
 	if stdout == nil {
 		stdout = io.Discard
 	}
@@ -108,17 +112,17 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 			},
 		}
 	}
-
+  
 	// Setup logger
-	logLevel, parseErr := zerolog.ParseLevel(flags.LogLevel)
+	logLevel, parseErr := zerolog.ParseLevel(resolved.Flags.LogLevel)
 	if parseErr != nil {
 		logLevel = zerolog.InfoLevel
 	}
-	logger := log.NewWithFormat(stdout, logLevel, flags.LogFormat)
+	logger := log.NewWithFormat(stdout, logLevel, resolved.Flags.LogFormat)
 	metricsStore := metric.NewStore()
 
 	startedAt := time.Now()
-	executor := engine.NewExecutor(targetScenario, scenario, scenarioCfg, logger, metricsStore)
+	executor := engine.NewExecutor(resolved.TargetScenario, resolved.Scenario, resolved.ScenarioCfg, logger, metricsStore)
 
 	execErr := executor.Execute(context.Background())
 	endedAt := time.Now()
@@ -132,56 +136,28 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 	}
 
 	// Evaluate SLA thresholds
-	thresholdResults := sla.Evaluate(scenarioCfg.Thresholds, metricsStore)
+	thresholdResults := sla.Evaluate(resolved.ScenarioCfg.Thresholds, metricsStore)
 	allPassed := sla.AllPassed(thresholdResults)
 	if executor.Aborted {
 		allPassed = false
 	}
 
-	reportData := report.ReportData{
-		SuiteName:   s.Name(),
-		Scenario:    targetScenario,
-		Version:     version.Version,
-		Commit:      version.Commit,
-		StartedAt:   startedAt,
-		EndedAt:     endedAt,
-		Config:      scenarioCfg,
-		Metrics:     metricsStore,
-		Thresholds:  thresholdResults,
-		Passed:      allPassed,
-		Aborted:     executor.Aborted,
-		AbortReason: executor.AbortReason,
-	}
-
-	if err := report.WriteReport(stdout, flags.ReportFormat, flags.ReportOut, reportData); err != nil {
-		logger.Error().Err(err).Msg("failed to write report")
-	}
-
-	if flags.JSONReportOut != "" {
-		if err := report.WriteReport(stdout, "json", flags.JSONReportOut, reportData); err != nil {
-			logger.Error().Err(err).Msg("failed to write JSON report")
-		}
-	}
-
-	if scenario.HandleSummary != nil {
-		summaryData := buildSummaryData(
-			s.Name(),
-			targetScenario,
-			version.Version,
-			version.Commit,
-			startedAt,
-			endedAt,
-			scenarioCfg,
-			metricsStore,
-			thresholdResults,
-			allPassed,
-			executor.Aborted,
-			executor.AbortReason,
-		)
-		if err := scenario.HandleSummary(context.Background(), summaryData); err != nil {
-			logger.Error().Err(err).Msg("HandleSummary hook error")
-		}
-	}
+	reportExecution(context.Background(), ReportParams{
+		SuiteName:        s.Name(),
+		ScenarioName:     resolved.TargetScenario,
+		Scenario:         resolved.Scenario,
+		ScenarioCfg:      resolved.ScenarioCfg,
+		Flags:            resolved.Flags,
+		MetricsStore:     metricsStore,
+		ThresholdResults: thresholdResults,
+		AllPassed:        allPassed,
+		Aborted:          executor.Aborted,
+		AbortReason:      executor.AbortReason,
+		StartedAt:        startedAt,
+		EndedAt:          endedAt,
+		Stdout:           stdout,
+		Logger:           logger.Zerolog(),
+	})
 
 	return Result{
 		Passed:      allPassed,
@@ -190,144 +166,3 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 		Error:       nil,
 	}
 }
-
-func buildSummaryData(
-	suiteName string,
-	scenarioName string,
-	versionStr string,
-	commitStr string,
-	startedAt time.Time,
-	endedAt time.Time,
-	cfg config.ScenarioConfig,
-	metricsStore *metric.Store,
-	thresholdResults []sla.ThresholdResult,
-	allPassed bool,
-	aborted bool,
-	abortReason string,
-) engine.SummaryData {
-	duration := endedAt.Sub(startedAt)
-	if duration < 0 {
-		duration = 0
-	}
-
-	var thresholds []engine.ThresholdSummary
-	for _, th := range thresholdResults {
-		thresholds = append(thresholds, engine.ThresholdSummary{
-			Metric:   th.Metric,
-			Stat:     th.Stat,
-			Operator: th.Operator,
-			Target:   th.Target,
-			Actual:   th.Actual,
-			Passed:   th.Passed,
-		})
-	}
-
-	type namedEntry struct {
-		name string
-		item engine.MetricSummary
-	}
-	var entries []namedEntry
-
-	// Histograms
-	for _, name := range metricsStore.HistogramNames() {
-		snap := metricsStore.MergedHistogramSnapshot(name)
-		entries = append(entries, namedEntry{
-			name: name,
-			item: engine.MetricSummary{
-				Name:  name,
-				Type:  "duration",
-				Count: snap.Count,
-				Min:   snap.Min,
-				Mean:  snap.Mean,
-				P50:   snap.P50,
-				P90:   snap.P90,
-				P95:   snap.P95,
-				P99:   snap.P99,
-				Max:   snap.Max,
-			},
-		})
-	}
-
-	// Counters
-	for _, name := range metricsStore.CounterNames() {
-		val := metricsStore.AggregatedCounterValue(name)
-		entries = append(entries, namedEntry{
-			name: name,
-			item: engine.MetricSummary{
-				Name:  name,
-				Type:  "counter",
-				Count: val,
-			},
-		})
-	}
-
-	// Gauges
-	for _, name := range metricsStore.GaugeNames() {
-		val := metricsStore.LastGaugeValue(name)
-		entries = append(entries, namedEntry{
-			name: name,
-			item: engine.MetricSummary{
-				Name:  name,
-				Type:  "gauge",
-				Value: val,
-			},
-		})
-	}
-
-	// Rates
-	for _, name := range metricsStore.RateNames() {
-		val := metricsStore.AggregatedRateValue(name)
-		entries = append(entries, namedEntry{
-			name: name,
-			item: engine.MetricSummary{
-				Name: name,
-				Type: "rate",
-				Rate: val,
-			},
-		})
-	}
-
-	for i := 0; i < len(entries)-1; i++ {
-		for j := i + 1; j < len(entries); j++ {
-			if entries[i].name > entries[j].name {
-				entries[i], entries[j] = entries[j], entries[i]
-			}
-		}
-	}
-
-	var metrics []engine.MetricSummary
-	for _, e := range entries {
-		metrics = append(metrics, e.item)
-	}
-
-	var checks []engine.CheckSummary
-	if metricsStore != nil {
-		for _, cs := range metricsStore.CheckSummaries() {
-			checks = append(checks, engine.CheckSummary{
-				Name:    cs.Name,
-				Passed:  cs.Passed,
-				Failed:  cs.Failed,
-				Total:   cs.Total,
-				PassPct: cs.PassPct,
-			})
-		}
-	}
-
-	return engine.SummaryData{
-		SuiteName:   suiteName,
-		Scenario:    scenarioName,
-		Version:     versionStr,
-		Commit:      commitStr,
-		StartedAt:   startedAt,
-		EndedAt:     endedAt,
-		Duration:    duration,
-		Config:      cfg,
-		Metrics:     metrics,
-		Checks:      checks,
-		Thresholds:  thresholds,
-		Passed:      allPassed,
-		Aborted:     aborted,
-		AbortReason: abortReason,
-	}
-}
-
