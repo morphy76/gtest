@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +29,6 @@ func sendSSEEvent(ch *sseTestChannel, payload any) {
 	_, _ = fmt.Fprintf(ch.w, "data: %s\n\n", data)
 	ch.flusher.Flush()
 }
-
 
 func splitPath(path string) []string {
 	var parts []string
@@ -77,8 +77,10 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 
 			ch := &sseTestChannel{w: w, flusher: flusher}
 
+			// Store both forms of the dialog ID so lookups succeed regardless
 			mu.Lock()
 			channels[dialogID] = ch
+			channels[externalID] = ch
 			mu.Unlock()
 
 			// Send lifecycle 'created' event
@@ -93,11 +95,13 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 
 			mu.Lock()
 			delete(channels, dialogID)
+			delete(channels, strings.TrimPrefix(dialogID, "dlg-"))
 			mu.Unlock()
 			return
 		}
 
 		if r.Method == http.MethodPost && len(parts) >= 4 && parts[2] == "message" {
+
 			dialogID := parts[3]
 
 			var body map[string]string
