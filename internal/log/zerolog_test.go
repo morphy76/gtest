@@ -64,11 +64,12 @@ func TestDebugEventsSuppressedAtInfoLevel(t *testing.T) {
 
 // AC-1.5.4: ZerologLogger satisfies the log.Logger interface (compile-time check)
 func TestLoggerInterfaceSatisfaction(t *testing.T) {
-	var l log.Logger = log.New(io.Discard, zerolog.DebugLevel)
-	var e log.LogEvent = l.Debug()
+	l := log.New(io.Discard, zerolog.DebugLevel)
+	e := l.Debug()
 	assert.NotNil(t, l)
 	assert.NotNil(t, e)
 }
+
 
 
 
