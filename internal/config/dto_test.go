@@ -16,6 +16,7 @@ func TestDomainModels_HaveNoStructTags(t *testing.T) {
 	}{
 		{"Config", Config{}},
 		{"ScenarioConfig", ScenarioConfig{}},
+		{"StageConfig", StageConfig{}},
 		{"ThinkTimeConfig", ThinkTimeConfig{}},
 		{"ThresholdConfig", ThresholdConfig{}},
 	}
@@ -65,6 +66,10 @@ func TestDTO_ToModel(t *testing.T) {
 					Mean:     500 * time.Millisecond,
 					StdDev:   100 * time.Millisecond,
 				},
+				Stages: []stageConfigDTO{
+					{Target: 10, Duration: 30 * time.Second},
+					{Target: 50, Duration: 10 * time.Second},
+				},
 				Thresholds: []thresholdConfigDTO{
 					{
 						Metric:         "http_req_duration",
@@ -91,6 +96,11 @@ func TestDTO_ToModel(t *testing.T) {
 	assert.Equal(t, 10, sc.VUs)
 	assert.Equal(t, 100, sc.TargetTPS)
 	assert.Equal(t, 20, sc.MaxVUs)
+	require.Len(t, sc.Stages, 2)
+	assert.Equal(t, 10, sc.Stages[0].Target)
+	assert.Equal(t, 30*time.Second, sc.Stages[0].Duration)
+	assert.Equal(t, 50, sc.Stages[1].Target)
+	assert.Equal(t, 10*time.Second, sc.Stages[1].Duration)
 	assert.Equal(t, 5*time.Second, sc.RampUp)
 	assert.Equal(t, 30*time.Second, sc.RunPeriod)
 	assert.Equal(t, 5*time.Second, sc.RampDown)

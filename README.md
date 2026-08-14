@@ -9,9 +9,10 @@
 ## Key Features
 
 - **Hexagonal Architecture with DDD Boundaries**: Clean separation of core domain models (`pkg/gtest`), configuration engines, pacing engines, metrics storage, and reporting CLI adapters.
-- **Dual Pacing Engines**:
+- **Triple Pacing Engines**:
   - **`constant_vus`**: Closed-system model maintaining a fixed number of Concurrent Virtual Users with linear ramp-up and ramp-down spacing.
   - **`arrival_rate`**: Open-system token bucket rate-limiting engine (`golang.org/x/time/rate`) targeting precise Transactions Per Second (TPS) with a bounded worker pool (`max_vus`).
+  - **`ramping_vus`**: Dynamic multi-stage pacing engine allowing stage-based VU target ramps, holds, and spikes over time.
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, and per-VU HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with automatic VU ID, Scenario, and Iteration correlation context.
 - **Data Parameterization Module (`pkg/gtest/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
@@ -207,6 +208,12 @@ scenarios:
    - `ramp_up`: Linear rate ramp-up duration (`time.Duration`).
    - `run_period`: Steady-state arrival duration (`time.Duration`).
    - `ramp_down`: Graceful exit duration for in-flight workers (`time.Duration`, default `0s`).
+
+3. **`ramping_vus`**:
+   - `stages`: List of stage definitions (`target: int`, `duration: time.Duration`).
+   - `ramp_down`: Graceful exit duration for remaining workers (`time.Duration`, default `0s`).
+   - `vu_timeout`: Per-iteration timeout (`time.Duration`).
+   - *Details and patterns in [Developer Guide](docs/GUIDE.md#ramping_vus-multi-stage-pacing).*
 
 ---
 
@@ -490,6 +497,7 @@ The `examples/` directory contains self-contained, compilable load test suites d
 |---|---|---|
 | [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, custom duration/counter/rate metrics, linear ramp-up/down. |
 | [`examples/grpc_user_service/`](examples/grpc_user_service/) | `arrival_rate` | High-throughput RPC simulation, token bucket TPS pacing, bounded worker pool. |
+| [`examples/ramping_vus/`](examples/ramping_vus/) | `ramping_vus` | Multi-stage spike test with dynamic VU scaling and recovery observation. |
 | [`examples/conversation_flow/`](examples/conversation_flow/) | `constant_vus` | Real-time SSE streaming conversational AI load test, multi-turn state machine, DSL client. |
 | [`examples/think_time/`](examples/think_time/) | `constant_vus` | Multi-step user journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. |
 | [`examples/checks/`](examples/checks/) | `constant_vus` | Inline assertions (`ctx.Check`) for HTTP status, headers, JSON body validation, check metrics. |

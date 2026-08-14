@@ -13,6 +13,9 @@ const (
 
 	// ScenarioTypeArrivalRate dispatches iterations at a target TPS using a token bucket.
 	ScenarioTypeArrivalRate ScenarioType = "arrival_rate"
+
+	// ScenarioTypeRampingVUs runs a dynamic number of virtual user goroutines across configured stages.
+	ScenarioTypeRampingVUs ScenarioType = "ramping_vus"
 )
 
 // Config is the top-level configuration loaded from gtest.yaml.
@@ -28,9 +31,18 @@ type Config struct {
 	Scenarios map[string]ScenarioConfig
 }
 
+// StageConfig defines a single stage target VU count and duration for ramping_vus scenarios.
+type StageConfig struct {
+	// Target is the target VU count at the end of the stage.
+	Target int
+
+	// Duration is the duration of the stage.
+	Duration time.Duration
+}
+
 // ScenarioConfig holds the configuration for a single load test scenario.
 type ScenarioConfig struct {
-	// Type is the execution model: "constant_vus" or "arrival_rate".
+	// Type is the execution model: "constant_vus", "arrival_rate", or "ramping_vus".
 	Type ScenarioType
 
 	// VUs is the number of virtual user goroutines (required for constant_vus).
@@ -42,10 +54,13 @@ type ScenarioConfig struct {
 	// MaxVUs is the hard cap on concurrent goroutines (required for arrival_rate).
 	MaxVUs int
 
+	// Stages defines the multi-stage ramping profile (required for ramping_vus).
+	Stages []StageConfig
+
 	// RampUp is the duration to linearly ramp up to the target level.
 	RampUp time.Duration
 
-	// RunPeriod is the steady-state execution duration (required).
+	// RunPeriod is the steady-state execution duration (required for constant_vus and arrival_rate).
 	RunPeriod time.Duration
 
 	// RampDown is the duration for graceful ramp-down.

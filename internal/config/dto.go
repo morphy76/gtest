@@ -21,6 +21,7 @@ type scenarioConfigDTO struct {
 	VUs              int                  `mapstructure:"vus"`
 	TargetTPS        int                  `mapstructure:"target_tps"`
 	MaxVUs           int                  `mapstructure:"max_vus"`
+	Stages           []stageConfigDTO     `mapstructure:"stages"`
 	RampUp           time.Duration        `mapstructure:"ramp_up"`
 	RunPeriod        time.Duration        `mapstructure:"run_period"`
 	RampDown         time.Duration        `mapstructure:"ramp_down"`
@@ -29,6 +30,12 @@ type scenarioConfigDTO struct {
 	InteractionDelay *thinkTimeConfigDTO  `mapstructure:"interaction_delay"`
 	ThinkTime        *thinkTimeConfigDTO  `mapstructure:"think_time"`
 	Thresholds       []thresholdConfigDTO `mapstructure:"thresholds"`
+}
+
+// stageConfigDTO is the DTO for a single stage in ramping_vus scenarios.
+type stageConfigDTO struct {
+	Target   int           `mapstructure:"target"`
+	Duration time.Duration `mapstructure:"duration"`
 }
 
 // thinkTimeConfigDTO is the DTO for think time and interaction delay configurations.
@@ -69,6 +76,14 @@ func (d *configDTO) toModel() *Config {
 	return cfg
 }
 
+// toModel converts a stageConfigDTO to a pure domain StageConfig model.
+func (d *stageConfigDTO) toModel() StageConfig {
+	return StageConfig{
+		Target:   d.Target,
+		Duration: d.Duration,
+	}
+}
+
 // toModel converts a scenarioConfigDTO to a pure domain ScenarioConfig model.
 func (d *scenarioConfigDTO) toModel() ScenarioConfig {
 	sc := ScenarioConfig{
@@ -80,6 +95,12 @@ func (d *scenarioConfigDTO) toModel() ScenarioConfig {
 		RunPeriod: d.RunPeriod,
 		RampDown:  d.RampDown,
 		VUTimeout: d.VUTimeout,
+	}
+	if d.Stages != nil {
+		sc.Stages = make([]StageConfig, len(d.Stages))
+		for i, st := range d.Stages {
+			sc.Stages[i] = st.toModel()
+		}
 	}
 	if d.Params != nil {
 		sc.Params = make(map[string]string, len(d.Params))

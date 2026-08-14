@@ -1,0 +1,29 @@
+version: "1.0"
+default_scenario: spike_test
+
+scenarios:
+  spike_test:
+    type: ramping_vus
+    stages:
+      - target: 5
+        duration: 200ms   # ramp up from 0 to 5 VUs over 200ms
+      - target: 5
+        duration: 300ms   # hold at 5 VUs for 300ms
+      - target: 15
+        duration: 200ms   # spike up to 15 VUs over 200ms
+      - target: 15
+        duration: 300ms   # hold spike for 300ms
+      - target: 0
+        duration: 200ms   # ramp down to 0 VUs
+    ramp_down: 100ms
+    vu_timeout: 1s
+
+    thresholds:
+      - metric: api_response_time
+        stat: p95
+        operator: "<"
+        target: "50ms"
+      - metric: api_success_rate
+        stat: rate
+        operator: ">="
+        target: "0.99"

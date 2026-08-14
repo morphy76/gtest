@@ -545,6 +545,31 @@ If all `max_vus` workers are busy when a token arrives, the iteration is **dropp
 
 **Best for**: testing at a specific throughput regardless of response time.
 
+### ramping_vus (Multi-Stage Pacing)
+
+Dynamically ramps and adjusts VU count across multiple stages over time. Ideal for spike testing, step functions, and load curves.
+
+```yaml
+type: ramping_vus
+stages:
+  - target: 10
+    duration: 30s      # ramp up from 0 to 10 VUs over 30s
+  - target: 10
+    duration: 1m       # hold steady at 10 VUs for 1 minute
+  - target: 50
+    duration: 10s      # spike to 50 VUs over 10s
+  - target: 50
+    duration: 2m       # hold spike for 2 minutes
+  - target: 0
+    duration: 30s      # ramp down to 0 VUs
+ramp_down: 5s          # optional grace period for remaining workers
+vu_timeout: 2s         # per-iteration timeout (required)
+```
+
+The engine continuously tracks stage progress and dynamically scales the active virtual user pool up or down to match the calculated target. In-flight iterations completing gracefully during ramp-down are recorded normally; remaining active workers are cleanly terminated upon test completion.
+
+**Best for**: simulating realistic traffic spikes, stress testing breaking points, and observing system recovery.
+
 ---
 
 ## 10. CLI Flags & Execution
@@ -836,6 +861,7 @@ The repository includes a comprehensive set of compilable, self-contained exampl
 |---|---|---|
 | **HTTP REST Checkout** | [`examples/http_checkout/`](../examples/http_checkout/) | Standard REST API load test, HDR duration histogram, success rate, constant VU concurrency. |
 | **gRPC RPC Service** | [`examples/grpc_user_service/`](../examples/grpc_user_service/) | Open-system arrival rate pacing (`arrival_rate`), target TPS, bounded worker pool (`max_vus`). |
+| **Ramping VUs Spike Test** | [`examples/ramping_vus/`](../examples/ramping_vus/) | Multi-stage spike test with dynamic VU scaling and recovery observation (`ramping_vus`). |
 | **Conversational AI Flow** | [`examples/conversation_flow/`](../examples/conversation_flow/) | Real-time Server-Sent Events (SSE) streaming, multi-turn state machine, DSL client architecture. |
 | **Thinking Time & Delays** | [`examples/think_time/`](../examples/think_time/) | Multi-step journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. |
 | **Inline Checks (Assertions)** | [`examples/checks/`](../examples/checks/) | Inline assertions (`ctx.Check`), non-aborting validations, auto-instrumented check counters and report tables. |
