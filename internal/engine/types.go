@@ -31,6 +31,18 @@ type TeardownHook func(ctx ScenarioContext, state map[string]any) error
 // It receives the complete execution summary data.
 type SummaryHook func(ctx context.Context, summary SummaryData) error
 
+// CheckFunc is a function that returns an empty string on pass, or a non-empty error message on failure.
+type CheckFunc func() string
+
+// CheckSummary represents aggregated results for a named inline check.
+type CheckSummary struct {
+	Name    string  `json:"name"`
+	Passed  int64   `json:"passed"`
+	Failed  int64   `json:"failed"`
+	Total   int64   `json:"total"`
+	PassPct float64 `json:"pass_pct"`
+}
+
 // MetricSummary represents a metric entry in the execution summary.
 type MetricSummary struct {
 	Name   string            `json:"name"`
@@ -69,6 +81,7 @@ type SummaryData struct {
 	Duration   time.Duration      `json:"duration"`
 	Config     any                `json:"config"`
 	Metrics    []MetricSummary    `json:"metrics"`
+	Checks     []CheckSummary     `json:"checks,omitempty"`
 	Thresholds []ThresholdSummary `json:"thresholds"`
 	Passed     bool               `json:"passed"`
 }
@@ -96,6 +109,7 @@ type ScenarioContext interface {
 	Log() log.Logger
 	Metrics() metric.Collector
 	Sleep(d ...time.Duration) error
+	Check(name string, fn CheckFunc) bool
 }
 
 

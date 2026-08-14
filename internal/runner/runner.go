@@ -278,6 +278,19 @@ func buildSummaryData(
 		metrics = append(metrics, e.item)
 	}
 
+	var checks []engine.CheckSummary
+	if metricsStore != nil {
+		for _, cs := range metricsStore.CheckSummaries() {
+			checks = append(checks, engine.CheckSummary{
+				Name:    cs.Name,
+				Passed:  cs.Passed,
+				Failed:  cs.Failed,
+				Total:   cs.Total,
+				PassPct: cs.PassPct,
+			})
+		}
+	}
+
 	return engine.SummaryData{
 		SuiteName:  suiteName,
 		Scenario:   scenarioName,
@@ -288,6 +301,7 @@ func buildSummaryData(
 		Duration:   duration,
 		Config:     cfg,
 		Metrics:    metrics,
+		Checks:     checks,
 		Thresholds: thresholds,
 		Passed:     allPassed,
 	}

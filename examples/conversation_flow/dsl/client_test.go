@@ -50,6 +50,12 @@ func (m *mockScenarioContext) Sleep(d ...time.Duration) error {
 	}
 	return nil
 }
+func (m *mockScenarioContext) Check(name string, fn gtest.CheckFunc) bool {
+	if fn != nil && fn() == "" {
+		return true
+	}
+	return false
+}
 
 
 type noopLogger struct{}

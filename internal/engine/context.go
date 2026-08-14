@@ -175,7 +175,29 @@ func (c *scenarioContext) Sleep(d ...time.Duration) error {
 	}
 }
 
+func (c *scenarioContext) Check(name string, fn CheckFunc) bool {
+	var reason string
+	if fn != nil {
+		reason = fn()
+	}
+
+	if reason == "" {
+		if c.metrics != nil {
+			c.metrics.Counter("gtest.checks.passed", metric.Tags{"name": name}).Inc()
+		}
+		return true
+	}
+
+	if c.metrics != nil {
+		c.metrics.Counter("gtest.checks.failed", metric.Tags{"name": name}).Inc()
+	}
+	if c.logger != nil {
+		c.logger.Warn().Str("check", name).Str("reason", reason).Msg("check failed")
+	}
+	return false
+}
 
 // Compile-time interface satisfaction check.
 var _ ScenarioContext = (*scenarioContext)(nil)
+
 

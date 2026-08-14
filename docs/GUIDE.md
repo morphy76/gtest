@@ -263,6 +263,7 @@ All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1
 | `Log()` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration |
 | `Metrics()` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
 | `Sleep(d ...time.Duration)` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
+| `Check(name, fn)` | `bool` | Evaluate inline pass/fail assertion (`CheckFunc`) without stopping VU iteration |
 
 
 
@@ -375,6 +376,8 @@ ctx.Metrics().Duration("foo", gtest.Tags{}).Observe(d) // PANIC: "foo" already r
 | `gtest.vu.pretest_errors` | Counter | PreTest hook failures |
 | `gtest.vu.active` | Gauge | Currently active VU goroutines |
 | `gtest.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
+| `gtest.checks.passed` | Counter | Total inline checks that passed |
+| `gtest.checks.failed` | Counter | Total inline checks that failed |
 
 ---
 
@@ -675,6 +678,28 @@ HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
 
     return nil
 },
+```
+
+### 11.7 Inline Assertions (Checks)
+
+```go
+RunVU: func(ctx gtest.ScenarioContext) error {
+    resp, err := client.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    // Assert HTTP status 200 without aborting iteration on check fail
+    ctx.Check("status is 200", func() string {
+        if resp.StatusCode != 200 {
+            return fmt.Sprintf("expected 200, got %d", resp.StatusCode)
+        }
+        return ""
+    })
+
+    return nil
+}
 ```
 
 ---

@@ -71,13 +71,16 @@ type Store struct {
 
 // NewStore creates a new empty metrics store.
 func NewStore() *Store {
-	return &Store{
+	s := &Store{
 		nameTypes:  make(map[string]metricType),
 		counters:   make(map[metricKey]*counter),
 		gauges:     make(map[metricKey]*gauge),
 		histograms: make(map[metricKey]*histogram),
 		rates:      make(map[metricKey]*rate),
 	}
+	s.nameTypes["gtest.checks.passed"] = metricTypeCounter
+	s.nameTypes["gtest.checks.failed"] = metricTypeCounter
+	return s
 }
 
 // Counter returns a monotonically increasing counter identified by name+tags.
@@ -393,5 +396,67 @@ func (s *Store) LastGaugeValue(name string) float64 {
 	return 0
 }
 
+// CheckSummary holds aggregated metrics for a named check.
+type CheckSummary struct {
+	Name    string  `json:"name"`
+	Passed  int64   `json:"passed"`
+	Failed  int64   `json:"failed"`
+	Total   int64   `json:"total"`
+	PassPct float64 `json:"pass_pct"`
+}
+
+// CheckSummaries returns aggregated pass/fail statistics for all named checks sorted by name.
+func (s *Store) CheckSummaries() []CheckSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	checkMap := make(map[string]*CheckSummary)
+
+	for key, c := range s.counters {
+		if key.name != "gtest.checks.passed" && key.name != "gtest.checks.failed" {
+			continue
+		}
+		checkName := strings.TrimPrefix(key.tagsKey, "name=")
+		if checkName == "" {
+			continue
+		}
+
+		entry, ok := checkMap[checkName]
+		if !ok {
+			entry = &CheckSummary{Name: checkName}
+			checkMap[checkName] = entry
+		}
+
+		if key.name == "gtest.checks.passed" {
+			entry.Passed += c.Value()
+		} else {
+			entry.Failed += c.Value()
+		}
+	}
+
+	if len(checkMap) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(checkMap))
+	for name := range checkMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	summaries := make([]CheckSummary, 0, len(names))
+	for _, name := range names {
+		entry := checkMap[name]
+		entry.Total = entry.Passed + entry.Failed
+		if entry.Total > 0 {
+			entry.PassPct = (float64(entry.Passed) / float64(entry.Total)) * 100.0
+		}
+		summaries = append(summaries, *entry)
+	}
+
+	return summaries
+}
+
 // Compile-time interface satisfaction check.
 var _ Collector = (*Store)(nil)
+

@@ -1453,3 +1453,25 @@ go run main.go --tag-filter endpoint=/api/checkout
 | **3.5** | Real-Time Metrics Export | None (new output pipeline) |
 | **3.6** | Tag Filtering + Per-Tag Thresholds | None (config + SLA evaluator) |
 
+---
+
+### 14.7 Increment 1.13 — Checks (Inline Assertions)
+
+Enable real-time inline pass/fail assertions inside `RunVU` without terminating the iteration, aggregating results for reporting and SLA threshold gates.
+
+#### Public API (`pkg/gtest`)
+- `type CheckFunc func() string`: Return `""` (empty string) on pass; return non-empty failure reason on fail.
+- `ScenarioContext.Check(name string, fn CheckFunc) bool`: Executes `fn()`, records metrics, logs warnings on failure, and returns boolean verdict.
+
+#### Built-in Metrics
+- `gtest.checks.passed` (Counter): Incremented with tag `name: <check_name>` when check passes.
+- `gtest.checks.failed` (Counter): Incremented with tag `name: <check_name>` when check fails.
+
+#### Acceptance Criteria
+- **AC-1.13.1**: Passing check returns `true`, increments `gtest.checks.passed`.
+- **AC-1.13.2**: Failing check returns `false`, increments `gtest.checks.failed`, logs reason.
+- **AC-1.13.3**: Multiple checks per iteration are aggregated independently.
+- **AC-1.13.4**: Console and JSON reports display per-check pass/fail counts and percentages.
+- **AC-1.13.5**: SLA Thresholds evaluate `gtest.checks.failed` and `gtest.checks.passed`.
+
+
