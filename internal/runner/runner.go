@@ -21,98 +21,21 @@ type Result struct {
 	Error       error
 }
 
-// ScenarioNotFoundError indicates a scenario was not found in the config or not registered.
-type ScenarioNotFoundError struct {
-	Name    string
-	Message string
-}
-
-func (e *ScenarioNotFoundError) Error() string {
-	if e.Name != "" {
-		return fmt.Sprintf("gtest: scenario %q not found: %s", e.Name, e.Message)
-	}
-	return fmt.Sprintf("gtest: scenario not found: %s", e.Message)
-}
-
-// ScenarioRegistry provides access to named scenarios.
-type ScenarioRegistry interface {
-	Name() string
-	GetScenario(name string) (engine.Scenario, bool)
-}
-
 // RunSuite executes the suite CLI workflow.
 func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
-	resolved, err := resolveScenario(s, args, stdout)
-	if err != nil {
-		return err
-	}
-
-	if resolved.ShowVersion {
-		return nil
-	}
-  
 	if stdout == nil {
 		stdout = io.Discard
 	}
-	flags, err := cli.ParseFlags(args, stdout)
+
+	resolved, err := resolveScenario(s, args, stdout)
 	if err != nil {
-		return Result{Error: &config.ConfigError{Err: err}}
+		return Result{Error: err}
 	}
 
-	if flags.ShowVersion {
-		if _, err := fmt.Fprintf(stdout, "gtest version %s (commit: %s, build_time: %s)\n",
-			version.Version, version.Commit, version.BuildTime); err != nil {
-			return Result{Error: err}
-		}
+	if resolved.ShowVersion {
 		return Result{Passed: true}
 	}
 
-	cfg, err := config.LoadFromFile(flags.ConfigPath)
-	if err != nil {
-		var valErr *config.ValidationError
-		if errors.As(err, &valErr) {
-			return Result{Error: valErr}
-		}
-		var cfgErr *config.ConfigError
-		if errors.As(err, &cfgErr) {
-			return Result{Error: cfgErr}
-		}
-		return Result{Error: &config.ConfigError{Path: flags.ConfigPath, Err: err}}
-	}
-
-	targetScenario := flags.ScenarioName
-	if targetScenario == "" {
-		targetScenario = cfg.DefaultScenario
-	}
-	if targetScenario == "" {
-		return Result{
-			Error: &ScenarioNotFoundError{
-				Name:    "",
-				Message: "no scenario specified via --scenario flag or default_scenario in config",
-			},
-		}
-	}
-
-	scenarioCfg, inConfig := cfg.Scenarios[targetScenario]
-	scenario, registered := s.GetScenario(targetScenario)
-
-	if !registered {
-		return Result{
-			Error: &ScenarioNotFoundError{
-				Name:    targetScenario,
-				Message: fmt.Sprintf("scenario %q is not registered in Suite", targetScenario),
-			},
-		}
-	}
-	if !inConfig {
-		return Result{
-			Error: &ScenarioNotFoundError{
-				Name:    targetScenario,
-				Message: fmt.Sprintf("scenario %q is registered in code but not defined in config file %q", targetScenario, flags.ConfigPath),
-			},
-		}
-	}
-  
 	// Setup logger
 	logLevel, parseErr := zerolog.ParseLevel(resolved.Flags.LogLevel)
 	if parseErr != nil {

@@ -476,15 +476,11 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	exitCode := -1
-	exitFunc := func(code int) {
-		exitCode = code
-	}
-
-	err := runner.RunSuite(reg, []string{"--config=" + cfgFile}, &stdout, exitFunc)
-	require.NoError(t, err)
+	res := runner.RunSuite(reg, []string{"--config=" + cfgFile}, &stdout)
+	require.NoError(t, res.Error)
 	assert.True(t, executed)
-	assert.Equal(t, 0, exitCode)
+	assert.True(t, res.Passed)
+	assert.False(t, res.Aborted)
 }
 
 func TestRunSuite_ThresholdFailureExits1(t *testing.T) {
@@ -512,14 +508,9 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	exitCode := -1
-	exitFunc := func(code int) {
-		exitCode = code
-	}
-
-	err := runner.RunSuite(reg, []string{"--config=" + cfgFile}, &stdout, exitFunc)
-	require.NoError(t, err)
-	assert.Equal(t, 1, exitCode)
+	res := runner.RunSuite(reg, []string{"--config=" + cfgFile}, &stdout)
+	require.NoError(t, res.Error)
+	assert.False(t, res.Passed)
 }
 
 func TestRunSuite_SetupErrorReturnsError(t *testing.T) {
@@ -544,16 +535,11 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	exitCode := -1
-	exitFunc := func(code int) {
-		exitCode = code
-	}
-
-	err := runner.RunSuite(reg, []string{"--config=" + cfgFile}, &stdout, exitFunc)
-	require.Error(t, err)
+	res := runner.RunSuite(reg, []string{"--config=" + cfgFile}, &stdout)
+	require.Error(t, res.Error)
 
 	var setupErr *engine.SetupError
-	require.True(t, errors.As(err, &setupErr))
+	require.True(t, errors.As(res.Error, &setupErr))
 	assert.Contains(t, setupErr.Error(), "db connection refused")
-	assert.Equal(t, -1, exitCode) // exitFunc should not be called on setup failure
 }
+
