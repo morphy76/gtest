@@ -227,12 +227,11 @@ type Rate interface {
 
 ### 4.3 `ScenarioContext` Interface
 
-```go
-// ScenarioContext is the scoped execution context passed to every VU hook.
-// It embeds context.Context so it can be passed directly to stdlib calls (http.NewRequestWithContext, etc.).
-type ScenarioContext interface {
-    context.Context
+To adhere to the **Interface Segregation Principle (ISP)**, `ScenarioContext` is decomposed into focused single-responsibility interfaces:
 
+```go
+// ExecutionIdentity provides execution identity attributes (VU ID, iteration index, and scenario name).
+type ExecutionIdentity interface {
     // VUID returns the 1-based unique identifier for this Virtual User goroutine.
     VUID() int64
 
@@ -242,7 +241,10 @@ type ScenarioContext interface {
 
     // ScenarioName returns the active scenario name as declared in gtest.yaml.
     ScenarioName() string
+}
 
+// ConfigProvider provides access to scenario configuration parameters.
+type ConfigProvider interface {
     // Param retrieves a string value from the scenario's params map.
     // Returns "" if key is absent.
     Param(key string) string
@@ -254,17 +256,43 @@ type ScenarioContext interface {
     // ParamDuration retrieves a params value parsed as time.Duration.
     // Returns defaultValue if key is absent or value cannot be parsed.
     ParamDuration(key string, defaultValue time.Duration) time.Duration
+}
 
+// StateProvider provides read-only access to global scenario state returned by Setup.
+type StateProvider interface {
     // GlobalState retrieves a value from the map returned by the Setup hook.
     // The map is read-only and shared across all VUs; callers must not mutate it.
     // Returns nil if key is absent or Setup was not provided.
     GlobalState(key string) any
+}
 
+// ObservabilityProvider provides access to structured logging and metric collection.
+type ObservabilityProvider interface {
     // Log returns the VU-scoped logger pre-enriched with scenario, vu_id, iteration fields.
     Log() Logger
 
     // Metrics returns the shared metrics collector.
     Metrics() MetricsCollector
+}
+
+// WorkflowController provides workflow execution controls such as delays and inline assertions.
+type WorkflowController interface {
+    // Sleep pauses execution for explicit duration or configured interaction_delay strategy.
+    Sleep(d ...time.Duration) error
+
+    // Check evaluates an inline pass/fail assertion function without stopping iteration.
+    Check(name string, fn CheckFunc) bool
+}
+
+// ScenarioContext is the scoped execution context passed to every VU hook.
+// It embeds context.Context and composes focused capability interfaces.
+type ScenarioContext interface {
+    context.Context
+    ExecutionIdentity
+    ConfigProvider
+    StateProvider
+    ObservabilityProvider
+    WorkflowController
 }
 ```
 

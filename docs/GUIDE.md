@@ -253,23 +253,51 @@ All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1
 
 ## 5. ScenarioContext API Reference
 
-`ScenarioContext` embeds `context.Context` and adds load-test-specific accessors:
+`ScenarioContext` embeds `context.Context` and composes 5 focused capability interfaces adhering to the **Interface Segregation Principle (ISP)**:
 
-| Method | Return | Description |
-|--------|--------|-------------|
-| `VUID()` | `int64` | 1-based virtual user ID |
-| `Iteration()` | `int64` | 0-based iteration count (0 in PreTest/AfterTest) |
-| `ScenarioName()` | `string` | Active scenario name from YAML |
-| `Param(key)` | `string` | Read scenario `params` by key; `""` if absent |
-| `ParamInt(key, default)` | `int` | Parse param as int; returns default on failure |
-| `ParamDuration(key, default)` | `time.Duration` | Parse param as duration; returns default on failure |
-| `GlobalState(key)` | `any` | Read value from Setup's returned map (read-only) |
-| `Log()` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration |
-| `Metrics()` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
-| `Sleep(d ...time.Duration)` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
-| `Check(name, fn)` | `bool` | Evaluate inline pass/fail assertion (`CheckFunc`) without stopping VU iteration |
+| Method | Interface | Return | Description |
+|--------|-----------|--------|-------------|
+| `VUID()` | `ExecutionIdentity` | `int64` | 1-based virtual user ID |
+| `Iteration()` | `ExecutionIdentity` | `int64` | 0-based iteration count (0 in PreTest/AfterTest) |
+| `ScenarioName()` | `ExecutionIdentity` | `string` | Active scenario name from YAML |
+| `Param(key)` | `ConfigProvider` | `string` | Read scenario `params` by key; `""` if absent |
+| `ParamInt(key, default)` | `ConfigProvider` | `int` | Parse param as int; returns default on failure |
+| `ParamDuration(key, default)` | `ConfigProvider` | `time.Duration` | Parse param as duration; returns default on failure |
+| `GlobalState(key)` | `StateProvider` | `any` | Read value from Setup's returned map (read-only) |
+| `Log()` | `ObservabilityProvider` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration |
+| `Metrics()` | `ObservabilityProvider` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
+| `Sleep(d ...time.Duration)` | `WorkflowController` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
+| `Check(name, fn)` | `WorkflowController` | `bool` | Evaluate inline pass/fail assertion (`CheckFunc`) without stopping VU iteration |
 
+### Interface Segregation & Modular Helpers
 
+Because `ScenarioContext` is decomposed into discrete interfaces, helper functions and custom components can accept only the specific capability they need instead of depending on the entire fat context:
+
+```go
+// Accepts only execution identity (e.g. for deterministic data partition or logging correlation)
+func ProcessUserBatch(id gtest.ExecutionIdentity, data []string) string {
+    idx := (id.VUID() - 1 + id.Iteration()) % int64(len(data))
+    return data[idx]
+}
+
+// Accepts only configuration parameters
+func BuildClientURL(cfg gtest.ConfigProvider) string {
+    return fmt.Sprintf("%s/api/v1", cfg.Param("base_url"))
+}
+
+// Accepts only workflow controls (sleep / check)
+func PerformHealthCheck(wf gtest.WorkflowController, client *http.Client, url string) bool {
+    return wf.Check("endpoint reachable", func() string {
+        resp, err := client.Get(url)
+        if err != nil || resp.StatusCode != http.StatusOK {
+            return "health check failed"
+        }
+        return ""
+    })
+}
+```
+
+This also makes unit testing helper functions trivial, as test authors only need to stub 1-3 methods rather than the full `ScenarioContext`.
 
 ### Using as context.Context
 

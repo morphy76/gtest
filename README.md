@@ -85,7 +85,7 @@ type Scenario struct {
 
 ## ScenarioContext API
 
-Inside `PreTest`, `RunVU`, and `AfterTest`, developers interact with `ScenarioContext`:
+`ScenarioContext` is the execution context passed to VU lifecycle hooks (`PreTest`, `RunVU`, `AfterTest`), composing focused capability interfaces (`ExecutionIdentity`, `ConfigProvider`, `StateProvider`, `ObservabilityProvider`, `WorkflowController`) and embedding standard `context.Context`:
 
 | Method | Description |
 |--------|-------------|
