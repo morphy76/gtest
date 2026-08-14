@@ -56,12 +56,28 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 		"gtest.vu.iterations_timeout",
 		"gtest.vu.panics",
 		"gtest.vu.pretest_errors",
+		"gtest.checks.passed",
+		"gtest.checks.failed",
 	}
 	for _, name := range builtInNames {
 		val := data.Metrics.AggregatedCounterValue(name)
 		fmt.Fprintf(&sb, "%-30s Counter    %d\n", name, val)
 	}
 	sb.WriteString("\n")
+
+	// Checks section
+	if data.Metrics != nil {
+		checks := data.Metrics.CheckSummaries()
+		if len(checks) > 0 {
+			sb.WriteString("CHECKS\n")
+			sb.WriteString("────────────────────────────────────────────────────────────────\n")
+			fmt.Fprintf(&sb, "%-30s %-10s %-8s %-8s\n", "Check Name", "Passed", "Failed", "Pass %")
+			for _, ch := range checks {
+				fmt.Fprintf(&sb, "%-30s %-10d %-8d %.2f%%\n", ch.Name, ch.Passed, ch.Failed, ch.PassPct)
+			}
+			sb.WriteString("\n")
+		}
+	}
 
 
 	// Custom metrics section

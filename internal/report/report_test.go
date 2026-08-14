@@ -24,6 +24,8 @@ func createTestReportData() report.ReportData {
 	store.Counter("gtest.vu.iterations_total", metric.Tags{}).Add(100)
 	store.Counter("gtest.vu.iterations_failed", metric.Tags{}).Add(2)
 	store.Counter("gtest.vu.iterations_timeout", metric.Tags{}).Add(1)
+	store.Counter("gtest.checks.passed", metric.Tags{"name": "status is 200"}).Add(95)
+	store.Counter("gtest.checks.failed", metric.Tags{"name": "status is 200"}).Add(5)
 
 	// Custom metrics (out of order to test alphabetical sorting)
 	store.Counter("z_requests_total", metric.Tags{}).Add(100)
@@ -209,3 +211,37 @@ func TestWriteReportToFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(fileBytes), "GTEST LOAD TEST SUMMARY")
 }
+
+func TestReportContainsChecksSection(t *testing.T) {
+	data := createTestReportData()
+
+	var consoleBuf bytes.Buffer
+	require.NoError(t, report.GenerateConsoleReport(&consoleBuf, data))
+	consoleOut := consoleBuf.String()
+
+	assert.Contains(t, consoleOut, "CHECKS")
+	assert.Contains(t, consoleOut, "status is 200")
+	assert.Contains(t, consoleOut, "95")
+	assert.Contains(t, consoleOut, "5")
+
+	var jsonBuf bytes.Buffer
+	require.NoError(t, report.GenerateJSONReport(&jsonBuf, data))
+
+	var doc struct {
+		Checks []struct {
+			Name    string  `json:"name"`
+			Passed  int64   `json:"passed"`
+			Failed  int64   `json:"failed"`
+			Total   int64   `json:"total"`
+			PassPct float64 `json:"pass_pct"`
+		} `json:"checks"`
+	}
+	require.NoError(t, json.Unmarshal(jsonBuf.Bytes(), &doc))
+	require.Len(t, doc.Checks, 1)
+	assert.Equal(t, "status is 200", doc.Checks[0].Name)
+	assert.Equal(t, int64(95), doc.Checks[0].Passed)
+	assert.Equal(t, int64(5), doc.Checks[0].Failed)
+	assert.Equal(t, int64(100), doc.Checks[0].Total)
+	assert.InDelta(t, 95.0, doc.Checks[0].PassPct, 1e-9)
+}
+

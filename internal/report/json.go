@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/gtest/internal/metric"
 )
 
 type jsonMetricEntry struct {
@@ -44,12 +45,18 @@ type jsonReportDocument struct {
 	EndedAt    time.Time             `json:"ended_at"`
 	Config     config.ScenarioConfig `json:"config"`
 	Metrics    []jsonMetricEntry     `json:"metrics"`
+	Checks     []metric.CheckSummary `json:"checks,omitempty"`
 	Thresholds []jsonThresholdEntry  `json:"thresholds"`
 	Passed     bool                  `json:"passed"`
 }
 
 // GenerateJSONReport formats and writes the JSON report document to w.
 func GenerateJSONReport(w io.Writer, data ReportData) error {
+	var checks []metric.CheckSummary
+	if data.Metrics != nil {
+		checks = data.Metrics.CheckSummaries()
+	}
+
 	doc := jsonReportDocument{
 		SuiteName: sOrDefault(data.SuiteName, "gtest"),
 		Scenario:  data.Scenario,
@@ -58,6 +65,7 @@ func GenerateJSONReport(w io.Writer, data ReportData) error {
 		StartedAt: data.StartedAt.UTC(),
 		EndedAt:   data.EndedAt.UTC(),
 		Config:    data.Config,
+		Checks:    checks,
 		Passed:    data.Passed,
 	}
 

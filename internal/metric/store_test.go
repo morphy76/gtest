@@ -330,6 +330,29 @@ func TestStoreImplementsMetricsCollector(t *testing.T) {
 	var _ metric.Collector = (*metric.Store)(nil)
 }
 
+func TestCheckSummaries(t *testing.T) {
+	store := metric.NewStore()
+
+	store.Counter("gtest.checks.passed", metric.Tags{"name": "status is 200"}).Add(8)
+	store.Counter("gtest.checks.failed", metric.Tags{"name": "status is 200"}).Add(2)
+	store.Counter("gtest.checks.passed", metric.Tags{"name": "content-type is json"}).Add(10)
+
+	summaries := store.CheckSummaries()
+	require.Len(t, summaries, 2)
+
+	assert.Equal(t, "content-type is json", summaries[0].Name)
+	assert.Equal(t, int64(10), summaries[0].Passed)
+	assert.Equal(t, int64(0), summaries[0].Failed)
+	assert.Equal(t, int64(10), summaries[0].Total)
+	assert.InDelta(t, 100.0, summaries[0].PassPct, 1e-9)
+
+	assert.Equal(t, "status is 200", summaries[1].Name)
+	assert.Equal(t, int64(8), summaries[1].Passed)
+	assert.Equal(t, int64(2), summaries[1].Failed)
+	assert.Equal(t, int64(10), summaries[1].Total)
+	assert.InDelta(t, 80.0, summaries[1].PassPct, 1e-9)
+}
+
 // helper
 func assertDurationWithinTolerance(t *testing.T, expected, actual, tolerance time.Duration, label string) {
 	t.Helper()
@@ -339,3 +362,4 @@ func assertDurationWithinTolerance(t *testing.T, expected, actual, tolerance tim
 	}
 	assert.LessOrEqual(t, diff, tolerance, "%s: expected ~%v, got %v (tolerance %v)", label, expected, actual, tolerance)
 }
+

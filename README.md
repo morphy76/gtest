@@ -98,9 +98,27 @@ Inside `PreTest`, `RunVU`, and `AfterTest`, developers interact with `ScenarioCo
 | `ctx.Log()` | Structured `Logger` instance bound with VU ID and iteration context. |
 | `ctx.Metrics()` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
 | `ctx.Sleep(d ...time.Duration)` | Pauses for explicit duration or configured `interaction_delay` strategy (respects `ctx.Done()`). |
+| `ctx.Check(name, fn)` | Evaluates inline pass/fail assertion (`CheckFunc`) without stopping VU iteration execution. |
 
 
 ---
+
+## Inline Assertions (Checks)
+
+Inline assertions allow developers to validate real-time pass/fail conditions inside `RunVU` without terminating the iteration:
+
+```go
+ctx.Check("status code is 200", func() string {
+    if resp.StatusCode != http.StatusOK {
+        return fmt.Sprintf("expected 200, got %d", resp.StatusCode)
+    }
+    return "" // empty string indicates check passed
+})
+```
+
+- **Pass/Fail Contract**: Return `""` (empty string) for pass (`true`); return non-empty failure reason string for fail (`false`).
+- **Auto-Instrumentation**: Automatically increments built-in counters `gtest.checks.passed` and `gtest.checks.failed` tagged with `name`.
+- **Reporting & Thresholds**: Per-check pass/fail counts and percentages are displayed in console and JSON reports. SLA thresholds can target check metrics (e.g. `gtest.checks.failed count == 0`).
 
 ## Recording Metrics
 
