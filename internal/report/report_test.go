@@ -221,7 +221,8 @@ func TestWriteReport_ToFile(t *testing.T) {
 
 	f, err := os.Create(outFilePath)
 	require.NoError(t, err)
-	defer f.Close()
+	// Ensure Close() error is checked so linters (errcheck) don't fail.
+	t.Cleanup(func() { require.NoError(t, f.Close()) })
 
 	err = report.WriteReport(f, "console", data)
 	require.NoError(t, err)
@@ -390,4 +391,5 @@ func TestReportWithMockMetricReader(t *testing.T) {
 	assert.Contains(t, jsonBuf.String(), "Mock Suite")
 	assert.Contains(t, jsonBuf.String(), "custom_counter")
 }
+
 
