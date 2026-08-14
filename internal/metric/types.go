@@ -5,6 +5,11 @@ import "time"
 // Tags is a set of key-value labels attached to a metric observation.
 type Tags map[string]string
 
+// Metric represents a generic metric instance.
+type Metric interface {
+	Type() MetricType
+}
+
 // Collector is the internal interface for recording metrics.
 type Collector interface {
 	Counter(name string, tags Tags) Counter
@@ -34,3 +39,4 @@ type Duration interface {
 type Rate interface {
 	Add(numerator, denominator int64)
 }
+
