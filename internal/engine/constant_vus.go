@@ -11,6 +11,8 @@ import (
 	"github.com/morphy76/gtest/internal/metric"
 )
 
+
+
 // RunConstantVUs executes the constant_vus pacing schedule.
 func RunConstantVUs(
 	ctx context.Context,
@@ -146,4 +148,6 @@ func runVUGoroutine(
 		iteration++
 	}
 }
+
+
 

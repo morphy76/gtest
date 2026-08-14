@@ -345,3 +345,62 @@ func TestConversationFlow_MessageSendFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "AddMessage")
 }
+
+func TestConversationFlow_ThinkingTimeOnlyBeforeNextMessage(t *testing.T) {
+	server := fullProtocolMockServer(t)
+	defer server.Close()
+
+	t.Run("three turns executes thinking time twice", func(t *testing.T) {
+		ctx := newMockScenarioContext()
+		client := NewConversationClient(server.URL, "token", "tenant", nil)
+		messages := []Message{
+			{ID: "1", Text: "Hello"},
+			{ID: "2", Text: "Question 2"},
+			{ID: "3", Text: "Goodbye"},
+		}
+
+		flow := NewConversationFlow(client, FlowConfig{
+			DialogModel:      "gpt-4o",
+			Turns:            3,
+			InteractionDelay: 50 * time.Millisecond,
+			SSEEventTimeout:  3 * time.Second,
+			Messages:         messages,
+		})
+
+		err := flow.Run(ctx)
+		require.NoError(t, err)
+
+		// For 3 turns, think time should be executed after turn 1 and turn 2, but NOT after turn 3 (exhausted)
+		ctx.mu.Lock()
+		defer ctx.mu.Unlock()
+		assert.Len(t, ctx.sleepCalls, 2, "must sleep exactly 2 times for a 3-turn flow")
+		for _, d := range ctx.sleepCalls {
+			assert.Equal(t, 50*time.Millisecond, d)
+		}
+	})
+
+	t.Run("one turn does not execute thinking time after completion", func(t *testing.T) {
+		ctx := newMockScenarioContext()
+		client := NewConversationClient(server.URL, "token", "tenant", nil)
+		messages := []Message{
+			{ID: "1", Text: "Single turn question"},
+		}
+
+		flow := NewConversationFlow(client, FlowConfig{
+			DialogModel:      "gpt-4o",
+			Turns:            1,
+			InteractionDelay: 50 * time.Millisecond,
+			SSEEventTimeout:  3 * time.Second,
+			Messages:         messages,
+		})
+
+		err := flow.Run(ctx)
+		require.NoError(t, err)
+
+		// For 1 turn, turns are exhausted after the first bot reply -> 0 sleep calls
+		ctx.mu.Lock()
+		defer ctx.mu.Unlock()
+		assert.Empty(t, ctx.sleepCalls, "must not sleep when turns are exhausted")
+	})
+}
+

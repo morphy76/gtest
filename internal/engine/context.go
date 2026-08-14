@@ -51,9 +51,14 @@ func newScenarioContext(
 	}
 
 	var delayGen delay.DelayGenerator
-	if cfg.InteractionDelay != nil {
-		delayGen, _ = delay.NewDelayGenerator(cfg.InteractionDelay)
+	delayCfg := cfg.InteractionDelay
+	if delayCfg == nil {
+		delayCfg = cfg.ThinkTime
 	}
+	if delayCfg != nil {
+		delayGen, _ = delay.NewDelayGenerator(delayCfg)
+	}
+
 
 	return &scenarioContext{
 		Context:      ctx,

@@ -9,6 +9,13 @@ scenarios:
     run_period: 500ms
     ramp_down: 100ms
     vu_timeout: 5s
+    # In-iteration thinking time between bot reply and next customer message (invoked via ctx.Sleep)
+    interaction_delay:
+      type: range
+      min: 50ms
+      max: 150ms
+
+
     params:
       base_url: "mock" # Set to target API URL (e.g. https://api.dev.example.com) or "mock" for in-process mock server
       token: "pat_token" # Set to access token or override via PAT environment variable
@@ -16,8 +23,8 @@ scenarios:
       dialog_model: "gpt-4o"
       turns: "2"
       sse_event_timeout: "5s" # Per-event SSE timeout: max wait for each expected SSE answer before failing the turn
-      interaction_delay: "100ms" # Think-time delay between conversation turns (simulates human reading time)
       # messages_file: "path/to/messages.csv" # Optional: CSV with columns message_id,user_message,category,expected_tokens
+
     thresholds:
       - metric: sse_open_time
         stat: p95

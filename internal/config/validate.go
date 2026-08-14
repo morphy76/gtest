@@ -167,6 +167,13 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 		}
 	}
 
+	// Validate think_time if specified.
+	if sc.ThinkTime != nil {
+		if err := validateThinkTime(prefix, sc.ThinkTime); err != nil {
+			return err
+		}
+	}
+
 	// Validate thresholds.
 	for i := range sc.Thresholds {
 		if err := validateThreshold(prefix, i, &sc.Thresholds[i]); err != nil {
@@ -179,10 +186,19 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 
 // validateInteractionDelay checks the interaction delay configuration.
 func validateInteractionDelay(prefix string, delay *InteractionDelayConfig) error {
-	delayPrefix := fmt.Sprintf("%s.interaction_delay", prefix)
+	return validateDelayConfig(fmt.Sprintf("%s.interaction_delay", prefix), delay)
+}
 
+// validateThinkTime checks the inter-iteration think time configuration.
+func validateThinkTime(prefix string, tt *ThinkTimeConfig) error {
+	return validateDelayConfig(fmt.Sprintf("%s.think_time", prefix), tt)
+}
+
+// validateDelayConfig checks a delay configuration against strategy bounds.
+func validateDelayConfig(delayPrefix string, delay *ThinkTimeConfig) error {
 	switch delay.Type {
 	case "fixed":
+
 		if delay.Duration <= 0 {
 			return &ValidationError{
 				Field:   delayPrefix + ".duration",

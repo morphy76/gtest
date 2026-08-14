@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,9 +16,12 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 
+
 type mockScenarioContext struct {
 	context.Context
-	params map[string]string
+	params     map[string]string
+	sleepCalls []time.Duration
+	mu         sync.Mutex
 }
 
 func newMockScenarioContext() *mockScenarioContext {
@@ -27,16 +31,26 @@ func newMockScenarioContext() *mockScenarioContext {
 	}
 }
 
-func (m *mockScenarioContext) VUID() int64                             { return 1 }
-func (m *mockScenarioContext) Iteration() int64                        { return 0 }
-func (m *mockScenarioContext) ScenarioName() string                    { return "test_scenario" }
-func (m *mockScenarioContext) Param(key string) string                 { return m.params[key] }
-func (m *mockScenarioContext) ParamInt(key string, def int) int        { return def }
+func (m *mockScenarioContext) VUID() int64                                                 { return 1 }
+func (m *mockScenarioContext) Iteration() int64                                            { return 0 }
+func (m *mockScenarioContext) ScenarioName() string                                        { return "test_scenario" }
+func (m *mockScenarioContext) Param(key string) string                                     { return m.params[key] }
+func (m *mockScenarioContext) ParamInt(key string, def int) int                            { return def }
 func (m *mockScenarioContext) ParamDuration(key string, def time.Duration) time.Duration { return def }
-func (m *mockScenarioContext) GlobalState(key string) any              { return nil }
-func (m *mockScenarioContext) Log() gtest.Logger                        { return noopLogger{} }
-func (m *mockScenarioContext) Metrics() gtest.MetricsCollector         { return noopMetrics{} }
-func (m *mockScenarioContext) Sleep(d ...time.Duration) error          { return nil }
+func (m *mockScenarioContext) GlobalState(key string) any                                  { return nil }
+func (m *mockScenarioContext) Log() gtest.Logger                                           { return noopLogger{} }
+func (m *mockScenarioContext) Metrics() gtest.MetricsCollector                             { return noopMetrics{} }
+func (m *mockScenarioContext) Sleep(d ...time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(d) > 0 {
+		m.sleepCalls = append(m.sleepCalls, d[0])
+	} else {
+		m.sleepCalls = append(m.sleepCalls, 0)
+	}
+	return nil
+}
+
 
 type noopLogger struct{}
 

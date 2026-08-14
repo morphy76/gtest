@@ -467,8 +467,10 @@ used by test developers.
 | `scenarios.<name>.ramp_down` | duration string | no | `"0s"` | ≥ 0 |
 | `scenarios.<name>.vu_timeout` | duration string | yes | — | > 0 |
 | `scenarios.<name>.params` | map[string]string | no | `{}` | Keys and values must be non-empty strings |
-| `scenarios.<name>.interaction_delay` | object | no | — | See §11 (Increment 1.12) |
+| `scenarios.<name>.interaction_delay` | object | no | — | Thinking time strategy explicitly invoked via `ctx.Sleep()` (see §11, Increment 1.12) |
 | `scenarios.<name>.thresholds` | list | no | `[]` | See §7.2 |
+
+
 
 
 Duration strings follow Go's `time.ParseDuration` format (e.g., `"15s"`, `"2m30s"`, `"500ms"`).
