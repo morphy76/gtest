@@ -33,7 +33,7 @@ test-race:
 ## test-bench: Run benchmark tests
 .PHONY: test-bench
 test-bench:
-	go test -count=1 -bench=. -benchmem ./...
+	go test -count=1 -bench=. -benchmem -run=^$$ ./...
 
 ## lint: Run static analysis
 .PHONY: lint

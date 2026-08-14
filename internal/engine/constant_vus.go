@@ -82,11 +82,13 @@ func runVUGoroutine(
 	activeGauge.Add(1)
 	defer activeGauge.Add(-1)
 
+	sCtx := newVUScenarioContext(ctx, vuid, cfg, scenarioName, globalState, logger, metrics)
+
 	// AfterTest is guaranteed to run after PreTest/RunVU exit.
 	defer func() {
 		if scenario.AfterTest != nil {
-			afterCtx := newScenarioContext(ctx, vuid, 0, cfg, scenarioName, globalState, logger, metrics)
-			if err := scenario.AfterTest(afterCtx); err != nil {
+			sCtx.prepareIteration(ctx, 0)
+			if err := scenario.AfterTest(sCtx); err != nil && logger != nil {
 				logger.Error().Err(err).Msg("AfterTest hook error")
 			}
 		}
@@ -94,19 +96,20 @@ func runVUGoroutine(
 
 	// PreTest hook (if present)
 	if scenario.PreTest != nil {
-		preCtx := newScenarioContext(ctx, vuid, 0, cfg, scenarioName, globalState, logger, metrics)
-		if err := scenario.PreTest(preCtx); err != nil {
+		sCtx.prepareIteration(ctx, 0)
+		if err := scenario.PreTest(sCtx); err != nil {
 			metrics.Counter(metric.MetricVUPretestErrors, metric.Tags{}).Inc()
-			logger.Error().Err(err).Msg("PreTest hook failed, skipping RunVU")
+			if logger != nil {
+				logger.Error().Err(err).Msg("PreTest hook failed, skipping RunVU")
+			}
 			return // skips RunVU, deferred AfterTest still runs
 		}
 	}
 
-	var iteration int64 = 0
+	im := newIterationMetrics(metrics)
+	hasTimeout := cfg.VUTimeout > 0
+	var iteration int64
 	for {
-		// Stop starting new iterations when either:
-		// - stopCh fires (run_period ended, ramp_down grace period active), or
-		// - ctx cancelled (total duration expired, including ramp_down=0 case).
 		select {
 		case <-stopCh:
 			return
@@ -115,26 +118,47 @@ func runVUGoroutine(
 		default:
 		}
 
-		iterCtx, cancel := context.WithTimeout(ctx, cfg.VUTimeout)
-		sCtx := newScenarioContext(iterCtx, vuid, iteration, cfg, scenarioName, globalState, logger, metrics)
-
-		func() {
-			defer cancel()
-			defer func() {
-				if r := recover(); r != nil {
-					metrics.Counter(metric.MetricVUPanics, metric.Tags{}).Inc()
-					metrics.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
-					metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
-					logger.Error().Str("panic", fmt.Sprintf("%v", r)).Msg("RunVU panicked")
-				}
-			}()
-
-			err := scenario.RunVU(sCtx)
-			recordIterationResult(ctx, iterCtx, err, metrics, logger)
-		}()
+		if hasTimeout {
+			iterCtx, cancel := context.WithTimeout(ctx, cfg.VUTimeout)
+			sCtx.prepareIteration(iterCtx, iteration)
+			executeIteration(ctx, iterCtx, sCtx, scenario.RunVU, im, logger)
+			cancel()
+		} else {
+			sCtx.prepareIteration(ctx, iteration)
+			executeIteration(ctx, ctx, sCtx, scenario.RunVU, im, logger)
+		}
 
 		iteration++
 	}
+}
+
+func executeIteration(
+	ctx context.Context,
+	iterCtx context.Context,
+	sCtx VUContext,
+	runVU func(VUContext) error,
+	im iterationMetrics,
+	logger log.Logger,
+) {
+	defer func() {
+		if r := recover(); r != nil {
+			if im.panics != nil {
+				im.panics.Inc()
+			}
+			if im.failed != nil {
+				im.failed.Inc()
+			}
+			if im.total != nil {
+				im.total.Inc()
+			}
+			if logger != nil {
+				logger.Error().Str("panic", fmt.Sprintf("%v", r)).Msg("RunVU panicked")
+			}
+		}
+	}()
+
+	err := runVU(sCtx)
+	recordIterationResultFast(ctx, iterCtx, err, im, logger)
 }
 
 

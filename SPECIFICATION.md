@@ -693,12 +693,13 @@ If the worker pool has reached `max_vus` and a new token is available, the frame
 `gtest.pacing.dropped_iterations` and discards the token (does not block or back-pressure). This is
 intentional: arrival rate is an open model and cannot block the arrival clock.
 
-### 8.4 Pacing Goroutine Safety
+### 8.4 Pacing Goroutine Safety & Worker Pooling
 
 - All VU goroutines are tracked in a `sync.WaitGroup`. `Execute()` blocks on `wg.Wait()` before proceeding
   to Teardown.
-- Worker pool is bounded via a semaphore channel of size `max_vus` (for `arrival_rate`) or pre-sized to
-  `vus` (for `constant_vus`).
+- **Worker Pool Model:** For `arrival_rate`, the engine maintains a pre-allocated worker pool of size `max_vus` consuming dispatched iteration jobs from a bounded channel, eliminating steady-state goroutine creation overhead. For `constant_vus`, `vus` persistent goroutines are spawned.
+- **Zero-Allocation VU Loop:** Virtual User contexts (`ScenarioContext`) are allocated once per worker goroutine and reused across iterations, updating only iteration identity and active context in place.
+- **Go Runtime Tuning:** For high-throughput load generation, operators should set `GOMEMLIMIT` (80–90% of memory limit) and elevated `GOGC` (200–500) to minimize runtime GC pauses during scenario execution.
 
 ---
 
@@ -709,12 +710,13 @@ intentional: arrival rate is an open model and cannot block the arrival clock.
 | Metric Type | Implementation | Thread Safety |
 |-------------|----------------|---------------|
 | Counter | `atomic.Int64` | Lock-free |
-| Gauge | `atomic.Value` (float64 bits) | Lock-free |
-| Duration | Per-VU HDR histogram; merged at report time | No contention during write path |
+| Gauge | `atomic.Uint64` (float64 bits) | Lock-free |
+| Duration | 16-stripe sharded HDR Histograms & per-VU histograms; merged at report time | Contention-free striped write path |
 | Rate | Two `atomic.Int64` values (numerator accumulator, denominator accumulator) | Lock-free |
+| Metric Lookup | Copy-on-Write `atomic.Pointer[map[metricKey]V]` | 100% Lock-free reads |
 
 **HDR Histogram Library:** `github.com/HdrHistogram/hdrhistogram-go` with a default range of 1µs to 60s
-and 3 significant digits of precision. Each VU owns its own histogram instance. At report time, histograms
+and 3 significant digits of precision. Durations are striped across 16 mutex-guarded shards (or dedicated per-VU instances), eliminating global mutex contention. At report time, histograms
 are merged using HDR's native `Merge()` function and percentiles extracted from the merged result.
 
 ### 9.2 Metric Registration & Identity

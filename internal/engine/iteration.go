@@ -7,6 +7,27 @@ import (
 	"github.com/morphy76/gtest/internal/metric"
 )
 
+// iterationMetrics holds pre-resolved built-in counter handles for zero-lookup iteration recording.
+type iterationMetrics struct {
+	total   metric.Counter
+	failed  metric.Counter
+	timeout metric.Counter
+	panics  metric.Counter
+}
+
+func newIterationMetrics(metrics metric.Collector) iterationMetrics {
+	if metrics == nil {
+		return iterationMetrics{}
+	}
+	emptyTags := metric.Tags{}
+	return iterationMetrics{
+		total:   metrics.Counter(metric.MetricIterationsTotal, emptyTags),
+		failed:  metrics.Counter(metric.MetricIterationsFailed, emptyTags),
+		timeout: metrics.Counter(metric.MetricIterationsTimeout, emptyTags),
+		panics:  metrics.Counter(metric.MetricVUPanics, emptyTags),
+	}
+}
+
 // recordIterationResult handles metrics and logging for a completed or interrupted RunVU iteration.
 // It differentiates between:
 // 1. Scenario completion / cancellation (parent ctx.Err() != nil):
@@ -23,10 +44,22 @@ func recordIterationResult(
 	metrics metric.Collector,
 	logger log.Logger,
 ) {
+	recordIterationResultFast(ctx, iterCtx, err, newIterationMetrics(metrics), logger)
+}
+
+func recordIterationResultFast(
+	ctx context.Context,
+	iterCtx context.Context,
+	err error,
+	im iterationMetrics,
+	logger log.Logger,
+) {
 	if ctx.Err() != nil {
 		// Scenario lifecycle context was cancelled or expired.
 		if err == nil {
-			metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
+			if im.total != nil {
+				im.total.Inc()
+			}
 		} else if logger != nil {
 			logger.Debug().Err(err).Msg("RunVU iteration interrupted by scenario completion")
 		}
@@ -34,19 +67,31 @@ func recordIterationResult(
 	}
 
 	if iterCtx.Err() == context.DeadlineExceeded {
-		metrics.Counter(metric.MetricIterationsTimeout, metric.Tags{}).Inc()
-		metrics.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
-		metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
+		if im.timeout != nil {
+			im.timeout.Inc()
+		}
+		if im.failed != nil {
+			im.failed.Inc()
+		}
+		if im.total != nil {
+			im.total.Inc()
+		}
 		if logger != nil {
 			logger.Error().Err(iterCtx.Err()).Msg("RunVU iteration timed out")
 		}
 	} else if err != nil {
-		metrics.Counter(metric.MetricIterationsFailed, metric.Tags{}).Inc()
-		metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
+		if im.failed != nil {
+			im.failed.Inc()
+		}
+		if im.total != nil {
+			im.total.Inc()
+		}
 		if logger != nil {
 			logger.Error().Err(err).Msg("RunVU returned error")
 		}
 	} else {
-		metrics.Counter(metric.MetricIterationsTotal, metric.Tags{}).Inc()
+		if im.total != nil {
+			im.total.Inc()
+		}
 	}
 }

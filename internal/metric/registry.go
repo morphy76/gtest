@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 // MetricType identifies the kind of metric registered under a name.
@@ -59,34 +60,66 @@ type Registry interface {
 }
 
 type registry struct {
-	mu        sync.RWMutex
-	nameTypes map[string]MetricType
+	mu      sync.Mutex
+	readMap atomic.Pointer[map[string]MetricType]
 }
 
 // NewRegistry creates a new thread-safe metric Registry with built-in metrics registered.
 func NewRegistry() Registry {
-	r := &registry{
-		nameTypes: make(map[string]MetricType),
+	r := &registry{}
+	initial := map[string]MetricType{
+		MetricChecksPassed: MetricTypeCounter,
+		MetricChecksFailed: MetricTypeCounter,
 	}
-	r.nameTypes[MetricChecksPassed] = MetricTypeCounter
-	r.nameTypes[MetricChecksFailed] = MetricTypeCounter
+	r.readMap.Store(&initial)
 	return r
 }
 
 // Register registers a metric name with a given MetricType.
 // Returns an *ErrTypeCollision if the name was already registered with a different type.
 func (r *registry) Register(name string, mt MetricType) error {
+	m := r.readMap.Load()
+	if m != nil {
+		if existing, ok := (*m)[name]; ok {
+			if existing != mt {
+				return &ErrTypeCollision{
+					Name:     name,
+					Existing: existing,
+					New:      mt,
+				}
+			}
+			return nil
+		}
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if existing, ok := r.nameTypes[name]; ok && existing != mt {
-		return &ErrTypeCollision{
-			Name:     name,
-			Existing: existing,
-			New:      mt,
+	m = r.readMap.Load()
+	if m != nil {
+		if existing, ok := (*m)[name]; ok {
+			if existing != mt {
+				return &ErrTypeCollision{
+					Name:     name,
+					Existing: existing,
+					New:      mt,
+				}
+			}
+			return nil
 		}
 	}
-	r.nameTypes[name] = mt
+
+	var newMap map[string]MetricType
+	if m != nil {
+		newMap = make(map[string]MetricType, len(*m)+1)
+		for k, v := range *m {
+			newMap[k] = v
+		}
+	} else {
+		newMap = make(map[string]MetricType, 1)
+	}
+	newMap[name] = mt
+	r.readMap.Store(&newMap)
 	return nil
 }
 
@@ -106,20 +139,25 @@ func (r *registry) RegisterMetric(name string, m Metric) error {
 }
 
 // MetricType returns the registered type for the given name, or false if unregistered.
+// 100% lock-free via atomic pointer load.
 func (r *registry) MetricType(name string) (MetricType, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	mt, ok := r.nameTypes[name]
+	m := r.readMap.Load()
+	if m == nil {
+		return 0, false
+	}
+	mt, ok := (*m)[name]
 	return mt, ok
 }
 
 // NamesByType returns sorted unique names for a given metric type.
 func (r *registry) NamesByType(mt MetricType) []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	m := r.readMap.Load()
+	if m == nil {
+		return nil
+	}
 
 	var names []string
-	for name, t := range r.nameTypes {
+	for name, t := range *m {
 		if t == mt {
 			names = append(names, name)
 		}

@@ -2,6 +2,7 @@ package metric
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	hdrhistogram "github.com/HdrHistogram/hdrhistogram-go"
@@ -16,21 +17,29 @@ const (
 	histSignificantFigures = 3
 )
 
-// histogram implements gtest.Duration using HDR histograms merged at report time.
-// The default path uses a single shared histogram protected by a mutex.
-// For zero-contention writes, callers can use CreateVUHistogram() per goroutine
-// and AddHistogram() at cleanup time.
+const histShards = 16
+
+type histShard struct {
+	mu   sync.Mutex
+	hist *hdrhistogram.Histogram
+}
+
+// histogram implements gtest.Duration using sharded HDR histograms merged at report time.
+// Observations are striped across 16 independent mutex-guarded shards to eliminate lock contention.
 type histogram struct {
+	shards     [histShards]histShard
+	seq        atomic.Uint32
 	mu         sync.Mutex
-	shared     *hdrhistogram.Histogram // primary write target for Observe()
 	histograms []*hdrhistogram.Histogram
 }
 
-// newHistogram creates a new histogram container with a shared write histogram.
+// newHistogram creates a new histogram container with sharded write targets.
 func newHistogram() *histogram {
-	return &histogram{
-		shared: hdrhistogram.New(histMinValue, histMaxValue, histSignificantFigures),
+	h := &histogram{}
+	for i := 0; i < histShards; i++ {
+		h.shards[i].hist = hdrhistogram.New(histMinValue, histMaxValue, histSignificantFigures)
 	}
+	return h
 }
 
 // Type returns the metric type for histogram/duration.
@@ -40,6 +49,7 @@ func (h *histogram) Type() MetricType {
 
 // Observe records one latency sample. Durations are stored in microseconds.
 // Values below 1µs are clamped to 1µs. Values above 60s are clamped to 60s.
+// Observations are striped across independent shards for zero lock contention.
 func (h *histogram) Observe(d time.Duration) {
 	us := d.Microseconds()
 	if us < histMinValue {
@@ -49,9 +59,11 @@ func (h *histogram) Observe(d time.Duration) {
 		us = histMaxValue
 	}
 
-	h.mu.Lock()
-	_ = h.shared.RecordValue(us)
-	h.mu.Unlock()
+	shardIdx := h.seq.Add(1) % histShards
+	shard := &h.shards[shardIdx]
+	shard.mu.Lock()
+	_ = shard.hist.RecordValue(us)
+	shard.mu.Unlock()
 }
 
 // CreateVUHistogram returns a new HDR histogram instance that a VU can use directly.
@@ -80,18 +92,23 @@ type HistogramSnapshot struct {
 	P99   time.Duration
 }
 
-// Snapshot merges all recorded histograms (shared + per-VU) and extracts percentile statistics.
+// Snapshot merges all recorded histograms (shards + per-VU) and extracts percentile statistics.
 // Returns a zero snapshot if no data has been recorded.
 func (h *histogram) Snapshot() HistogramSnapshot {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Merge the shared histogram and any per-VU histograms.
 	merged := hdrhistogram.New(histMinValue, histMaxValue, histSignificantFigures)
 
-	if h.shared != nil && h.shared.TotalCount() > 0 {
-		merged.Merge(h.shared)
+	for i := 0; i < histShards; i++ {
+		shard := &h.shards[i]
+		shard.mu.Lock()
+		if shard.hist != nil && shard.hist.TotalCount() > 0 {
+			merged.Merge(shard.hist)
+		}
+		shard.mu.Unlock()
 	}
+
 	for _, hist := range h.histograms {
 		merged.Merge(hist)
 	}

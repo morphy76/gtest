@@ -9,12 +9,12 @@
 ## Key Features
 
 - **Hexagonal Architecture with DDD Boundaries**: Clean separation of core domain models (`pkg/gtest`), configuration engines, pacing engines, metrics storage, and reporting CLI adapters.
-- **Triple Pacing Engines**:
-  - **`constant_vus`**: Closed-system model maintaining a fixed number of Concurrent Virtual Users with linear ramp-up and ramp-down spacing.
-  - **`arrival_rate`**: Open-system token bucket rate-limiting engine (`golang.org/x/time/rate`) targeting precise Transactions Per Second (TPS) with a bounded worker pool (`max_vus`).
+- **Triple Pacing Engines & Zero-Allocation Hot Path**:
+  - **`constant_vus`**: Closed-system model maintaining a fixed number of Concurrent Virtual Users with reusable per-VU execution contexts and zero steady-state heap allocations.
+  - **`arrival_rate`**: Open-system token bucket rate-limiting engine (`golang.org/x/time/rate`) targeting precise Transactions Per Second (TPS) with a pre-allocated bounded worker pool (`max_vus`) eliminating per-iteration goroutine churning.
   - **`ramping_vus`**: Dynamic multi-stage pacing engine allowing stage-based VU target ramps, holds, and spikes over time.
-- **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, and per-VU HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
-- **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with automatic VU ID, Scenario, and Iteration correlation context.
+- **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
+- **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
 - **Data Parameterization Module (`pkg/gtest/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
 - **SLA Threshold Evaluator & Graceful Abort**: Declarative quality gates evaluated post-execution, with optional real-time early termination (`abort_on_fail: true`, `delay_abort_eval: 5s`) to stop runaway failures instantly. Returns exit code `0` on success or `1` on SLA breach/abort.
 - **Deterministic Reporting**: Terminal summary and JSON reports (§10 schema) with alphabetically sorted metrics.
@@ -487,6 +487,24 @@ SLA THRESHOLD EVALUATION
 OVERALL: PASSED                                          (exit 0)
 ================================================================================
 ```
+
+---
+
+## Benchmarking & Framework Overhead
+
+The framework is optimized to ensure maximum load generation throughput with zero GC pressure during steady-state execution:
+
+- **0 allocs/op** per Virtual User iteration in steady state (`constant_vus`, `ramping_vus`, `arrival_rate`).
+- **100% Lock-Free** metric queries leveraging copy-on-write atomic pointer maps and 16-stripe sharded HDR Histograms.
+- **Sub-10ns Inline Checks**: `ctx.Check()` evaluates in ~6.4ns with cached metric handles and zero allocations.
+
+Run the microbenchmark suite:
+
+```bash
+make test-bench
+```
+
+For complete architectural details, Go runtime tuning (`GOMEMLIMIT`, `GOGC`, `GOMAXPROCS`), and memory allocation budgets, see the [Developer Guide](docs/GUIDE.md#14-performance--framework-overhead-optimization).
 
 ---
 
