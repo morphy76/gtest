@@ -261,9 +261,9 @@ All duration fields use Go's `time.ParseDuration` format: `50ms`, `1s`, `5m`, `1
 | `Iteration()` | `ExecutionIdentity` | `int64` | 0-based iteration count (0 in PreTest/AfterTest) |
 | `ScenarioName()` | `ExecutionIdentity` | `string` | Active scenario name from YAML |
 | `Param(key)` | `ConfigProvider` | `string` | Read scenario `params` by key; `""` if absent |
-| `ParamInt(key, default)` | `ConfigProvider` | `int` | Parse param as int; returns default on failure |
-| `ParamDuration(key, default)` | `ConfigProvider` | `time.Duration` | Parse param as duration; returns default on failure |
-| `GlobalState(key)` | `StateProvider` | `any` | Read value from Setup's returned map (read-only) |
+| `ParamInt(key, default)` | `ConfigProvider` | `int` | Parse param as int; logs warning and returns default on parse failure |
+| `ParamDuration(key, default)` | `ConfigProvider` | `time.Duration` | Parse param as duration; logs warning and returns default on parse failure |
+| `GlobalState(key)` | `StateProvider` | `any` | Read value from Setup's returned map (shallow-copied, read-only) |
 | `Log()` | `ObservabilityProvider` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration |
 | `Metrics()` | `ObservabilityProvider` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
 | `Sleep(d ...time.Duration)` | `WorkflowController` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
@@ -348,11 +348,13 @@ If `RunVU` panics, the framework:
 3. Logs the panic value
 4. **Continues the iteration loop** (the VU is not killed)
 
-### GlobalState contract
+### GlobalState contract & Thread Safety
 
-- Setup returns `map[string]any` → the framework makes a **shallow copy**
-- All VUs share the **same copied map** (read-only)
-- **Do not mutate** the map from VU code — use `sync.Map` or channels for shared mutable state
+- Setup returns `map[string]any` → the framework makes a **shallow copy** of this map before starting VUs.
+- All VUs share the **same copied map** (read-only) via `ctx.GlobalState(key)`.
+- **Shallow Copy Limitation**: The shallow copy protects the top-level map keys from mutation, but does **not** perform a deep copy of nested mutable objects (e.g., slices, inner maps, pointer structures).
+- **Thread Safety Invariant**: If `Setup` returns complex nested structures or pointers, they must be treated as **immutable** by all VUs, or access must be protected using standard Go concurrency primitives (`sync.Mutex`, `sync.RWMutex`, atomic values, or thread-safe types like `sync.Map`).
+- **Do not mutate** shared state from VU code without synchronization.
 
 ---
 

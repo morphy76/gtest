@@ -93,9 +93,9 @@ type Scenario struct {
 | `ctx.Iteration()` | Returns the 0-based iteration index (`int64`). |
 | `ctx.ScenarioName()` | Returns the scenario string identifier. |
 | `ctx.Param(key)` | Returns scenario param string from YAML config. |
-| `ctx.ParamInt(key, default)` | Parses scenario param as integer. |
-| `ctx.ParamDuration(key, default)` | Parses scenario param as `time.Duration` (e.g. `200ms`). |
-| `ctx.GlobalState(key)` | Accesses values returned by the `Setup` hook. |
+| `ctx.ParamInt(key, default)` | Parses scenario param as integer (logs warning and returns default on parse failure). |
+| `ctx.ParamDuration(key, default)` | Parses scenario param as `time.Duration` (e.g. `200ms`, logs warning and returns default on parse failure). |
+| `ctx.GlobalState(key)` | Accesses values returned by the `Setup` hook (shallow-copied, read-only). |
 | `ctx.Log()` | Structured `Logger` instance bound with VU ID and iteration context. |
 | `ctx.Metrics()` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
 | `ctx.Sleep(d ...time.Duration)` | Pauses for explicit duration or configured `interaction_delay` strategy (respects `ctx.Done()`). |

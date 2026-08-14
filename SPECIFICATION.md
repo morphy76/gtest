@@ -255,11 +255,11 @@ type ConfigProvider interface {
     Param(key string) string
 
     // ParamInt retrieves a params value parsed as int.
-    // Returns defaultValue if key is absent or value cannot be parsed.
+    // Returns defaultValue if key is absent. If present but unparseable, emits a Warn-level log and returns defaultValue.
     ParamInt(key string, defaultValue int) int
 
     // ParamDuration retrieves a params value parsed as time.Duration.
-    // Returns defaultValue if key is absent or value cannot be parsed.
+    // Returns defaultValue if key is absent. If present but unparseable, emits a Warn-level log and returns defaultValue.
     ParamDuration(key string, defaultValue time.Duration) time.Duration
 }
 
@@ -302,8 +302,10 @@ type ScenarioContext interface {
 ```
 
 > **Note on Global State Thread Safety:** The `map[string]any` returned by `Setup` is treated as **immutable**
-> after Setup returns. The framework makes a shallow copy and exposes it read-only via `GlobalState()`. Test
-> developers must not store mutable pointers inside the Setup state map without their own synchronization.
+> after Setup returns. The framework makes a shallow copy of the map and exposes it read-only via `GlobalState()`.
+> **Shallow Copy Limitation:** Shallow copy only clones top-level map keys and does not deep-copy nested mutable
+> structures (e.g. slices, maps, pointer structs). Test developers must ensure that any complex objects returned
+> by `Setup` are strictly immutable or protected with thread-safe concurrency primitives (`sync.RWMutex`, `sync.Map`, etc.).
 
 ### 4.4 Hook Types
 

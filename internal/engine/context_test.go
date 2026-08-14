@@ -1,13 +1,18 @@
 package engine_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/engine"
+	"github.com/morphy76/gtest/internal/log"
+	"github.com/morphy76/gtest/internal/metric"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -286,6 +291,108 @@ func TestScenarioContext_InterfaceSegregation(t *testing.T) {
 
 		failed := wc.Check("is_fail", func() string { return "check error" })
 		assert.False(t, failed)
+	})
+}
+
+func TestScenarioContext_ParamParsingWarnings(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.New(&buf, zerolog.DebugLevel)
+	metrics := metric.NewStore()
+
+	cfg := config.ScenarioConfig{
+		Params: map[string]string{
+			"valid_int":   "42",
+			"invalid_int": "abc",
+			"valid_dur":   "250ms",
+			"invalid_dur": "not_a_duration",
+			"empty_param": "",
+		},
+	}
+
+	sCtx := engine.NewScenarioContext(context.Background(), 1, 0, cfg, "test_scenario", nil, logger, metrics)
+
+	t.Run("ParamInt with valid int does not log warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamInt("valid_int", 10)
+		assert.Equal(t, 42, val)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("ParamInt with missing key does not log warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamInt("missing_key", 10)
+		assert.Equal(t, 10, val)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("ParamInt with empty value does not log warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamInt("empty_param", 10)
+		assert.Equal(t, 10, val)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("ParamInt with invalid value returns default and logs warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamInt("invalid_int", 99)
+		assert.Equal(t, 99, val)
+
+		var logEntry map[string]any
+		err := json.Unmarshal(buf.Bytes(), &logEntry)
+		require.NoError(t, err, "log should be valid json: %s", buf.String())
+		assert.Equal(t, "warn", logEntry["level"])
+		assert.Equal(t, "invalid_int", logEntry["key"])
+		assert.Equal(t, "abc", logEntry["value"])
+		assert.Equal(t, float64(99), logEntry["default"])
+		assert.NotEmpty(t, logEntry["error"])
+		assert.Contains(t, logEntry["message"], "failed to parse param as integer")
+	})
+
+	t.Run("ParamDuration with valid duration does not log warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamDuration("valid_dur", time.Second)
+		assert.Equal(t, 250*time.Millisecond, val)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("ParamDuration with missing key does not log warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamDuration("missing_key", time.Second)
+		assert.Equal(t, time.Second, val)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("ParamDuration with empty value does not log warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamDuration("empty_param", time.Second)
+		assert.Equal(t, time.Second, val)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("ParamDuration with invalid value returns default and logs warning", func(t *testing.T) {
+		buf.Reset()
+		val := sCtx.ParamDuration("invalid_dur", 5*time.Second)
+		assert.Equal(t, 5*time.Second, val)
+
+		var logEntry map[string]any
+		err := json.Unmarshal(buf.Bytes(), &logEntry)
+		require.NoError(t, err, "log should be valid json: %s", buf.String())
+		assert.Equal(t, "warn", logEntry["level"])
+		assert.Equal(t, "invalid_dur", logEntry["key"])
+		assert.Equal(t, "not_a_duration", logEntry["value"])
+		assert.Equal(t, float64(5000), logEntry["default"])
+		assert.NotEmpty(t, logEntry["error"])
+		assert.Contains(t, logEntry["message"], "failed to parse param as duration")
+	})
+
+	t.Run("Nil logger does not panic on parse failure", func(t *testing.T) {
+		nilLoggerCtx := engine.NewScenarioContext(context.Background(), 1, 0, cfg, "test_scenario", nil, nil, metrics)
+		assert.NotPanics(t, func() {
+			valInt := nilLoggerCtx.ParamInt("invalid_int", 123)
+			assert.Equal(t, 123, valInt)
+			valDur := nilLoggerCtx.ParamDuration("invalid_dur", 3*time.Second)
+			assert.Equal(t, 3*time.Second, valDur)
+		})
 	})
 }
 
