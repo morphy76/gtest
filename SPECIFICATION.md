@@ -51,7 +51,12 @@ github.com/morphy76/gtest/               ← module root
 │   ├── sla/                             ← Threshold evaluation and results
 │   ├── log/                             ← Zerolog adapter implementing gtest.Logger
 │   ├── cli/                             ← CLI flag parsing
-│   └── report/                          ← Console and JSON report formatters
+│   ├── report/                          ← Console and JSON report formatters
+│   └── runner/                          ← Execution orchestration & lifecycle dispatch
+│       ├── resolver.go                  ← Scenario & config resolution
+│       ├── summary.go                   ← Summary data aggregation & sorting
+│       ├── reporter.go                  ← Report generation & summary hook dispatch
+│       └── runner.go                    ← Suite execution coordinator
 │
 └── examples/
     ├── http_checkout/                   ← REST API load test (constant_vus)
@@ -1078,7 +1083,7 @@ scenarios:
 **Deliverables:**
 - `pkg/gtest/scenario.go` — `SummaryHook` type (`func(ctx context.Context, summary SummaryData) error`) and `Scenario.HandleSummary` field
 - `pkg/gtest/summary.go` — `SummaryData` export struct containing run metadata, metrics snapshot, and SLA results
-- `internal/runner/runner.go` — post-report execution of `HandleSummary`
+- `internal/runner/reporter.go` & `internal/runner/runner.go` — post-report execution of `HandleSummary`
 
 **Acceptance Criteria:**
 
