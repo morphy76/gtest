@@ -94,12 +94,18 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 				},
 			})
 
-			<-r.Context().Done()
+			// Run context listener in a goroutine to avoid blocking SSE writes
+			go func() {
+				<-r.Context().Done()
 
-			mu.Lock()
-			delete(channels, dialogID)
-			delete(channels, strings.TrimPrefix(dialogID, "dlg-"))
-			mu.Unlock()
+				mu.Lock()
+				delete(channels, dialogID)
+				delete(channels, strings.TrimPrefix(dialogID, "dlg-"))
+				mu.Unlock()
+			}()
+
+			// Keep connection alive until context closes
+			<-r.Context().Done()
 			return
 		}
 
@@ -414,4 +420,3 @@ func TestConversationFlow_ThinkingTimeOnlyBeforeNextMessage(t *testing.T) {
 		assert.Empty(t, ctx.sleepCalls, "must not sleep when turns are exhausted")
 	})
 }
-
