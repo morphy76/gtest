@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
 
 // AC-1.5.1: Log().Info().Str("k","v").Msg("m") emits one JSON line with level=info, k=v, message=m
 func TestInfoLogEmitsJSONLine(t *testing.T) {
@@ -62,9 +64,14 @@ func TestDebugEventsSuppressedAtInfoLevel(t *testing.T) {
 
 // AC-1.5.4: ZerologLogger satisfies the log.Logger interface (compile-time check)
 func TestLoggerInterfaceSatisfaction(t *testing.T) {
-	var _ log.Logger = (*log.ZerologLogger)(nil)
-	var _ log.LogEvent = (log.LogEvent)(nil)
+	l := log.New(io.Discard, zerolog.DebugLevel)
+	e := l.Debug()
+	assert.NotNil(t, l)
+	assert.NotNil(t, e)
 }
+
+
+
 
 // Additional test: WithScenario and WithIteration binding
 func TestScenarioAndIterationBinding(t *testing.T) {

@@ -135,7 +135,7 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	var exitCode int = -1
+	exitCode := -1
 
 	exitFunc := func(code int) {
 		exitCode = code
@@ -180,11 +180,12 @@ scenarios:
 	})
 
 	var stdout bytes.Buffer
-	var exitCode int = -1
+	exitCode := -1
 
 	exitFunc := func(code int) {
 		exitCode = code
 	}
+
 
 	err := suite.ExecuteWithArgs([]string{"--config", configPath}, &stdout, exitFunc)
 	require.NoError(t, err)

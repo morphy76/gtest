@@ -156,7 +156,10 @@ suite.RegisterScenario("checkout_flow", gtest.Scenario{
             ctx.Metrics().Counter("errors", gtest.Tags{}).Inc()
             return err
         }
-        defer resp.Body.Close()
+        defer func() {
+            _ = resp.Body.Close()
+        }()
+
 
         ctx.Metrics().Counter("requests", gtest.Tags{"status": fmt.Sprint(resp.StatusCode)}).Inc()
         return nil
@@ -501,9 +504,10 @@ RunVU: func(ctx gtest.ScenarioContext) error {
             ctx.Metrics().Counter("http_errors", tags).Inc()
             ctx.Metrics().Rate("success_rate", gtest.Tags{}).Add(0, 1)
         } else {
-            resp.Body.Close()
+            _ = resp.Body.Close()
             ctx.Metrics().Rate("success_rate", gtest.Tags{}).Add(1, 1)
         }
+
     }
     return nil
 },

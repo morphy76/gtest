@@ -45,10 +45,13 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 	}
 
 	if flags.ShowVersion {
-		fmt.Fprintf(stdout, "gtest version %s (commit: %s, build_time: %s)\n",
-			version.Version, version.Commit, version.BuildTime)
+		if _, err := fmt.Fprintf(stdout, "gtest version %s (commit: %s, build_time: %s)\n",
+			version.Version, version.Commit, version.BuildTime); err != nil {
+			return err
+		}
 		return nil
 	}
+
 
 	cfg, err := config.LoadFromFile(flags.ConfigPath)
 	if err != nil {

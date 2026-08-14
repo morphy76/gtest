@@ -115,7 +115,7 @@ func TestOpenConversationAndAwaitBotResponse(t *testing.T) {
 				},
 			}
 			b, _ := json.Marshal(createdEvent)
-			fmt.Fprintf(w, "data: %s\n\n", b)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", b)
 			flusher.Flush()
 
 			// Wait a bit and send bot message event
@@ -128,8 +128,9 @@ func TestOpenConversationAndAwaitBotResponse(t *testing.T) {
 				},
 			}
 			b2, _ := json.Marshal(botEvent)
-			fmt.Fprintf(w, "data: %s\n\n", b2)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", b2)
 			flusher.Flush()
+
 
 			// Keep open until request canceled
 			<-r.Context().Done()
@@ -190,8 +191,9 @@ func TestAwaitBotResponse_Timeout(t *testing.T) {
 			},
 		}
 		b, _ := json.Marshal(createdEvent)
-		fmt.Fprintf(w, "data: %s\n\n", b)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", b)
 		flusher.Flush()
+
 
 		<-r.Context().Done()
 	}))

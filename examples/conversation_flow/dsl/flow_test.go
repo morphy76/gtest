@@ -25,9 +25,10 @@ func sendSSEEvent(ch *sseTestChannel, payload any) {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	data, _ := json.Marshal(payload)
-	fmt.Fprintf(ch.w, "data: %s\n\n", data)
+	_, _ = fmt.Fprintf(ch.w, "data: %s\n\n", data)
 	ch.flusher.Flush()
 }
+
 
 func splitPath(path string) []string {
 	var parts []string

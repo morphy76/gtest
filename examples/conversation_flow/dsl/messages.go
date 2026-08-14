@@ -23,7 +23,10 @@ func LoadMessages(filePath string) ([]Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open messages file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
+
 
 	reader := csv.NewReader(f)
 	reader.LazyQuotes = true
