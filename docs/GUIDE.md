@@ -419,6 +419,33 @@ thresholds:
     target: "1000"
 ```
 
+### 8.1 Early Stop / Graceful Abort (`abort_on_fail`)
+
+Configure `abort_on_fail: true` on any threshold entry to immediately terminate test execution if that threshold is breached during execution, preventing wasted test execution or runaway system degradation.
+
+Optionally specify `delay_abort_eval` to establish a warm-up grace period before early termination monitoring begins:
+
+```yaml
+thresholds:
+  - metric: gtest.vu.iterations_failed
+    stat: count
+    operator: "=="
+    target: "0"
+    abort_on_fail: true
+    delay_abort_eval: 5s   # Ignore failures during first 5 seconds of ramp-up
+
+  - metric: http_request_duration
+    stat: p95
+    operator: "<"
+    target: "500ms"
+    abort_on_fail: true
+```
+
+When an early stop is triggered:
+1. All active VU contexts are cancelled immediately (`ctx.Done()`).
+2. The terminal summary report displays `OVERALL: ABORTED (exit 1)` along with the triggering threshold reason.
+3. The process exits with code `1`.
+
 ### Exit codes
 
 - **Exit 0**: All thresholds pass → `OVERALL: PASSED`

@@ -118,18 +118,23 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 	// Evaluate SLA thresholds
 	thresholdResults := sla.Evaluate(scenarioCfg.Thresholds, metricsStore)
 	allPassed := sla.AllPassed(thresholdResults)
+	if executor.Aborted {
+		allPassed = false
+	}
 
 	reportData := report.ReportData{
-		SuiteName:  s.Name(),
-		Scenario:   targetScenario,
-		Version:    version.Version,
-		Commit:     version.Commit,
-		StartedAt:  startedAt,
-		EndedAt:    endedAt,
-		Config:     scenarioCfg,
-		Metrics:    metricsStore,
-		Thresholds: thresholdResults,
-		Passed:     allPassed,
+		SuiteName:   s.Name(),
+		Scenario:    targetScenario,
+		Version:     version.Version,
+		Commit:      version.Commit,
+		StartedAt:   startedAt,
+		EndedAt:     endedAt,
+		Config:      scenarioCfg,
+		Metrics:     metricsStore,
+		Thresholds:  thresholdResults,
+		Passed:      allPassed,
+		Aborted:     executor.Aborted,
+		AbortReason: executor.AbortReason,
 	}
 
 	if err := report.WriteReport(stdout, flags.ReportFormat, flags.ReportOut, reportData); err != nil {
@@ -154,6 +159,8 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 			metricsStore,
 			thresholdResults,
 			allPassed,
+			executor.Aborted,
+			executor.AbortReason,
 		)
 		if err := scenario.HandleSummary(context.Background(), summaryData); err != nil {
 			logger.Error().Err(err).Msg("HandleSummary hook error")
@@ -182,6 +189,8 @@ func buildSummaryData(
 	metricsStore *metric.Store,
 	thresholdResults []sla.ThresholdResult,
 	allPassed bool,
+	aborted bool,
+	abortReason string,
 ) engine.SummaryData {
 	duration := endedAt.Sub(startedAt)
 	if duration < 0 {
@@ -292,18 +301,20 @@ func buildSummaryData(
 	}
 
 	return engine.SummaryData{
-		SuiteName:  suiteName,
-		Scenario:   scenarioName,
-		Version:    versionStr,
-		Commit:     commitStr,
-		StartedAt:  startedAt,
-		EndedAt:    endedAt,
-		Duration:   duration,
-		Config:     cfg,
-		Metrics:    metrics,
-		Checks:     checks,
-		Thresholds: thresholds,
-		Passed:     allPassed,
+		SuiteName:   suiteName,
+		Scenario:    scenarioName,
+		Version:     versionStr,
+		Commit:      commitStr,
+		StartedAt:   startedAt,
+		EndedAt:     endedAt,
+		Duration:    duration,
+		Config:      cfg,
+		Metrics:     metrics,
+		Checks:      checks,
+		Thresholds:  thresholds,
+		Passed:      allPassed,
+		Aborted:     aborted,
+		AbortReason: abortReason,
 	}
 }
 

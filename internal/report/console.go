@@ -157,7 +157,13 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 
 	verdict := "PASSED"
 	exitCode := 0
-	if !data.Passed {
+	if data.Aborted {
+		verdict = "ABORTED"
+		exitCode = 1
+		if data.AbortReason != "" {
+			fmt.Fprintf(&sb, "ABORT REASON: %s\n", data.AbortReason)
+		}
+	} else if !data.Passed {
 		verdict = "FAILED"
 		exitCode = 1
 	}
