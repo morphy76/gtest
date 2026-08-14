@@ -47,7 +47,7 @@ github.com/morphy76/gtest/               ← module root
 │   │   └── version.go                   ← Version, Commit, BuildTime vars (ldflags target)
 │   ├── config/                          ← YAML loading, validation, Config/ScenarioConfig types
 │   ├── engine/                          ← VU lifecycle, pacing (constant_vus, arrival_rate)
-│   ├── metric/                          ← In-memory metrics engine (Registry, Collector, Aggregator, Store)
+│   ├── metric/                          ← In-memory metrics engine (Registry, Collector, Aggregator, Reader, Store)
 │   ├── sla/                             ← Threshold evaluation and results
 │   ├── log/                             ← Zerolog adapter implementing gtest.Logger
 │   ├── cli/                             ← CLI flag parsing
@@ -801,6 +801,7 @@ Return structured errors for all failure modes.
 - `internal/metric/registry.go` — `Registry` interface & thread-safe type registry
 - `internal/metric/collector.go` — `Collector` interface & metric ingestion with generic double-checked locking sync helper
 - `internal/metric/aggregator.go` — `Aggregator` interface & summary statistics computation
+- `internal/metric/reader.go` — `Reader` interface composing `Registry` and `Aggregator`
 - `internal/metric/store.go` — `Store` composing Registry, Collector, and Aggregator
 - `internal/metric/counter.go`, `gauge.go`, `histogram.go`, `rate.go` — concrete metric types
 - HDR histogram per-VU lifetime management and merge API for report time

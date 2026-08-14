@@ -230,3 +230,76 @@ func TestRateNoDataReturnsNoData(t *testing.T) {
 	assert.Equal(t, "no data", res.Actual)
 	assert.Equal(t, "no data", res.Reason)
 }
+
+type mockMetricReader struct {
+	metricTypes map[string]metric.MetricType
+	histograms  map[string]metric.HistogramSnapshot
+	counters    map[string]int64
+	rates       map[string]float64
+	rateHasData map[string]bool
+	gauges      map[string]float64
+}
+
+func (m *mockMetricReader) MetricType(name string) (metric.MetricType, bool) {
+	mt, ok := m.metricTypes[name]
+	return mt, ok
+}
+
+func (m *mockMetricReader) MergedHistogramSnapshot(name string) metric.HistogramSnapshot {
+	return m.histograms[name]
+}
+
+func (m *mockMetricReader) AggregatedCounterValue(name string) int64 {
+	return m.counters[name]
+}
+
+func (m *mockMetricReader) RateData(name string) (float64, bool) {
+	val, ok := m.rates[name]
+	hasData := m.rateHasData[name]
+	return val, ok && hasData
+}
+
+func (m *mockMetricReader) LastGaugeValue(name string) float64 {
+	return m.gauges[name]
+}
+
+func TestEvaluateWithMockMetricReader(t *testing.T) {
+	mockReader := &mockMetricReader{
+		metricTypes: map[string]metric.MetricType{
+			"mock_duration": metric.MetricTypeDuration,
+			"mock_counter":  metric.MetricTypeCounter,
+		},
+		histograms: map[string]metric.HistogramSnapshot{
+			"mock_duration": {
+				Count: 10,
+				P95:   80 * time.Millisecond,
+			},
+		},
+		counters: map[string]int64{
+			"mock_counter": 150,
+		},
+	}
+
+	thresholds := []config.ThresholdConfig{
+		{
+			Metric:         "mock_duration",
+			Stat:           "p95",
+			Operator:       "<",
+			Target:         "100ms",
+			TargetDuration: 100 * time.Millisecond,
+		},
+		{
+			Metric:      "mock_counter",
+			Stat:        "count",
+			Operator:    ">=",
+			Target:      "100",
+			TargetFloat: 100,
+		},
+	}
+
+	results := sla.Evaluate(thresholds, mockReader)
+	require.Len(t, results, 2)
+	assert.True(t, results[0].Passed)
+	assert.True(t, results[1].Passed)
+	assert.True(t, sla.AllPassed(results))
+}

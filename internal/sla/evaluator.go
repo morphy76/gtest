@@ -9,18 +9,27 @@ import (
 	"github.com/morphy76/gtest/internal/metric"
 )
 
-// Evaluate checks all threshold configurations against the metrics store snapshot.
+// MetricReader defines the read-only metric capabilities required by the SLA evaluator.
+type MetricReader interface {
+	MetricType(name string) (metric.MetricType, bool)
+	MergedHistogramSnapshot(name string) metric.HistogramSnapshot
+	AggregatedCounterValue(name string) int64
+	RateData(name string) (float64, bool)
+	LastGaugeValue(name string) float64
+}
+
+// Evaluate checks all threshold configurations against the metrics reader.
 // It evaluates EVERY threshold in order (no short-circuiting) and returns a slice of results.
-func Evaluate(thresholds []config.ThresholdConfig, store *metric.Store) []ThresholdResult {
+func Evaluate(thresholds []config.ThresholdConfig, reader MetricReader) []ThresholdResult {
 	results := make([]ThresholdResult, 0, len(thresholds))
 	for _, th := range thresholds {
-		results = append(results, EvaluateThreshold(th, store))
+		results = append(results, EvaluateThreshold(th, reader))
 	}
 	return results
 }
 
-// EvaluateThreshold evaluates a single threshold configuration against the metrics store.
-func EvaluateThreshold(th config.ThresholdConfig, store *metric.Store) ThresholdResult {
+// EvaluateThreshold evaluates a single threshold configuration against the metrics reader.
+func EvaluateThreshold(th config.ThresholdConfig, reader MetricReader) ThresholdResult {
 	res := ThresholdResult{
 		Threshold: th,
 		Metric:    th.Metric,
@@ -29,7 +38,7 @@ func EvaluateThreshold(th config.ThresholdConfig, store *metric.Store) Threshold
 		Target:    th.Target,
 	}
 
-	_, exists := store.MetricType(th.Metric)
+	_, exists := reader.MetricType(th.Metric)
 	if !exists {
 		res.Passed = false
 		res.Actual = "no data"
@@ -38,7 +47,7 @@ func EvaluateThreshold(th config.ThresholdConfig, store *metric.Store) Threshold
 	}
 
 	if config.IsDurationStat(th.Stat) {
-		snap := store.MergedHistogramSnapshot(th.Metric)
+		snap := reader.MergedHistogramSnapshot(th.Metric)
 		if snap.Count == 0 {
 			res.Passed = false
 			res.Actual = "no data"
@@ -74,11 +83,11 @@ func EvaluateThreshold(th config.ThresholdConfig, store *metric.Store) Threshold
 	var actualFloat float64
 	switch th.Stat {
 	case "count":
-		c := store.AggregatedCounterValue(th.Metric)
+		c := reader.AggregatedCounterValue(th.Metric)
 		actualFloat = float64(c)
 		res.Actual = strconv.FormatInt(c, 10)
 	case "rate":
-		rateVal, hasData := store.RateData(th.Metric)
+		rateVal, hasData := reader.RateData(th.Metric)
 		if !hasData {
 			res.Passed = false
 			res.Actual = "no data"
@@ -88,7 +97,7 @@ func EvaluateThreshold(th config.ThresholdConfig, store *metric.Store) Threshold
 		actualFloat = rateVal
 		res.Actual = strconv.FormatFloat(actualFloat, 'f', -1, 64)
 	case "value":
-		actualFloat = store.LastGaugeValue(th.Metric)
+		actualFloat = reader.LastGaugeValue(th.Metric)
 		res.Actual = strconv.FormatFloat(actualFloat, 'f', -1, 64)
 	default:
 		res.Passed = false

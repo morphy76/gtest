@@ -22,7 +22,7 @@ type ReportParams struct {
 	Scenario         engine.Scenario
 	ScenarioCfg      config.ScenarioConfig
 	Flags            *cli.Flags
-	MetricsStore     *metric.Store
+	MetricsStore     metric.Reader
 	ThresholdResults []sla.ThresholdResult
 	AllPassed        bool
 	Aborted          bool

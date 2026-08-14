@@ -271,3 +271,103 @@ func TestAbortedReportFormat(t *testing.T) {
 	assert.Equal(t, "threshold breach on metric \"http_request_duration\" (p95 < 200ms, actual: 250ms)", doc.AbortReason)
 }
 
+type mockReportMetricReader struct {
+	histograms  map[string]metric.HistogramSnapshot
+	counters    map[string]int64
+	gauges      map[string]float64
+	rates       map[string]float64
+	checkSummaries []metric.CheckSummary
+}
+
+func (m *mockReportMetricReader) Register(name string, mt metric.MetricType) error { return nil }
+func (m *mockReportMetricReader) MustRegister(name string, mt metric.MetricType) {}
+func (m *mockReportMetricReader) RegisterMetric(name string, met metric.Metric) error { return nil }
+func (m *mockReportMetricReader) MetricType(name string) (metric.MetricType, bool) {
+	return metric.MetricTypeCounter, true
+}
+func (m *mockReportMetricReader) NamesByType(mt metric.MetricType) []string { return nil }
+func (m *mockReportMetricReader) CounterNames() []string {
+	names := make([]string, 0, len(m.counters))
+	for k := range m.counters {
+		names = append(names, k)
+	}
+	return names
+}
+func (m *mockReportMetricReader) GaugeNames() []string {
+	names := make([]string, 0, len(m.gauges))
+	for k := range m.gauges {
+		names = append(names, k)
+	}
+	return names
+}
+func (m *mockReportMetricReader) HistogramNames() []string {
+	names := make([]string, 0, len(m.histograms))
+	for k := range m.histograms {
+		names = append(names, k)
+	}
+	return names
+}
+func (m *mockReportMetricReader) RateNames() []string {
+	names := make([]string, 0, len(m.rates))
+	for k := range m.rates {
+		names = append(names, k)
+	}
+	return names
+}
+func (m *mockReportMetricReader) MergedHistogramSnapshot(name string) metric.HistogramSnapshot {
+	return m.histograms[name]
+}
+func (m *mockReportMetricReader) AggregatedCounterValue(name string) int64 {
+	return m.counters[name]
+}
+func (m *mockReportMetricReader) AggregatedRateValue(name string) float64 {
+	return m.rates[name]
+}
+func (m *mockReportMetricReader) RateData(name string) (float64, bool) {
+	val, ok := m.rates[name]
+	return val, ok
+}
+func (m *mockReportMetricReader) LastGaugeValue(name string) float64 {
+	return m.gauges[name]
+}
+func (m *mockReportMetricReader) CheckSummaries() []metric.CheckSummary {
+	return m.checkSummaries
+}
+
+func TestReportWithMockMetricReader(t *testing.T) {
+	mockReader := &mockReportMetricReader{
+		counters: map[string]int64{
+			"gtest.vu.iterations_total": 10,
+			"custom_counter":            5,
+		},
+		histograms: map[string]metric.HistogramSnapshot{
+			"custom_duration": {Count: 10, P95: 50 * time.Millisecond},
+		},
+		gauges: map[string]float64{
+			"custom_gauge": 1.23,
+		},
+		rates: map[string]float64{
+			"custom_rate": 0.99,
+		},
+	}
+
+	data := report.ReportData{
+		SuiteName: "Mock Suite",
+		Scenario:  "mock_scenario",
+		Metrics:   mockReader,
+		Passed:    true,
+	}
+
+	var consoleBuf bytes.Buffer
+	err := report.GenerateConsoleReport(&consoleBuf, data)
+	require.NoError(t, err)
+	assert.Contains(t, consoleBuf.String(), "mock_scenario")
+	assert.Contains(t, consoleBuf.String(), "custom_counter")
+
+	var jsonBuf bytes.Buffer
+	err = report.GenerateJSONReport(&jsonBuf, data)
+	require.NoError(t, err)
+	assert.Contains(t, jsonBuf.String(), "Mock Suite")
+	assert.Contains(t, jsonBuf.String(), "custom_counter")
+}
+

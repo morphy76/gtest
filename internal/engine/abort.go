@@ -8,7 +8,6 @@ import (
 
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
 	"github.com/morphy76/gtest/internal/sla"
 )
 
@@ -20,7 +19,7 @@ func MonitorAbortThresholds(
 	cancel context.CancelFunc,
 	startTime time.Time,
 	thresholds []config.ThresholdConfig,
-	store *metric.Store,
+	reader sla.MetricReader,
 	logger log.Logger,
 ) (abortedCh <-chan struct{}, getReason func() string) {
 	ch := make(chan struct{})
@@ -56,7 +55,7 @@ func MonitorAbortThresholds(
 						continue // Ignore breaches during warm-up grace period
 					}
 
-					res := sla.EvaluateThreshold(th, store)
+					res := sla.EvaluateThreshold(th, reader)
 					if !res.Passed {
 						reasonStr := fmt.Sprintf("threshold breach on metric %q (%s %s %s, actual: %s)",
 							th.Metric, th.Stat, th.Operator, th.Target, res.Actual)

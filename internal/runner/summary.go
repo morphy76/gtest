@@ -20,7 +20,7 @@ type SummaryParams struct {
 	StartedAt        time.Time
 	EndedAt          time.Time
 	Config           config.ScenarioConfig
-	MetricsStore     *metric.Store
+	MetricsStore     metric.Reader
 	ThresholdResults []sla.ThresholdResult
 	AllPassed        bool
 	Aborted          bool
