@@ -504,7 +504,7 @@ Run the microbenchmark suite:
 make test-bench
 ```
 
-For complete architectural details and memory allocation budgets, see the [Developer Guide](docs/GUIDE.md#14-performance--framework-overhead-optimization).
+For complete architectural details, Go runtime tuning (`GOMEMLIMIT`, `GOGC`, `GOMAXPROCS`), and memory allocation budgets, see the [Developer Guide](docs/GUIDE.md#14-performance--framework-overhead-optimization).
 
 ---
 

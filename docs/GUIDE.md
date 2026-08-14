@@ -1002,4 +1002,68 @@ Expected baseline performance on modern hardware (e.g. Apple Silicon / Linux x86
 | `BenchmarkCollector_Duration_Parallel` | **~115 ns/op** | **0 B/op (0 allocs/op)** |
 | `BenchmarkEngine_ConstantVUs_NoopIteration` | **> 1,000,000 iter/s** | **0 allocs/op steady-state** |
 
+### 14.5 Go Runtime & Host System Tuning for Maximum Load Generation
+
+When executing high-throughput load tests (e.g. 50k–500k+ TPS or thousands of concurrent VUs), tuning Go runtime environment variables and host OS network limits ensures that the load generator runs at maximum efficiency without self-inflicted bottlenecks.
+
+#### A. Go Runtime Environment Variables
+
+| Variable | Recommended Value | Purpose & Performance Impact |
+|---|---|---|
+| **`GOMEMLIMIT`** | `80-90%` of container/host RAM (e.g. `GOMEMLIMIT=7GiB` on an 8GB host) | Sets a soft memory ceiling for the Go GC. Enables the runtime to utilize available RAM efficiently and avoid premature GC cycles during high-throughput load tests. |
+| **`GOGC`** | `200` to `500` (or `off` when paired with `GOMEMLIMIT`) | Controls garbage collection frequency relative to heap size. Higher values delay GC cycles during test execution, saving CPU cycles and eliminating GC latency jitter. Paired with `GOMEMLIMIT`, `GOGC=300` or `GOGC=500` ensures GC only triggers when approaching memory boundaries. |
+| **`GOMAXPROCS`** | Equal to available physical/container CPU cores (e.g. `GOMAXPROCS=16`) | Sets the number of operating system threads executing Go code concurrently. In containerized environments (Kubernetes/Docker), ensure `GOMAXPROCS` matches container CPU limits to prevent OS CPU throttling. |
+| **`GODEBUG`** | `gctrace=1` (for diagnostic dry-runs) | Emits GC activity statistics to stderr on every GC cycle (heap size, mark duration, pause time). Use during test dry-runs to verify that GC pauses remain sub-millisecond. |
+
+Example command running a tuned high-load test:
+
+```bash
+GOMEMLIMIT=7GiB GOGC=300 GOMAXPROCS=16 ./my-load-test --config gtest.yaml --scenario high_tps_checkout
+```
+
+#### B. Client Connection & HTTP Transport Tuning
+
+When load testing HTTP/REST endpoints with high concurrency, default Go `http.Transport` settings can throttle client throughput:
+
+```go
+Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+    // Tune HTTP transport for high concurrency load generation
+    transport := &http.Transport{
+        MaxIdleConns:        10000,
+        MaxIdleConnsPerHost: 5000,
+        MaxConnsPerHost:     0, // unlimited
+        IdleConnTimeout:     90 * time.Second,
+        DisableKeepAlives:   false, // reuse TCP connections
+        ForceAttemptHTTP2:   true,
+    }
+    client := &http.Client{
+        Transport: transport,
+        Timeout:   5 * time.Second,
+    }
+    return map[string]any{"client": client}, nil
+}
+```
+
+- **`MaxIdleConnsPerHost`**: The standard library default is `2`, which causes massive TCP socket churning and connection re-establishment (`TIME_WAIT` socket buildup). Increase to `1000–5000+` for high-throughput load generation.
+- **`DisableKeepAlives: false`**: Enables HTTP keep-alive connection reuse, eliminating TCP 3-way handshake and TLS negotiation overhead on every iteration.
+
+#### C. Operating System & Network Socket Limits
+
+Load generator nodes creating thousands of concurrent connections require adequate OS file descriptor and network socket limits:
+
+```bash
+# 1. Increase file descriptor limits (prevent "too many open files")
+ulimit -n 65536
+
+# 2. Expand ephemeral port range (Linux sysctl)
+sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+
+# 3. Enable fast TCP connection reuse for TIME_WAIT sockets (Linux sysctl)
+sysctl -w net.ipv4.tcp_tw_reuse=1
+
+# 4. Increase socket listen backlog and FIN timeout (Linux sysctl)
+sysctl -w net.core.somaxconn=65535
+sysctl -w net.ipv4.tcp_fin_timeout=15
+```
+
 

@@ -699,6 +699,7 @@ intentional: arrival rate is an open model and cannot block the arrival clock.
   to Teardown.
 - **Worker Pool Model:** For `arrival_rate`, the engine maintains a pre-allocated worker pool of size `max_vus` consuming dispatched iteration jobs from a bounded channel, eliminating steady-state goroutine creation overhead. For `constant_vus`, `vus` persistent goroutines are spawned.
 - **Zero-Allocation VU Loop:** Virtual User contexts (`ScenarioContext`) are allocated once per worker goroutine and reused across iterations, updating only iteration identity and active context in place.
+- **Go Runtime Tuning:** For high-throughput load generation, operators should set `GOMEMLIMIT` (80–90% of memory limit) and elevated `GOGC` (200–500) to minimize runtime GC pauses during scenario execution.
 
 ---
 
