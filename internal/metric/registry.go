@@ -17,16 +17,6 @@ const (
 	MetricTypeRate
 )
 
-// Backwards compatibility aliases for unexported types/constants.
-type metricType = MetricType
-
-const (
-	metricTypeCounter  = MetricTypeCounter
-	metricTypeGauge    = MetricTypeGauge
-	metricTypeDuration = MetricTypeDuration
-	metricTypeRate     = MetricTypeRate
-)
-
 // String returns the human-readable name of the metric type.
 func (mt MetricType) String() string {
 	switch mt {
@@ -41,10 +31,6 @@ func (mt MetricType) String() string {
 	default:
 		return "unknown"
 	}
-}
-
-func metricTypeName(mt MetricType) string {
-	return mt.String()
 }
 
 // ErrTypeCollision is returned when a metric name is already registered with a different type.
