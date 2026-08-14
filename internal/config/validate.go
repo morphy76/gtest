@@ -327,6 +327,14 @@ func validateThreshold(prefix string, idx int, th *ThresholdConfig) error {
 		}
 	}
 
+	// delay_abort_eval must be >= 0
+	if th.DelayAbortEval < 0 {
+		return &ValidationError{
+			Field:   thPrefix + ".delay_abort_eval",
+			Message: "must be >= 0",
+		}
+	}
+
 	// Parse target based on stat type.
 	if IsDurationStat(th.Stat) {
 		d, err := time.ParseDuration(th.Target)

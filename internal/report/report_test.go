@@ -245,3 +245,29 @@ func TestReportContainsChecksSection(t *testing.T) {
 	assert.InDelta(t, 95.0, doc.Checks[0].PassPct, 1e-9)
 }
 
+// AC-1.16.4: Aborted test generates report showing ABORTED status
+func TestAbortedReportFormat(t *testing.T) {
+	data := createTestReportData()
+	data.Aborted = true
+	data.AbortReason = "threshold breach on metric \"http_request_duration\" (p95 < 200ms, actual: 250ms)"
+
+	var consoleBuf bytes.Buffer
+	require.NoError(t, report.GenerateConsoleReport(&consoleBuf, data))
+	consoleOut := consoleBuf.String()
+
+	assert.Contains(t, consoleOut, "ABORT REASON: threshold breach on metric \"http_request_duration\" (p95 < 200ms, actual: 250ms)")
+	assert.Contains(t, consoleOut, "OVERALL: ABORTED                                        (exit 1)")
+
+	var jsonBuf bytes.Buffer
+	require.NoError(t, report.GenerateJSONReport(&jsonBuf, data))
+
+	var doc struct {
+		Aborted     bool   `json:"aborted"`
+		AbortReason string `json:"abort_reason"`
+		Passed      bool   `json:"passed"`
+	}
+	require.NoError(t, json.Unmarshal(jsonBuf.Bytes(), &doc))
+	assert.True(t, doc.Aborted)
+	assert.Equal(t, "threshold breach on metric \"http_request_duration\" (p95 < 200ms, actual: 250ms)", doc.AbortReason)
+}
+

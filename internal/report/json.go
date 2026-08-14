@@ -37,17 +37,19 @@ type jsonThresholdEntry struct {
 }
 
 type jsonReportDocument struct {
-	SuiteName  string                `json:"suite_name"`
-	Scenario   string                `json:"scenario"`
-	Version    string                `json:"version"`
-	Commit     string                `json:"commit"`
-	StartedAt  time.Time             `json:"started_at"`
-	EndedAt    time.Time             `json:"ended_at"`
-	Config     config.ScenarioConfig `json:"config"`
-	Metrics    []jsonMetricEntry     `json:"metrics"`
-	Checks     []metric.CheckSummary `json:"checks,omitempty"`
-	Thresholds []jsonThresholdEntry  `json:"thresholds"`
-	Passed     bool                  `json:"passed"`
+	SuiteName   string                `json:"suite_name"`
+	Scenario    string                `json:"scenario"`
+	Version     string                `json:"version"`
+	Commit      string                `json:"commit"`
+	StartedAt   time.Time             `json:"started_at"`
+	EndedAt     time.Time             `json:"ended_at"`
+	Config      config.ScenarioConfig `json:"config"`
+	Metrics     []jsonMetricEntry     `json:"metrics"`
+	Checks      []metric.CheckSummary `json:"checks,omitempty"`
+	Thresholds  []jsonThresholdEntry  `json:"thresholds"`
+	Passed      bool                  `json:"passed"`
+	Aborted     bool                  `json:"aborted"`
+	AbortReason string                `json:"abort_reason,omitempty"`
 }
 
 // GenerateJSONReport formats and writes the JSON report document to w.
@@ -58,15 +60,17 @@ func GenerateJSONReport(w io.Writer, data ReportData) error {
 	}
 
 	doc := jsonReportDocument{
-		SuiteName: sOrDefault(data.SuiteName, "gtest"),
-		Scenario:  data.Scenario,
-		Version:   data.Version,
-		Commit:    data.Commit,
-		StartedAt: data.StartedAt.UTC(),
-		EndedAt:   data.EndedAt.UTC(),
-		Config:    data.Config,
-		Checks:    checks,
-		Passed:    data.Passed,
+		SuiteName:   sOrDefault(data.SuiteName, "gtest"),
+		Scenario:    data.Scenario,
+		Version:     data.Version,
+		Commit:      data.Commit,
+		StartedAt:   data.StartedAt.UTC(),
+		EndedAt:     data.EndedAt.UTC(),
+		Config:      data.Config,
+		Checks:      checks,
+		Passed:      data.Passed,
+		Aborted:     data.Aborted,
+		AbortReason: data.AbortReason,
 	}
 
 	// Format threshold entries

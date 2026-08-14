@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/log"
@@ -16,6 +17,8 @@ type Executor struct {
 	Config       config.ScenarioConfig
 	Logger       log.Logger
 	Metrics      *metric.Store
+	Aborted      bool
+	AbortReason  string
 }
 
 // NewExecutor creates a new scenario executor.
@@ -57,14 +60,31 @@ func (e *Executor) Execute(ctx context.Context) error {
 		}
 	}
 
-	// 2. VU Pacing Engine phase
+	// 2. VU Pacing Engine phase with abort monitor
+	pacingCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	startTime := time.Now()
+	abortedCh, getReason := MonitorAbortThresholds(pacingCtx, cancel, startTime, e.Config.Thresholds, e.Metrics, e.Logger)
+
 	switch e.Config.Type {
 	case config.ScenarioTypeConstantVUs:
-		RunConstantVUs(ctx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
+		RunConstantVUs(pacingCtx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
 	case config.ScenarioTypeArrivalRate:
-		RunArrivalRate(ctx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
+		RunArrivalRate(pacingCtx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
 	default:
 		return fmt.Errorf("gtest: unsupported scenario type %q", e.Config.Type)
+	}
+
+	select {
+	case <-abortedCh:
+		e.Aborted = true
+		e.AbortReason = getReason()
+	default:
+		if reason := getReason(); reason != "" {
+			e.Aborted = true
+			e.AbortReason = reason
+		}
 	}
 
 	// 3. Teardown phase

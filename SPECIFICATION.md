@@ -1496,5 +1496,22 @@ Provide a dedicated data loading and parameterization package for CSV, JSON, and
 - **AC-1.14.5**: Random strategy selects rows uniformly with thread safety.
 - **AC-1.14.6**: SharedQueue strategy dispenses each row exactly once across concurrent VUs and returns `ErrDatasetExhausted` when depleted.
 
+---
+
+### 14.9 Increment 1.16 — Graceful Abort / Early Stop (`abort_on_fail`)
+
+Support early test termination when critical thresholds breach during test execution, avoiding wasted resources or runaway system damage.
+
+#### Configuration Options
+- `ThresholdConfig.AbortOnFail` (`abort_on_fail: true`): Enables real-time periodic evaluation during test execution.
+- `ThresholdConfig.DelayAbortEval` (`delay_abort_eval: 5s`): Optional warm-up grace period before abort evaluation begins.
+
+#### Acceptance Criteria
+- **AC-1.16.1**: Threshold configured with `abort_on_fail=true` evaluates periodically during test execution.
+- **AC-1.16.2**: Breach before `delay_abort_eval` is ignored (warm-up grace period).
+- **AC-1.16.3**: Breach after `delay_abort_eval` cancels all active VU contexts immediately.
+- **AC-1.16.4**: Aborted test generates report showing `ABORTED` status and exits with code 1.
+
+
 
 

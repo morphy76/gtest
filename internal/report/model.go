@@ -21,9 +21,11 @@ type ReportData struct {
 	StartedAt  time.Time
 	EndedAt    time.Time
 	Config     config.ScenarioConfig
-	Metrics    *metric.Store
-	Thresholds []sla.ThresholdResult
-	Passed     bool
+	Metrics     *metric.Store
+	Thresholds  []sla.ThresholdResult
+	Passed      bool
+	Aborted     bool
+	AbortReason string
 }
 
 // WriteReport outputs the report in the requested format (console or json) to w or a file.

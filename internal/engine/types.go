@@ -72,18 +72,20 @@ type ThresholdSummary struct {
 
 // SummaryData contains the complete structured report information post-execution.
 type SummaryData struct {
-	SuiteName  string             `json:"suite_name"`
-	Scenario   string             `json:"scenario"`
-	Version    string             `json:"version"`
-	Commit     string             `json:"commit"`
-	StartedAt  time.Time          `json:"started_at"`
-	EndedAt    time.Time          `json:"ended_at"`
-	Duration   time.Duration      `json:"duration"`
-	Config     any                `json:"config"`
-	Metrics    []MetricSummary    `json:"metrics"`
-	Checks     []CheckSummary     `json:"checks,omitempty"`
-	Thresholds []ThresholdSummary `json:"thresholds"`
-	Passed     bool               `json:"passed"`
+	SuiteName   string             `json:"suite_name"`
+	Scenario    string             `json:"scenario"`
+	Version     string             `json:"version"`
+	Commit      string             `json:"commit"`
+	StartedAt   time.Time          `json:"started_at"`
+	EndedAt     time.Time          `json:"ended_at"`
+	Duration    time.Duration      `json:"duration"`
+	Config      any                `json:"config"`
+	Metrics     []MetricSummary    `json:"metrics"`
+	Checks      []CheckSummary     `json:"checks,omitempty"`
+	Thresholds  []ThresholdSummary `json:"thresholds"`
+	Passed      bool               `json:"passed"`
+	Aborted     bool               `json:"aborted"`
+	AbortReason string             `json:"abort_reason,omitempty"`
 }
 
 // Scenario groups all lifecycle hooks for a named test scenario.

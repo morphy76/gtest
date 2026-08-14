@@ -109,6 +109,12 @@ type ThresholdConfig struct {
 	// or as float64 for non-duration stats (count, rate, value).
 	Target string `mapstructure:"target"`
 
+	// AbortOnFail triggers early test termination if breached during execution.
+	AbortOnFail bool `mapstructure:"abort_on_fail"`
+
+	// DelayAbortEval is a warm-up grace period before abort evaluation begins.
+	DelayAbortEval time.Duration `mapstructure:"delay_abort_eval"`
+
 	// TargetDuration is the parsed target when Stat is a duration stat.
 	// Populated by validation; zero value if not applicable.
 	TargetDuration time.Duration `mapstructure:"-"`
