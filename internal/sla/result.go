@@ -4,14 +4,14 @@ import "github.com/morphy76/gtest/internal/config"
 
 // ThresholdResult represents the evaluation outcome for a single SLA threshold.
 type ThresholdResult struct {
-	Threshold config.ThresholdConfig `json:"threshold"`
-	Metric    string                 `json:"metric"`
-	Stat      string                 `json:"stat"`
-	Operator  string                 `json:"operator"`
-	Target    string                 `json:"target"`
-	Actual    string                 `json:"actual"`
-	Passed    bool                   `json:"passed"`
-	Reason    string                 `json:"reason,omitempty"`
+	Threshold config.ThresholdConfig
+	Metric    string
+	Stat      string
+	Operator  string
+	Target    string
+	Actual    string
+	Passed    bool
+	Reason    string
 }
 
 // AllPassed returns true if every threshold result in the slice passed.

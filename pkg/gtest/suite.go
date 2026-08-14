@@ -13,6 +13,7 @@ import (
 	"github.com/morphy76/gtest/internal/engine"
 	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/runner"
 )
 
@@ -269,8 +270,8 @@ func (a *runnerSuiteAdapter) GetScenario(name string) (engine.Scenario, bool) {
 
 	var handleSummary engine.SummaryHook
 	if sc.HandleSummary != nil {
-		handleSummary = func(ctx context.Context, summary engine.SummaryData) error {
-			return sc.HandleSummary(ctx, convertEngineSummaryToPublic(summary))
+		handleSummary = func(ctx context.Context, summary report.SummaryData) error {
+			return sc.HandleSummary(ctx, convertReportSummaryToPublic(summary))
 		}
 	}
 
@@ -284,7 +285,7 @@ func (a *runnerSuiteAdapter) GetScenario(name string) (engine.Scenario, bool) {
 	}, true
 }
 
-func convertEngineSummaryToPublic(s engine.SummaryData) SummaryData {
+func convertReportSummaryToPublic(s report.SummaryData) SummaryData {
 	metrics := make([]MetricSummary, len(s.Metrics))
 	for i, m := range s.Metrics {
 		metrics[i] = MetricSummary{
