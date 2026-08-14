@@ -13,12 +13,12 @@ LDFLAGS    := -s -w \
 ## test: Run all library unit tests
 .PHONY: test
 test:
-	go test ./...
+	go test -count=1 ./...
 
 ## test-integration: Run integration tests (requires external services)
 .PHONY: test-integration
 test-integration:
-	go test -tags=integration ./...
+	go test -count=1 -tags=integration ./...
 
 ## test-examples: Build example binaries to verify they compile
 .PHONY: test-examples
@@ -28,12 +28,12 @@ test-examples:
 ## test-race: Run unit tests with race detector
 .PHONY: test-race
 test-race:
-	go test -race ./...
+	go test -count=1 -race ./...
 
 ## test-bench: Run benchmark tests
 .PHONY: test-bench
 test-bench:
-	go test -bench=. -benchmem ./...
+	go test -count=1 -bench=. -benchmem ./...
 
 ## lint: Run static analysis
 .PHONY: lint
