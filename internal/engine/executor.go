@@ -24,11 +24,12 @@ type Executor struct {
 	Config       config.ScenarioConfig
 	Logger       log.Logger
 	Metrics      MetricsStore
+	Pacer        PacingEngine
 	Aborted      bool
 	AbortReason  string
 }
 
-// NewExecutor creates a new scenario executor.
+// NewExecutor creates a new scenario executor resolving the pacing engine from DefaultPacingRegistry.
 func NewExecutor(
 	scenarioName string,
 	scenario Scenario,
@@ -36,12 +37,33 @@ func NewExecutor(
 	logger log.Logger,
 	metrics MetricsStore,
 ) *Executor {
+	pacer, _ := DefaultPacingRegistry.Get(cfg.Type)
 	return &Executor{
 		ScenarioName: scenarioName,
 		Scenario:     scenario,
 		Config:       cfg,
 		Logger:       logger,
 		Metrics:      metrics,
+		Pacer:        pacer,
+	}
+}
+
+// NewExecutorWithPacer creates a new scenario executor with an explicitly injected pacing engine.
+func NewExecutorWithPacer(
+	scenarioName string,
+	scenario Scenario,
+	cfg config.ScenarioConfig,
+	logger log.Logger,
+	metrics MetricsStore,
+	pacer PacingEngine,
+) *Executor {
+	return &Executor{
+		ScenarioName: scenarioName,
+		Scenario:     scenario,
+		Config:       cfg,
+		Logger:       logger,
+		Metrics:      metrics,
+		Pacer:        pacer,
 	}
 }
 
@@ -74,14 +96,11 @@ func (e *Executor) Execute(ctx context.Context) error {
 	startTime := time.Now()
 	abortedCh, getReason := MonitorAbortThresholds(pacingCtx, cancel, startTime, e.Config.Thresholds, e.Metrics, e.Logger)
 
-	switch e.Config.Type {
-	case config.ScenarioTypeConstantVUs:
-		RunConstantVUs(pacingCtx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
-	case config.ScenarioTypeArrivalRate:
-		RunArrivalRate(pacingCtx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
-	default:
+	if e.Pacer == nil {
 		return fmt.Errorf("gtest: unsupported scenario type %q", e.Config.Type)
 	}
+
+	e.Pacer.Run(pacingCtx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)
 
 	select {
 	case <-abortedCh:

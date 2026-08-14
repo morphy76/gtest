@@ -872,6 +872,7 @@ field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing
 ramp-down, and lifecycle orchestration. Exercise all lifecycle hooks.
 
 **Deliverables:**
+- `internal/engine/pacer.go` — `PacingEngine` interface, `ConstantVUsPacer`, `ArrivalRatePacer`, and `PacingRegistry`
 - `internal/engine/constant_vus.go` — constant VU pacing and ramp-up/ramp-down
 - `internal/engine/executor.go` — scenario lifecycle orchestration (Setup → VUs → Teardown)
 
