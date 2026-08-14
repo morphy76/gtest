@@ -516,22 +516,36 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 },
 ```
 
-### 11.2 Data Parameterization (CSV)
+### 11.2 Data Parameterization (`pkg/gtest/data`)
+
+Use the dedicated `github.com/morphy76/gtest/pkg/gtest/data` package to load CSV, JSON, or JSON Lines datasets with thread-safe record distribution strategies:
+
+- **Loaders**: `data.LoadCSV`, `data.LoadJSON`, `data.LoadJSONL` (or `data.LoadCSVFile`, etc.)
+- **Strategies**:
+  - `data.Sequential`: Round-robins across records deterministically by VU ID and iteration.
+  - `data.Random`: Uniform thread-safe random record selection.
+  - `data.UniquePerVU`: Distributes records deterministically per Virtual User ID.
+  - `data.SharedQueue`: Dispenses each record exactly once across concurrent VUs until exhausted (`data.ErrDatasetExhausted`).
 
 ```go
 Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
-    file, _ := os.Open(ctx.Param("data_file"))
-    reader := csv.NewReader(file)
-    records, _ := reader.ReadAll()
-    return map[string]any{"records": records}, nil
+    ds, err := data.LoadCSVFile("testdata/users.csv", data.Sequential)
+    if err != nil {
+        return nil, err
+    }
+    return map[string]any{"dataset": ds}, nil
 },
 
 RunVU: func(ctx gtest.ScenarioContext) error {
-    records := ctx.GlobalState("records").([][]string)
-    // Pick a row based on VU ID + iteration for deterministic distribution
-    idx := int(ctx.VUID()*1000+ctx.Iteration()) % len(records)
-    row := records[idx]
-    // Use row[0], row[1], etc. in your request
+    ds := ctx.GlobalState("dataset").(*data.DataSet)
+    record, err := ds.Next(ctx)
+    if err != nil {
+        return err
+    }
+
+    username := record["username"]
+    userID := record["user_id"]
+    // ... make request with dataset fields ...
     return nil
 },
 ```
