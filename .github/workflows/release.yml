@@ -1,29 +1,18 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      bump_type:
-        description: 'Version increment level'
-        type: choice
-        required: true
-        default: 'patch'
-        options:
-          - patch
-          - minor
-          - major
-      dry_run:
-        description: 'Dry run (validate without committing, tagging, or releasing)'
-        type: boolean
-        required: false
-        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'VERSION.gtest'
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Release (Manual)
+    name: Tag & Release
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +20,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -45,82 +33,34 @@ jobs:
           make test-race
           make test-examples
 
-      - name: Calculate Next Version
+      - name: Read Version
         id: semver
         run: |
-          CURRENT_VERSION=$(cat VERSION.gtest | tr -d '[:space:]')
-          echo "Current version: ${CURRENT_VERSION}"
-          
-          if [[ ! "${CURRENT_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Invalid SemVer format in VERSION.gtest: '${CURRENT_VERSION}'"
-            exit 1
-          fi
+          VERSION=$(cat VERSION.gtest | tr -d '[:space:]')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: v${VERSION}"
 
-          MAJOR="${BASH_REMATCH[1]}"
-          MINOR="${BASH_REMATCH[2]}"
-          PATCH="${BASH_REMATCH[3]}"
-
-          case "${{ inputs.bump_type }}" in
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            *)
-              echo "::error::Unsupported bump type: ${{ inputs.bump_type }}"
-              exit 1
-              ;;
-          esac
-
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          echo "previous_version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Calculated next version: ${NEW_VERSION} (bump type: ${{ inputs.bump_type }})"
-
-      - name: Update VERSION.gtest
-        run: |
-          echo "${{ steps.semver.outputs.new_version }}" > VERSION.gtest
-          cat VERSION.gtest
-
-      - name: Commit, Tag, and Release
-        if: ${{ inputs.dry_run == false }}
+      - name: Create Git Tag and GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PREV_VER: ${{ steps.semver.outputs.previous_version }}
-          NEW_VER: ${{ steps.semver.outputs.new_version }}
+          VERSION: ${{ steps.semver.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Commit updated version file
-          git add VERSION.gtest
-          git commit -m "chore(release): bump version from v${PREV_VER} to v${NEW_VER}"
-          
-          # Create release tag
-          git tag -a "v${NEW_VER}" -m "Release v${NEW_VER}"
+          # Create annotated git tag
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
 
-          # Push changes and tag to main branch
-          git push origin main
-          git push origin "v${NEW_VER}"
-
-          # Create GitHub Release with auto-generated notes
-          gh release create "v${NEW_VER}" \
-            --title "Release v${NEW_VER}" \
+          # Create GitHub Release with auto-generated release notes
+          gh release create "v${VERSION}" \
+            --title "Release v${VERSION}" \
             --generate-notes
 
       - name: Generate Job Summary
         run: |
-          echo "### 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Release Published" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Bump Type** | \`${{ inputs.bump_type }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Previous Version** | \`v${{ steps.semver.outputs.previous_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Released Version** | \`v${{ steps.semver.outputs.new_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Dry Run** | \`${{ inputs.dry_run }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Released Version** | \`v${{ steps.semver.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
