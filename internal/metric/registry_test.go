@@ -11,7 +11,7 @@ import (
 )
 
 func TestRegistry_InterfaceSatisfaction(t *testing.T) {
-	var _ metric.Registry = metric.NewRegistry()
+	_ = metric.NewRegistry()
 }
 
 func TestRegistry_RegisterAndMetricType(t *testing.T) {
