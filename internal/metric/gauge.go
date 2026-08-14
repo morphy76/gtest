@@ -10,6 +10,11 @@ type gauge struct {
 	bits atomic.Uint64
 }
 
+// Type returns the metric type for gauge.
+func (g *gauge) Type() MetricType {
+	return MetricTypeGauge
+}
+
 // Set stores the given value atomically.
 func (g *gauge) Set(value float64) {
 	g.bits.Store(math.Float64bits(value))
@@ -30,3 +35,9 @@ func (g *gauge) Add(delta float64) {
 func (g *gauge) Value() float64 {
 	return math.Float64frombits(g.bits.Load())
 }
+
+// Compile-time checks.
+var (
+	_ Gauge  = (*gauge)(nil)
+	_ Metric = (*gauge)(nil)
+)
