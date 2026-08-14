@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
-	"time"
 )
 
 // Record represents a single data record mapping string keys to string values.
@@ -23,8 +21,6 @@ type DataSet struct {
 	records  []Record
 	strategy Strategy
 	cursor   int64
-	mu       sync.Mutex
-	rng      *rand.Rand
 }
 
 // NewDataSet creates a DataSet with the given records and distribution strategy.
@@ -32,7 +28,6 @@ func NewDataSet(records []Record, strategy Strategy) *DataSet {
 	return &DataSet{
 		records:  records,
 		strategy: strategy,
-		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -54,22 +49,13 @@ func (ds *DataSet) Next(ctx ContextAccessor) (Record, error) {
 
 	n := int64(len(ds.records))
 
-	var vuid, iteration int64
-	if ctx != nil {
-		vuid = ctx.VUID()
-		iteration = ctx.Iteration()
-	}
-
 	switch ds.strategy {
-	case Sequential:
-		vuidOffset := vuid - 1
-		if vuidOffset < 0 {
-			vuidOffset = 0
+	case Sequential, UniquePerVU:
+		if ctx == nil {
+			return nil, ErrNilContext
 		}
-		idx := (vuidOffset + iteration) % n
-		return ds.records[idx], nil
-
-	case UniquePerVU:
+		vuid := ctx.VUID()
+		iteration := ctx.Iteration()
 		vuidOffset := vuid - 1
 		if vuidOffset < 0 {
 			vuidOffset = 0
@@ -78,9 +64,7 @@ func (ds *DataSet) Next(ctx ContextAccessor) (Record, error) {
 		return ds.records[idx], nil
 
 	case Random:
-		ds.mu.Lock()
-		idx := ds.rng.Int63n(n)
-		ds.mu.Unlock()
+		idx := rand.Int64N(n)
 		return ds.records[idx], nil
 
 	case SharedQueue:
@@ -91,7 +75,10 @@ func (ds *DataSet) Next(ctx ContextAccessor) (Record, error) {
 		return ds.records[idx], nil
 
 	default:
-		idx := iteration % n
+		if ctx == nil {
+			return nil, ErrNilContext
+		}
+		idx := ctx.Iteration() % n
 		return ds.records[idx], nil
 	}
 }

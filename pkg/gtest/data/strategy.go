@@ -19,6 +19,9 @@ const (
 // ErrDatasetExhausted is returned when a SharedQueue strategy has dispensed all records.
 var ErrDatasetExhausted = errors.New("gtest/data: dataset exhausted")
 
+// ErrNilContext is returned when a strategy requiring execution context (e.g. Sequential, UniquePerVU) receives a nil ContextAccessor.
+var ErrNilContext = errors.New("gtest/data: nil context accessor")
+
 // ContextAccessor provides access to execution context variables needed by dataset strategies.
 type ContextAccessor interface {
 	VUID() int64
