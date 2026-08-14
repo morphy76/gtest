@@ -27,37 +27,6 @@ type SummaryParams struct {
 	AbortReason      string
 }
 
-// buildSummaryData transforms execution runtime results into an engine.SummaryData model.
-func buildSummaryData(
-	suiteName string,
-	scenarioName string,
-	versionStr string,
-	commitStr string,
-	startedAt time.Time,
-	endedAt time.Time,
-	cfg config.ScenarioConfig,
-	metricsStore *metric.Store,
-	thresholdResults []sla.ThresholdResult,
-	allPassed bool,
-	aborted bool,
-	abortReason string,
-) engine.SummaryData {
-	return BuildSummaryData(SummaryParams{
-		SuiteName:        suiteName,
-		ScenarioName:     scenarioName,
-		Version:          versionStr,
-		Commit:           commitStr,
-		StartedAt:        startedAt,
-		EndedAt:          endedAt,
-		Config:           cfg,
-		MetricsStore:     metricsStore,
-		ThresholdResults: thresholdResults,
-		AllPassed:        allPassed,
-		Aborted:          aborted,
-		AbortReason:      abortReason,
-	})
-}
-
 // BuildSummaryData constructs engine.SummaryData from SummaryParams using standard library sorting.
 func BuildSummaryData(p SummaryParams) engine.SummaryData {
 	duration := p.EndedAt.Sub(p.StartedAt)
