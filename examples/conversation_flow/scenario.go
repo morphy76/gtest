@@ -77,6 +77,24 @@ func startMockServer() *httptest.Server {
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
 
+			mu.Lock()
+			ch, exists := channels[dialogID]
+			mu.Unlock()
+
+			if exists {
+				// Echo customer messageAdded event
+				custEvent := map[string]any{
+					"message": map[string]string{
+						"event": "messageAdded",
+						"role":  "CUSTOMER",
+						"text":  body["text"],
+					},
+				}
+				cData, _ := json.Marshal(custEvent)
+				_, _ = fmt.Fprintf(ch.w, "data: %s\n\n", cData)
+				ch.flusher.Flush()
+			}
+
 			w.WriteHeader(http.StatusOK)
 
 			// Emit bot response event asynchronously over the open SSE connection

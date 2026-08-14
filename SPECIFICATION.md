@@ -54,10 +54,14 @@ github.com/morphy76/gtest/               ← module root
 │   └── report/                          ← Console and JSON report formatters
 │
 └── examples/
-    ├── http_checkout/
-    │   └── main.go                      ← //go:build gtest_example
-    └── grpc_user_service/
-        └── main.go                      ← //go:build gtest_example
+    ├── http_checkout/                   ← REST API load test (constant_vus)
+    ├── grpc_user_service/               ← RPC arrival rate pacing (arrival_rate)
+    ├── conversation_flow/               ← Real-time SSE conversational AI
+    ├── think_time/                      ← Thinking time & delay strategies
+    ├── checks/                          ← Inline assertions (ctx.Check)
+    ├── data_parameterization/           ← Dataset parameterization (CSV, JSON, JSONL)
+    ├── sla_thresholds/                  ← Quality gates, multi-metrics, abort_on_fail
+    └── handle_summary/                  ← Execution summary hooks (HandleSummary)
 ```
 
 ---
@@ -943,20 +947,21 @@ subprocess pattern). For non-exit paths, wrap `os.Exit` via an injectable `ExitF
 
 ---
 
-### Increment 1.10 — Developer Examples ✅ COMPLETED (2026-08-13)
+### Increment 1.10 — Developer Examples ✅ COMPLETED (2026-08-14)
 
-**Goal:** Provide two working example load tests that serve as end-to-end integration tests of the library.
+**Goal:** Provide comprehensive, runnable example load tests in `examples/` covering all core framework features introduced across Phase 1 increments to serve as end-to-end reference implementations for developers.
 
 **Deliverables:**
-- `examples/http_checkout/main.go` — `//go:build gtest_example`
-- `examples/grpc_user_service/main.go` — `//go:build gtest_example`
-- `examples/conversation_flow/main.go` — `//go:build gtest_example` (Conversational AI SSE replication)
-- `examples/conversation_flow/dsl/client.go` — Conversational DSL API & metric consolidation
-- `examples/http_checkout/gtest.yaml`
-- `examples/grpc_user_service/gtest.yaml`
-- `examples/conversation_flow/gtest.yaml`
+- `examples/http_checkout/` (`main.go`, `gtest.yaml`) — HTTP REST API load testing with constant VU concurrency
+- `examples/grpc_user_service/` (`main.go`, `gtest.yaml`) — RPC/gRPC simulation with arrival rate token bucket pacing
+- `examples/conversation_flow/` (`main.go`, `scenario.go`, `gtest.yaml`, `dsl/`) — Real-time event-driven SSE conversational AI simulation
+- `examples/think_time/` (`main.go`, `gtest.yaml`) — Thinking time & interaction delay strategies (`interaction_delay`, `ctx.Sleep()`, `ExpoDelay`)
+- `examples/checks/` (`main.go`, `gtest.yaml`) — Inline assertions (`ctx.Check`) and check validation reporting
+- `examples/data_parameterization/` (`main.go`, `gtest.yaml`) — Dataset parameterization for CSV, JSON, and JSONL (`pkg/gtest/data`)
+- `examples/sla_thresholds/` (`main.go`, `gtest.yaml`) — Quality gate SLA thresholds, multi-metric assertions, and error handling with graceful abort (`abort_on_fail`)
+- `examples/handle_summary/` (`main.go`, `gtest.yaml`) — Programmatic post-execution summary hooks (`HandleSummary`) for notifications and custom exports
 
-**Build Validation:** `go build -tags=gtest_example ./examples/...` must succeed.
+**Build Validation:** `go build -tags=gtest_example ./examples/...` (`make test-examples`) must succeed.
 
 ---
 
@@ -1023,7 +1028,7 @@ scenarios:
 
 ---
 
-### Increment 1.13 — Checks (Inline Assertions)
+### Increment 1.13 — Checks (Inline Assertions) ✅ COMPLETED (2026-08-14)
 
 **Goal:** Enable real-time inline pass/fail assertions inside `RunVU` without terminating the iteration, aggregating results for reporting and threshold gates.
 
@@ -1045,7 +1050,7 @@ scenarios:
 
 ---
 
-### Increment 1.14 — Data Parameterization Module (`pkg/gtest/data`)
+### Increment 1.14 — Data Parameterization Module (`pkg/gtest/data`) ✅ COMPLETED (2026-08-14)
 
 **Goal:** Provide a dedicated data loading and parameterization package for CSV, JSON, and JSON Lines datasets with thread-safe distribution strategies.
 
@@ -1068,7 +1073,6 @@ scenarios:
 
 ### Increment 1.15 — Execution Summary Hooks (`HandleSummary`) ✅ COMPLETED (2026-08-14)
 
-
 **Goal:** Allow test developers to programmatically receive the complete structured execution summary post-run (for Slack alerts, webhooks, or custom output generation).
 
 **Deliverables:**
@@ -1086,7 +1090,7 @@ scenarios:
 
 ---
 
-### Increment 1.16 — Graceful Abort / Early Stop (`abort_on_fail`)
+### Increment 1.16 — Graceful Abort / Early Stop (`abort_on_fail`) ✅ COMPLETED (2026-08-14)
 
 **Goal:** Support early test termination when critical thresholds breach during test execution, avoiding wasted resources or runaway system damage.
 

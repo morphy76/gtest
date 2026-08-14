@@ -18,6 +18,7 @@ A step-by-step guide for load test developers adopting the `gtest` framework.
 10. [CLI Flags & Execution](#10-cli-flags--execution)
 11. [Patterns & Recipes](#11-patterns--recipes)
 12. [Troubleshooting](#12-troubleshooting)
+13. [Reference Implementations (examples/)](#13-reference-implementations-examples)
 
 ---
 
@@ -773,3 +774,53 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 **Cause**: `max_vus` is too low for `target_tps` given your iteration latency.  
 **Formula**: `max_vus ≥ target_tps × avg_iteration_latency_seconds`  
 **Fix**: Increase `max_vus` or optimize your RunVU to reduce latency.
+
+---
+
+## 13. Reference Implementations (`examples/`)
+
+The repository includes a comprehensive set of compilable, self-contained example suites under `examples/`. Each example is paired with an in-process mock server (`httptest.Server` or simulated domain model) and a companion `gtest.yaml` configuration:
+
+| Example | Directory | Core Concepts |
+|---|---|---|
+| **HTTP REST Checkout** | [`examples/http_checkout/`](../examples/http_checkout/) | Standard REST API load test, HDR duration histogram, success rate, constant VU concurrency. |
+| **gRPC RPC Service** | [`examples/grpc_user_service/`](../examples/grpc_user_service/) | Open-system arrival rate pacing (`arrival_rate`), target TPS, bounded worker pool (`max_vus`). |
+| **Conversational AI Flow** | [`examples/conversation_flow/`](../examples/conversation_flow/) | Real-time Server-Sent Events (SSE) streaming, multi-turn state machine, DSL client architecture. |
+| **Thinking Time & Delays** | [`examples/think_time/`](../examples/think_time/) | Multi-step journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. |
+| **Inline Checks (Assertions)** | [`examples/checks/`](../examples/checks/) | Inline assertions (`ctx.Check`), non-aborting validations, auto-instrumented check counters and report tables. |
+| **Data Parameterization** | [`examples/data_parameterization/`](../examples/data_parameterization/) | `pkg/gtest/data` dataset ingestion (CSV, JSON, JSONL) with `Sequential`, `Random`, and `SharedQueue` strategies. |
+| **SLA Thresholds & Quality Gates** | [`examples/sla_thresholds/`](../examples/sla_thresholds/) | Multi-metric thresholds, percentile gates, rate assertions, and early test termination with `abort_on_fail`. |
+| **Execution Summary Hook** | [`examples/handle_summary/`](../examples/handle_summary/) | `HandleSummary` lifecycle hook, summary data inspection, programmatic webhook dispatch and artifact generation. |
+
+### Running Examples
+
+Run any example directly by navigating to its directory:
+
+```bash
+# Run the think_time example:
+cd examples/think_time
+go run -tags=gtest_example .
+
+# Run the checks example:
+cd examples/checks
+go run -tags=gtest_example .
+
+# Run the data parameterization example:
+cd examples/data_parameterization
+go run -tags=gtest_example .
+
+# Run the SLA thresholds example:
+cd examples/sla_thresholds
+go run -tags=gtest_example .
+
+# Run the summary hook example:
+cd examples/handle_summary
+go run -tags=gtest_example .
+```
+
+Verify that all examples compile cleanly across the entire workspace:
+
+```bash
+make test-examples
+```
+

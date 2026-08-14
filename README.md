@@ -187,7 +187,7 @@ scenarios:
     thresholds:
       - metric: gtest.pacing.dropped_iterations
         stat: count
-        operator: "=="
+        operator: "<="
         target: "0"
 ```
 
@@ -261,6 +261,54 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 Programmatic generators are also available: `gtest.FixedDelay(d)`, `gtest.RangeDelay(min, max)`, `gtest.ExpoDelay(mean, min, max)`, `gtest.GaussianDelay(mean, stdDev, min, max)`.
 
 ---
+
+## Data Parameterization (`pkg/gtest/data`)
+
+Feed external datasets into your load tests using the built-in `pkg/gtest/data` module supporting CSV, JSON, and JSON Lines formats with thread-safe row selection strategies:
+
+### Supported Dataset Formats & Loaders
+
+| Format | Loader Function | Description |
+|---|---|---|
+| **CSV** | `data.LoadCSV(reader, strategy)` / `data.LoadCSVFile(path, strategy)` | Reads CSV with headers into string key-value maps (`Record`). |
+| **JSON** | `data.LoadJSON(reader, strategy)` / `data.LoadJSONFile(path, strategy)` | Parses a JSON array of objects into key-value records. |
+| **JSONL** | `data.LoadJSONL(reader, strategy)` / `data.LoadJSONLFile(path, strategy)` | Parses newline-delimited JSON objects line-by-line. |
+
+### Distribution Strategies
+
+| Strategy | Enum Constant | Behavior |
+|---|---|---|
+| **Sequential** | `data.Sequential` | Deterministic round-robin across rows based on VU ID and iteration index: `(vuid - 1 + iteration) % N`. |
+| **Random** | `data.Random` | Thread-safe uniform random selection across all rows. |
+| **UniquePerVU** | `data.UniquePerVU` | Partitions rows to avoid VU overlap where possible. |
+| **SharedQueue** | `data.SharedQueue` | Thread-safe atomic single-consumption queue. Returns `data.ErrDatasetExhausted` when depleted. |
+
+### Example Usage
+
+```go
+Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+    ds, err := data.LoadCSVFile("data/users.csv", data.Sequential)
+    if err != nil {
+        return nil, err
+    }
+    return map[string]any{"users": ds}, nil
+},
+RunVU: func(ctx gtest.ScenarioContext) error {
+    ds := ctx.GlobalState("users").(*data.DataSet)
+    user, err := ds.Next(ctx)
+    if err != nil {
+        return err
+    }
+    // Access string values by column/key name
+    userID := user["user_id"]
+    username := user["username"]
+    // ...
+    return nil
+},
+```
+
+---
+
 
 
 
@@ -424,3 +472,33 @@ SLA THRESHOLD EVALUATION
 OVERALL: PASSED                                          (exit 0)
 ================================================================================
 ```
+
+---
+
+## Examples & Reference Implementations
+
+The `examples/` directory contains self-contained, compilable load test suites demonstrating all framework capabilities:
+
+| Example Directory | Scenario Type | Features Demonstrated |
+|---|---|---|
+| [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, custom duration/counter/rate metrics, linear ramp-up/down. |
+| [`examples/grpc_user_service/`](examples/grpc_user_service/) | `arrival_rate` | High-throughput RPC simulation, token bucket TPS pacing, bounded worker pool. |
+| [`examples/conversation_flow/`](examples/conversation_flow/) | `constant_vus` | Real-time SSE streaming conversational AI load test, multi-turn state machine, DSL client. |
+| [`examples/think_time/`](examples/think_time/) | `constant_vus` | Multi-step user journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. |
+| [`examples/checks/`](examples/checks/) | `constant_vus` | Inline assertions (`ctx.Check`) for HTTP status, headers, JSON body validation, check metrics. |
+| [`examples/data_parameterization/`](examples/data_parameterization/) | `constant_vus` | CSV (`Sequential`), JSON (`Random`), and JSONL (`SharedQueue`) dataset parameterization. |
+| [`examples/sla_thresholds/`](examples/sla_thresholds/) | `constant_vus` | Quality gate SLA thresholds across metrics, percentile operators, and early stop with `abort_on_fail`. |
+| [`examples/handle_summary/`](examples/handle_summary/) | `constant_vus` | Post-test execution hook (`HandleSummary`), summary metric inspection, webhook notification dispatch. |
+
+### Running Examples
+
+All examples use in-process mock servers and can be executed immediately:
+
+```bash
+# Run any example directly from its folder:
+cd examples/think_time && go run -tags=gtest_example .
+
+# Verify compilation across all example binaries:
+make test-examples
+```
+

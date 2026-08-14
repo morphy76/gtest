@@ -1,0 +1,21 @@
+version: "1.0"
+default_scenario: checks_demo
+
+scenarios:
+  checks_demo:
+    type: constant_vus
+    vus: 4
+    ramp_up: 50ms
+    run_period: 300ms
+    ramp_down: 50ms
+    vu_timeout: 1s
+
+    thresholds:
+      - metric: gtest.checks.failed
+        stat: count
+        operator: "<="
+        target: "0"
+      - metric: gtest.checks.passed
+        stat: count
+        operator: ">="
+        target: "10"
