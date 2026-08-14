@@ -1,6 +1,6 @@
 module github.com/morphy76/gtest
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.3.0
