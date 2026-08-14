@@ -8,7 +8,14 @@ import (
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/gtest/internal/sla"
 )
+
+// MetricsStore defines the metric recording and reading capabilities required by the scenario executor.
+type MetricsStore interface {
+	metric.Collector
+	sla.MetricReader
+}
 
 // Executor orchestrates scenario execution: Setup -> VUs -> Teardown.
 type Executor struct {
@@ -16,7 +23,7 @@ type Executor struct {
 	Scenario     Scenario
 	Config       config.ScenarioConfig
 	Logger       log.Logger
-	Metrics      *metric.Store
+	Metrics      MetricsStore
 	Aborted      bool
 	AbortReason  string
 }
@@ -27,7 +34,7 @@ func NewExecutor(
 	scenario Scenario,
 	cfg config.ScenarioConfig,
 	logger log.Logger,
-	metrics *metric.Store,
+	metrics MetricsStore,
 ) *Executor {
 	return &Executor{
 		ScenarioName: scenarioName,

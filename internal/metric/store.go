@@ -28,4 +28,5 @@ var (
 	_ Collector  = (*Store)(nil)
 	_ Registry   = (*Store)(nil)
 	_ Aggregator = (*Store)(nil)
+	_ Reader     = (*Store)(nil)
 )

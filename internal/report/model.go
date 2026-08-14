@@ -20,8 +20,8 @@ type ReportData struct {
 	Commit     string
 	StartedAt  time.Time
 	EndedAt    time.Time
-	Config     config.ScenarioConfig
-	Metrics     *metric.Store
+	Config      config.ScenarioConfig
+	Metrics     metric.Reader
 	Thresholds  []sla.ThresholdResult
 	Passed      bool
 	Aborted     bool
