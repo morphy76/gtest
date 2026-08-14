@@ -303,3 +303,97 @@ func TestEvaluateWithMockMetricReader(t *testing.T) {
 	assert.True(t, results[1].Passed)
 	assert.True(t, sla.AllPassed(results))
 }
+
+func TestComparisonOperators(t *testing.T) {
+	store := metric.NewStore()
+	d := store.Duration("latency", metric.Tags{})
+	d.Observe(100 * time.Millisecond)
+
+	c := store.Counter("reqs", metric.Tags{})
+	c.Add(50)
+
+	testCases := []struct {
+		name     string
+		th       config.ThresholdConfig
+		expected bool
+	}{
+		{
+			name: "duration less than pass",
+			th: config.ThresholdConfig{
+				Metric: "latency", Stat: "p50", Operator: "<", Target: "200ms", TargetDuration: 200 * time.Millisecond,
+			},
+			expected: true,
+		},
+		{
+			name: "duration less than or equal pass",
+			th: config.ThresholdConfig{
+				Metric: "latency", Stat: "p50", Operator: "<=", Target: "200ms", TargetDuration: 200 * time.Millisecond,
+			},
+			expected: true,
+		},
+		{
+			name: "duration greater than fail",
+			th: config.ThresholdConfig{
+				Metric: "latency", Stat: "p50", Operator: ">", Target: "200ms", TargetDuration: 200 * time.Millisecond,
+			},
+			expected: false,
+		},
+		{
+			name: "duration greater than or equal pass",
+			th: config.ThresholdConfig{
+				Metric: "latency", Stat: "p50", Operator: ">=", Target: "50ms", TargetDuration: 50 * time.Millisecond,
+			},
+			expected: true,
+		},
+		{
+			name: "duration invalid operator fail",
+			th: config.ThresholdConfig{
+				Metric: "latency", Stat: "p50", Operator: "==", Target: "100ms", TargetDuration: 100 * time.Millisecond,
+			},
+			expected: false,
+		},
+		{
+			name: "float less than fail",
+			th: config.ThresholdConfig{
+				Metric: "reqs", Stat: "count", Operator: "<", Target: "50", TargetFloat: 50,
+			},
+			expected: false,
+		},
+		{
+			name: "float less than or equal pass",
+			th: config.ThresholdConfig{
+				Metric: "reqs", Stat: "count", Operator: "<=", Target: "50", TargetFloat: 50,
+			},
+			expected: true,
+		},
+		{
+			name: "float greater than pass",
+			th: config.ThresholdConfig{
+				Metric: "reqs", Stat: "count", Operator: ">", Target: "40", TargetFloat: 40,
+			},
+			expected: true,
+		},
+		{
+			name: "float greater than or equal pass",
+			th: config.ThresholdConfig{
+				Metric: "reqs", Stat: "count", Operator: ">=", Target: "50", TargetFloat: 50,
+			},
+			expected: true,
+		},
+		{
+			name: "float invalid operator fail",
+			th: config.ThresholdConfig{
+				Metric: "reqs", Stat: "count", Operator: "unknown", Target: "50", TargetFloat: 50,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := sla.EvaluateThreshold(tc.th, store)
+			assert.Equal(t, tc.expected, res.Passed)
+		})
+	}
+}
+

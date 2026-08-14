@@ -9,14 +9,22 @@ import (
 
 // Flags holds the parsed command-line configuration options.
 type Flags struct {
-	ConfigPath    string
-	ScenarioName  string
-	LogLevel      string
-	LogFormat     string
-	ReportFormat  string
-	ReportOut     string
+	// ConfigPath is the filesystem path to the YAML configuration file.
+	ConfigPath string
+	// ScenarioName is the name of the specific scenario to execute.
+	ScenarioName string
+	// LogLevel sets the logging verbosity (debug, info, warn, error).
+	LogLevel string
+	// LogFormat sets the log output formatting (pretty or json).
+	LogFormat string
+	// ReportFormat sets the output format for the summary report (console or json).
+	ReportFormat string
+	// ReportOut specifies an optional file path to write the console summary report to.
+	ReportOut string
+	// JSONReportOut specifies an optional file path to write the JSON report document to.
 	JSONReportOut string
-	ShowVersion   bool
+	// ShowVersion indicates whether to print the library version and exit.
+	ShowVersion bool
 }
 
 // ParseFlags parses command-line arguments into a Flags struct.

@@ -25,6 +25,7 @@ const (
 
 // DelayGenerator generates successive delay durations.
 type DelayGenerator interface {
+	// Next returns the next generated pause duration according to the generator's distribution strategy.
 	Next() time.Duration
 }
 
