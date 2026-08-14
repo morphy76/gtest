@@ -40,7 +40,12 @@ github.com/morphy76/gtest/               ← module root
 │       ├── context.go                   ← ScenarioContext interface
 │       ├── metrics.go                   ← MetricsCollector, Counter, Gauge, Duration, Rate
 │       ├── logger.go                    ← Logger, LogEvent interfaces
-│       └── errors.go                    ← ConfigError, ValidationError, etc.
+│       ├── errors.go                    ← ConfigError, ValidationError, ScenarioNotFoundError, SetupError
+│       ├── check.go                     ← CheckFunc inline assertion function type
+│       ├── delay.go                     ← DelayStrategy, DelayGenerator, and delay constructors
+│       ├── think_time.go                ← ThinkTimeConfig
+│       ├── summary.go                   ← SummaryData, MetricSummary, CheckSummary, ThresholdSummary
+│       └── data/                        ← Dataset parameterization subpackage
 │
 ├── internal/
 │   ├── version/
@@ -475,7 +480,7 @@ test developers):
 | `MetricChecksPassed` | `gtest.checks.passed` | Counter | Total inline checks that passed |
 | `MetricChecksFailed` | `gtest.checks.failed` | Counter | Total inline checks that failed |
 
-Built-in metric names are defined as exported package-level constants in `internal/metric/names.go` and re-exported in `pkg/gtest/metrics.go` for public use. All framework metrics are prefixed with `MetricPrefix = "gtest."` and must not be used as names for test-developer-defined custom metrics.
+Built-in metric names are defined as exported package-level constants directly in `pkg/gtest/metrics.go` (and mirrored in `internal/metric/names.go` for internal telemetry). All framework metrics are prefixed with `MetricPrefix = "gtest."` and must not be used as names for test-developer-defined custom metrics.
 
 > **Note on In-Flight Iterations:** `MetricIterationsTimeout` only counts iterations that exceed `vu_timeout` during active scenario execution. In-flight iterations interrupted mid-flight by scenario completion (e.g. `run_period` / `ramp_down` expiration or early scenario abort/cancellation) are discarded as incomplete and are not recorded as timeouts or failed iterations.
 

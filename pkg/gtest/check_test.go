@@ -33,7 +33,7 @@ func TestCheck_Passing(t *testing.T) {
 		return ""
 	}
 
-	passed := ctx.Check("status is 200", checkFn)
+	passed := ctx.Check("status is 200", engine.CheckFunc(checkFn))
 
 	assert.True(t, passed, "passing check should return true")
 	assert.Equal(t, int64(1), store.AggregatedCounterValue(gtest.MetricChecksPassed))
