@@ -981,6 +981,7 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 (metrics sorted alphabetically by name).
 
 **Deliverables:**
+- `internal/report/model.go` — report data model and format dispatcher
 - `internal/report/console.go` — console summary formatter
 - `internal/report/json.go` — JSON report formatter
 

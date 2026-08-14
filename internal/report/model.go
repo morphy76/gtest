@@ -1,9 +1,7 @@
 package report
 
 import (
-	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -14,12 +12,12 @@ import (
 
 // ReportData gathers all scenario metadata, metric store snapshots, and SLA results for reporting.
 type ReportData struct {
-	SuiteName  string
-	Scenario   string
-	Version    string
-	Commit     string
-	StartedAt  time.Time
-	EndedAt    time.Time
+	SuiteName   string
+	Scenario    string
+	Version     string
+	Commit      string
+	StartedAt   time.Time
+	EndedAt     time.Time
 	Config      config.ScenarioConfig
 	Metrics     metric.Reader
 	Thresholds  []sla.ThresholdResult
@@ -28,25 +26,13 @@ type ReportData struct {
 	AbortReason string
 }
 
-// WriteReport outputs the report in the requested format (console or json) to w or a file.
-func WriteReport(w io.Writer, format string, reportOutFile string, data ReportData) error {
-	targetWriter := w
-	if reportOutFile != "" {
-		f, err := os.Create(reportOutFile)
-		if err != nil {
-			return fmt.Errorf("failed to create report output file %q: %w", reportOutFile, err)
-		}
-		defer func() {
-			_ = f.Close()
-		}()
-		targetWriter = f
-	}
-
-
+// WriteReport outputs the report in the requested format (console or json) to w.
+func WriteReport(w io.Writer, format string, data ReportData) error {
 	switch strings.ToLower(format) {
 	case "json":
-		return GenerateJSONReport(targetWriter, data)
+		return GenerateJSONReport(w, data)
 	default:
-		return GenerateConsoleReport(targetWriter, data)
+		return GenerateConsoleReport(w, data)
 	}
 }
+

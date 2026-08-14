@@ -455,6 +455,35 @@ func TestReportExecution_HookErrorDoesNotPanic(t *testing.T) {
 	})
 }
 
+func TestReportExecution_InvalidFilePathsHandledGracefully(t *testing.T) {
+	var stdout bytes.Buffer
+	logger := zerolog.Nop()
+	now := time.Now()
+
+	p := runner.ReportParams{
+		SuiteName:    "suite_test",
+		ScenarioName: "sc_test",
+		Scenario:     engine.Scenario{RunVU: func(ctx engine.ScenarioContext) error { return nil }},
+		ScenarioCfg:  config.ScenarioConfig{Type: config.ScenarioTypeConstantVUs},
+		Flags: &cli.Flags{
+			ReportFormat:  "console",
+			ReportOut:     "/nonexistent/directory/unwritable_report.txt",
+			JSONReportOut: "/nonexistent/directory/unwritable_json.json",
+		},
+		MetricsStore: metric.NewStore(),
+		AllPassed:    true,
+		StartedAt:    now,
+		EndedAt:      now.Add(time.Second),
+		Stdout:       &stdout,
+		Logger:       logger,
+	}
+
+	assert.NotPanics(t, func() {
+		runner.ReportExecution(context.Background(), p)
+	})
+}
+
+
 func TestRunSuite_EndToEndSuccess(t *testing.T) {
 	cfgFile := createTempConfig(t, `
 version: "1.0"

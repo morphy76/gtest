@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"io"
+	"os"
 	"time"
 
 	"github.com/morphy76/gtest/internal/cli"
@@ -61,15 +62,40 @@ func ReportExecution(ctx context.Context, p ReportParams) {
 		jsonReportOut = p.Flags.JSONReportOut
 	}
 
-	if err := report.WriteReport(p.Stdout, reportFormat, reportOut, reportData); err != nil {
-		p.Logger.Error().Err(err).Msg("failed to write report")
+	targetWriter := p.Stdout
+	if reportOut != "" {
+		f, err := os.Create(reportOut)
+		if err != nil {
+			p.Logger.Error().Err(err).Str("path", reportOut).Msg("failed to create report output file")
+			targetWriter = nil
+		} else {
+			defer func() {
+				_ = f.Close()
+			}()
+			targetWriter = f
+		}
+	}
+
+	if targetWriter != nil {
+		if err := report.WriteReport(targetWriter, reportFormat, reportData); err != nil {
+			p.Logger.Error().Err(err).Msg("failed to write report")
+		}
 	}
 
 	if jsonReportOut != "" {
-		if err := report.WriteReport(p.Stdout, "json", jsonReportOut, reportData); err != nil {
-			p.Logger.Error().Err(err).Msg("failed to write JSON report")
+		f, err := os.Create(jsonReportOut)
+		if err != nil {
+			p.Logger.Error().Err(err).Str("path", jsonReportOut).Msg("failed to create JSON report output file")
+		} else {
+			defer func() {
+				_ = f.Close()
+			}()
+			if err := report.WriteReport(f, "json", reportData); err != nil {
+				p.Logger.Error().Err(err).Msg("failed to write JSON report")
+			}
 		}
 	}
+
 
 	if p.Scenario.HandleSummary != nil {
 		summaryData := BuildSummaryData(SummaryParams{
