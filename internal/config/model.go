@@ -123,39 +123,3 @@ type ThresholdConfig struct {
 	// Populated by validation; zero value if not applicable.
 	TargetFloat float64 `mapstructure:"-"`
 }
-
-// durationStats is the set of stat values that require a time.Duration target.
-var durationStats = map[string]bool{
-	"p50":  true,
-	"p90":  true,
-	"p95":  true,
-	"p99":  true,
-	"mean": true,
-	"max":  true,
-}
-
-// IsDurationStat reports whether the stat requires a time.Duration target.
-func IsDurationStat(stat string) bool {
-	return durationStats[stat]
-}
-
-// validStats is the complete set of supported stat values.
-var validStats = map[string]bool{
-	"p50":   true,
-	"p90":   true,
-	"p95":   true,
-	"p99":   true,
-	"mean":  true,
-	"max":   true,
-	"count": true,
-	"rate":  true,
-	"value": true,
-}
-
-// validOperators is the set of supported comparison operators.
-var validOperators = map[string]bool{
-	"<":  true,
-	"<=": true,
-	">":  true,
-	">=": true,
-}

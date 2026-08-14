@@ -802,8 +802,9 @@ Return structured errors for all failure modes.
 
 **Deliverables:**
 - `internal/config/loader.go` — Viper-based config loading
-- `internal/config/model.go` — `Config`, `ScenarioConfig`, `ThresholdConfig` types, error types
-- `internal/config/validate.go` — Validation logic
+- `internal/config/model.go` — `Config`, `ScenarioConfig`, `ThresholdConfig` types (pure DTOs)
+- `internal/config/errors.go` — Structured error types (`ConfigError`, `ValidationError`)
+- `internal/config/validate.go` — Validation logic, stat/operator lookup tables, and delay validator registry
 
 **Acceptance Criteria (testable):**
 

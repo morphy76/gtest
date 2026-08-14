@@ -4,10 +4,180 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
 )
+
+// durationStats is the set of stat values that require a time.Duration target.
+var durationStats = map[string]bool{
+	"p50":  true,
+	"p90":  true,
+	"p95":  true,
+	"p99":  true,
+	"mean": true,
+	"max":  true,
+}
+
+// IsDurationStat reports whether the stat requires a time.Duration target.
+func IsDurationStat(stat string) bool {
+	return durationStats[stat]
+}
+
+// validStats is the complete set of supported stat values.
+var validStats = map[string]bool{
+	"p50":   true,
+	"p90":   true,
+	"p95":   true,
+	"p99":   true,
+	"mean":  true,
+	"max":   true,
+	"count": true,
+	"rate":  true,
+	"value": true,
+}
+
+// validOperators is the set of supported comparison operators.
+var validOperators = map[string]bool{
+	"<":  true,
+	"<=": true,
+	">":  true,
+	">=": true,
+}
+
+// DelayValidatorFunc validates a delay configuration against strategy bounds.
+type DelayValidatorFunc func(prefix string, delay *ThinkTimeConfig) error
+
+var (
+	delayValidatorsMu sync.RWMutex
+	delayValidators   = map[string]DelayValidatorFunc{
+		"fixed":    validateFixedDelay,
+		"range":    validateRangeDelay,
+		"expo":     validateExpoDelay,
+		"gaussian": validateGaussianDelay,
+	}
+)
+
+// RegisterDelayValidator registers a validator function for a specific delay strategy type.
+func RegisterDelayValidator(strategy string, fn DelayValidatorFunc) {
+	delayValidatorsMu.Lock()
+	defer delayValidatorsMu.Unlock()
+	delayValidators[strategy] = fn
+}
+
+func getDelayValidator(strategy string) (DelayValidatorFunc, bool) {
+	delayValidatorsMu.RLock()
+	defer delayValidatorsMu.RUnlock()
+	fn, ok := delayValidators[strategy]
+	return fn, ok
+}
+
+// validateDelayConfig checks a delay configuration against strategy bounds.
+func validateDelayConfig(delayPrefix string, delay *ThinkTimeConfig) error {
+	validator, exists := getDelayValidator(delay.Type)
+	if !exists {
+		return &ValidationError{
+			Field:   delayPrefix + ".type",
+			Message: fmt.Sprintf("must be one of {fixed, range, expo, gaussian}, got %q", delay.Type),
+		}
+	}
+	return validator(delayPrefix, delay)
+}
+
+func validateFixedDelay(prefix string, delay *ThinkTimeConfig) error {
+	if delay.Duration <= 0 {
+		return &ValidationError{
+			Field:   prefix + ".duration",
+			Message: "must be > 0 for fixed delay",
+		}
+	}
+	return nil
+}
+
+func validateRangeDelay(prefix string, delay *ThinkTimeConfig) error {
+	if delay.Min < 0 {
+		return &ValidationError{
+			Field:   prefix + ".min",
+			Message: "must be >= 0 for range delay",
+		}
+	}
+	if delay.Max <= 0 {
+		return &ValidationError{
+			Field:   prefix + ".max",
+			Message: "must be > 0 for range delay",
+		}
+	}
+	if delay.Max < delay.Min {
+		return &ValidationError{
+			Field:   prefix + ".max",
+			Message: "must be >= min for range delay",
+		}
+	}
+	return nil
+}
+
+func validateExpoDelay(prefix string, delay *ThinkTimeConfig) error {
+	if delay.Mean <= 0 {
+		return &ValidationError{
+			Field:   prefix + ".mean",
+			Message: "must be > 0 for expo delay",
+		}
+	}
+	if delay.Min < 0 {
+		return &ValidationError{
+			Field:   prefix + ".min",
+			Message: "must be >= 0",
+		}
+	}
+	if delay.Max < 0 {
+		return &ValidationError{
+			Field:   prefix + ".max",
+			Message: "must be >= 0",
+		}
+	}
+	if delay.Min > 0 && delay.Max > 0 && delay.Max < delay.Min {
+		return &ValidationError{
+			Field:   prefix + ".max",
+			Message: "must be >= min for expo delay",
+		}
+	}
+	return nil
+}
+
+func validateGaussianDelay(prefix string, delay *ThinkTimeConfig) error {
+	if delay.Mean <= 0 {
+		return &ValidationError{
+			Field:   prefix + ".mean",
+			Message: "must be > 0 for gaussian delay",
+		}
+	}
+	if delay.StdDev <= 0 {
+		return &ValidationError{
+			Field:   prefix + ".std_dev",
+			Message: "must be > 0 for gaussian delay",
+		}
+	}
+	if delay.Min < 0 {
+		return &ValidationError{
+			Field:   prefix + ".min",
+			Message: "must be >= 0",
+		}
+	}
+	if delay.Max < 0 {
+		return &ValidationError{
+			Field:   prefix + ".max",
+			Message: "must be >= 0",
+		}
+	}
+	if delay.Min > 0 && delay.Max > 0 && delay.Max < delay.Min {
+		return &ValidationError{
+			Field:   prefix + ".max",
+			Message: "must be >= min for gaussian delay",
+		}
+	}
+	return nil
+}
 
 // durationDecodeHook returns a mapstructure decode hook that converts string values
 // to time.Duration for fields typed as time.Duration.
@@ -194,101 +364,6 @@ func validateThinkTime(prefix string, tt *ThinkTimeConfig) error {
 	return validateDelayConfig(fmt.Sprintf("%s.think_time", prefix), tt)
 }
 
-// validateDelayConfig checks a delay configuration against strategy bounds.
-func validateDelayConfig(delayPrefix string, delay *ThinkTimeConfig) error {
-	switch delay.Type {
-	case "fixed":
-
-		if delay.Duration <= 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".duration",
-				Message: "must be > 0 for fixed delay",
-			}
-		}
-	case "range":
-		if delay.Min < 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".min",
-				Message: "must be >= 0 for range delay",
-			}
-		}
-		if delay.Max <= 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".max",
-				Message: "must be > 0 for range delay",
-			}
-		}
-		if delay.Max < delay.Min {
-			return &ValidationError{
-				Field:   delayPrefix + ".max",
-				Message: "must be >= min for range delay",
-			}
-		}
-	case "expo":
-		if delay.Mean <= 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".mean",
-				Message: "must be > 0 for expo delay",
-			}
-		}
-		if delay.Min < 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".min",
-				Message: "must be >= 0",
-			}
-		}
-		if delay.Max < 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".max",
-				Message: "must be >= 0",
-			}
-		}
-		if delay.Min > 0 && delay.Max > 0 && delay.Max < delay.Min {
-			return &ValidationError{
-				Field:   delayPrefix + ".max",
-				Message: "must be >= min for expo delay",
-			}
-		}
-	case "gaussian":
-		if delay.Mean <= 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".mean",
-				Message: "must be > 0 for gaussian delay",
-			}
-		}
-		if delay.StdDev <= 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".std_dev",
-				Message: "must be > 0 for gaussian delay",
-			}
-		}
-		if delay.Min < 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".min",
-				Message: "must be >= 0",
-			}
-		}
-		if delay.Max < 0 {
-			return &ValidationError{
-				Field:   delayPrefix + ".max",
-				Message: "must be >= 0",
-			}
-		}
-		if delay.Min > 0 && delay.Max > 0 && delay.Max < delay.Min {
-			return &ValidationError{
-				Field:   delayPrefix + ".max",
-				Message: "must be >= min for gaussian delay",
-			}
-		}
-	default:
-		return &ValidationError{
-			Field:   delayPrefix + ".type",
-			Message: fmt.Sprintf("must be one of {fixed, range, expo, gaussian}, got %q", delay.Type),
-		}
-	}
-
-	return nil
-}
 
 
 // validateThreshold checks a single threshold configuration and parses its target value.
