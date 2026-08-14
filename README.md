@@ -286,11 +286,12 @@ func main() {
 				ctx.Metrics().Rate("checkout_success_rate", gtest.Tags{}).Add(0, 1)
 				return fmt.Errorf("request failed: %v", err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 
 			ctx.Metrics().Rate("checkout_success_rate", gtest.Tags{}).Add(1, 1)
 			ctx.Metrics().Counter("http_requests_total", gtest.Tags{}).Inc()
 			return nil
+
 		},
 		AfterTest: func(ctx gtest.ScenarioContext) error {
 			ctx.Log().Debug().Msg("iteration finished")

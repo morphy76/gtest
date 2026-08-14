@@ -18,13 +18,18 @@ func TestScenarioContextSleep(t *testing.T) {
 	logger, metrics := newTestDeps()
 
 	t.Run("explicit duration pauses for expected time", func(t *testing.T) {
-		var sleptDuration time.Duration
+		var durations []time.Duration
+		var mu sync.Mutex
 
 		scenario := engine.Scenario{
 			RunVU: func(ctx engine.ScenarioContext) error {
 				start := time.Now()
 				err := ctx.Sleep(50 * time.Millisecond)
-				sleptDuration = time.Since(start)
+				if err == nil {
+					mu.Lock()
+					durations = append(durations, time.Since(start))
+					mu.Unlock()
+				}
 				return err
 			},
 		}
@@ -40,8 +45,14 @@ func TestScenarioContextSleep(t *testing.T) {
 		err := exec.Execute(context.Background())
 		require.NoError(t, err)
 
-		assert.GreaterOrEqual(t, sleptDuration, 45*time.Millisecond)
+		mu.Lock()
+		defer mu.Unlock()
+		require.NotEmpty(t, durations)
+		for _, d := range durations {
+			assert.GreaterOrEqual(t, d, 45*time.Millisecond)
+		}
 	})
+
 
 	t.Run("aborts immediately when context is cancelled", func(t *testing.T) {
 		var sleepErr error

@@ -94,11 +94,12 @@ func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externa
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		metrics.RecordConnectionFailure()
 		metrics.RecordSSEAvailability(false)
 		return nil, fmt.Errorf("SSE connection failed with HTTP status %d", resp.StatusCode)
 	}
+
 
 	metrics.RecordSSEOpenTime(openDuration)
 	metrics.RecordSSEAvailability(true)
@@ -221,12 +222,12 @@ func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *Conv
 	if err != nil || (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated) {
 		metrics.RecordMessageDelivery(deliveryTime, false)
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		return fmt.Errorf("AddMessage failed with status %d: %v", resp.StatusCode, err)
 	}
 
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	metrics.RecordMessageDelivery(deliveryTime, true)
 	return nil
 }
@@ -243,9 +244,10 @@ func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeou
 		}
 
 		if event != nil && event.Message != nil {
-			if event.Message.Role == "CUSTOMER" {
+			switch event.Message.Role {
+			case "CUSTOMER":
 				metrics.RecordCustomerMessageReceived()
-			} else if event.Message.Role == "BOT" {
+			case "BOT":
 				rtt := time.Since(start)
 				metrics.RecordBotMessageReceived(rtt)
 				return event, nil
@@ -279,9 +281,10 @@ func (s *ConversationSession) Close() {
 		s.cancel()
 	}
 	if s.SSEStream != nil {
-		s.SSEStream.Close()
+		_ = s.SSEStream.Close()
 	}
 }
+
 
 // CloseConversation sends a DELETE request to close the dialog.
 func (c *ConversationClient) CloseConversation(ctx gtest.ScenarioContext, externalID, dialogID string) error {
@@ -299,7 +302,10 @@ func (c *ConversationClient) CloseConversation(ctx gtest.ScenarioContext, extern
 	if err != nil {
 		return fmt.Errorf("failed to send close request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("close conversation returned status %d", resp.StatusCode)

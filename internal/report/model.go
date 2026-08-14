@@ -28,15 +28,18 @@ type ReportData struct {
 
 // WriteReport outputs the report in the requested format (console or json) to w or a file.
 func WriteReport(w io.Writer, format string, reportOutFile string, data ReportData) error {
-	var targetWriter io.Writer = w
+	targetWriter := w
 	if reportOutFile != "" {
 		f, err := os.Create(reportOutFile)
 		if err != nil {
 			return fmt.Errorf("failed to create report output file %q: %w", reportOutFile, err)
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 		targetWriter = f
 	}
+
 
 	switch strings.ToLower(format) {
 	case "json":

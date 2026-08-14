@@ -142,8 +142,8 @@ func (c *scenarioContext) Sleep(d ...time.Duration) error {
 
 	if duration <= 0 {
 		select {
-		case <-c.Context.Done():
-			return c.Context.Err()
+		case <-c.Done():
+			return c.Err()
 		default:
 			return nil
 		}
@@ -153,12 +153,13 @@ func (c *scenarioContext) Sleep(d ...time.Duration) error {
 	defer timer.Stop()
 
 	select {
-	case <-c.Context.Done():
-		return c.Context.Err()
+	case <-c.Done():
+		return c.Err()
 	case <-timer.C:
 		return nil
 	}
 }
+
 
 // Compile-time interface satisfaction check.
 var _ ScenarioContext = (*scenarioContext)(nil)

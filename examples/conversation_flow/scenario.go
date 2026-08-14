@@ -57,7 +57,7 @@ func startMockServer() *httptest.Server {
 				},
 			}
 			data, _ := json.Marshal(createdEvent)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 
 			// Keep connection open until context cancelled
@@ -96,10 +96,11 @@ func startMockServer() *httptest.Server {
 						},
 					}
 					bData, _ := json.Marshal(botEvent)
-					fmt.Fprintf(ch.w, "data: %s\n\n", bData)
+					_, _ = fmt.Fprintf(ch.w, "data: %s\n\n", bData)
 					ch.flusher.Flush()
 				}
 			}()
+
 			return
 		}
 
