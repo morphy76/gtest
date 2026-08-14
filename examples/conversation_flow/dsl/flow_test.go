@@ -75,6 +75,9 @@ func fullProtocolMockServer(t *testing.T) *httptest.Server {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 
+			// Commit headers to client so stream is ready
+			w.WriteHeader(http.StatusOK)
+
 			ch := &sseTestChannel{w: w, flusher: flusher}
 
 			// Store both forms of the dialog ID so lookups succeed regardless
@@ -180,6 +183,7 @@ func TestConversationFlow_AbortedLifecycle(t *testing.T) {
 
 			flusher := w.(http.Flusher)
 			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
 
 			ch := &sseTestChannel{w: w, flusher: flusher}
 
@@ -248,6 +252,7 @@ func TestConversationFlow_PerEventTimeout(t *testing.T) {
 
 			flusher := w.(http.Flusher)
 			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
 
 			sendSSEEvent(&sseTestChannel{w: w, flusher: flusher}, map[string]any{
 				"lifecycle": map[string]string{
@@ -307,6 +312,7 @@ func TestConversationFlow_MessageSendFailure(t *testing.T) {
 
 			flusher := w.(http.Flusher)
 			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
 
 			sendSSEEvent(&sseTestChannel{w: w, flusher: flusher}, map[string]any{
 				"lifecycle": map[string]string{

@@ -110,6 +110,7 @@ func TestOpenConversationAndAwaitBotResponse(t *testing.T) {
 			assert.Equal(t, "test_tenant", r.Header.Get("X-Tenant-ID"))
 
 			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
 			flusher, ok := w.(http.Flusher)
 			require.True(t, ok)
 
@@ -187,6 +188,7 @@ func TestOpenConversationAndAwaitBotResponse(t *testing.T) {
 func TestAwaitBotResponse_Timeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
 		flusher := w.(http.Flusher)
 
 		// Only send created event, no bot response
