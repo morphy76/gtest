@@ -399,17 +399,20 @@ ctx.Metrics().Duration("foo", gtest.Tags{}).Observe(d) // PANIC: "foo" already r
 
 ### Built-in metrics (auto-recorded by the framework)
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `gtest.vu.iterations_total` | Counter | Total iterations executed |
-| `gtest.vu.iterations_failed` | Counter | Iterations that errored or panicked |
-| `gtest.vu.iterations_timeout` | Counter | Iterations exceeding `vu_timeout` |
-| `gtest.vu.panics` | Counter | RunVU panics recovered |
-| `gtest.vu.pretest_errors` | Counter | PreTest hook failures |
-| `gtest.vu.active` | Gauge | Currently active VU goroutines |
-| `gtest.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
-| `gtest.checks.passed` | Counter | Total inline checks that passed |
-| `gtest.checks.failed` | Counter | Total inline checks that failed |
+All built-in metrics are exported as typed constants in `pkg/gtest` (e.g. `gtest.MetricIterationsTotal`) and `internal/metric`:
+
+| Constant (`pkg/gtest`) | String Identifier | Type | Description |
+|------------------------|-------------------|------|-------------|
+| `gtest.MetricIterationsTotal` | `gtest.vu.iterations_total` | Counter | Total iterations executed |
+| `gtest.MetricIterationsFailed` | `gtest.vu.iterations_failed` | Counter | Iterations that errored or panicked |
+| `gtest.MetricIterationsTimeout` | `gtest.vu.iterations_timeout` | Counter | Iterations exceeding `vu_timeout` |
+| `gtest.MetricVUPanics` | `gtest.vu.panics` | Counter | RunVU panics recovered |
+| `gtest.MetricVUPretestErrors` | `gtest.vu.pretest_errors` | Counter | PreTest hook failures |
+| `gtest.MetricVUActive` | `gtest.vu.active` | Gauge | Currently active VU goroutines |
+| `gtest.MetricIterationDuration` | `gtest.vu.iteration_duration` | Duration | Completed VU iteration duration |
+| `gtest.MetricPacingDroppedIterations` | `gtest.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
+| `gtest.MetricChecksPassed` | `gtest.checks.passed` | Counter | Total inline checks that passed |
+| `gtest.MetricChecksFailed` | `gtest.checks.failed` | Counter | Total inline checks that failed |
 
 ---
 

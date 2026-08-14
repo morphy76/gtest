@@ -183,13 +183,13 @@ func (c *scenarioContext) Check(name string, fn CheckFunc) bool {
 
 	if reason == "" {
 		if c.metrics != nil {
-			c.metrics.Counter("gtest.checks.passed", metric.Tags{"name": name}).Inc()
+			c.metrics.Counter(metric.MetricChecksPassed, metric.Tags{"name": name}).Inc()
 		}
 		return true
 	}
 
 	if c.metrics != nil {
-		c.metrics.Counter("gtest.checks.failed", metric.Tags{"name": name}).Inc()
+		c.metrics.Counter(metric.MetricChecksFailed, metric.Tags{"name": name}).Inc()
 	}
 	if c.logger != nil {
 		c.logger.Warn().Str("check", name).Str("reason", reason).Msg("check failed")

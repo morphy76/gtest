@@ -265,8 +265,8 @@ func TestBuildSummaryData_ComprehensiveAndAlphabeticalSorting(t *testing.T) {
 	mGauge.Set(3.14)
 	bRate.Add(5, 10)
 
-	store.Counter("gtest.checks.passed", metric.Tags{"name": "chk_pass"}).Inc()
-	store.Counter("gtest.checks.failed", metric.Tags{"name": "chk_fail"}).Inc()
+	store.Counter(metric.MetricChecksPassed, metric.Tags{"name": "chk_pass"}).Inc()
+	store.Counter(metric.MetricChecksFailed, metric.Tags{"name": "chk_fail"}).Inc()
 
 	startTime := time.Date(2026, 8, 14, 10, 0, 0, 0, time.UTC)
 	endTime := startTime.Add(5 * time.Second)
@@ -323,8 +323,8 @@ func TestBuildSummaryData_ComprehensiveAndAlphabeticalSorting(t *testing.T) {
 	assert.Equal(t, "rate", summary.Metrics[1].Type)
 	assert.InDelta(t, 0.5, summary.Metrics[1].Rate, 0.0001)
 
-	assert.Equal(t, "gtest.checks.failed", summary.Metrics[2].Name)
-	assert.Equal(t, "gtest.checks.passed", summary.Metrics[3].Name)
+	assert.Equal(t, metric.MetricChecksFailed, summary.Metrics[2].Name)
+	assert.Equal(t, metric.MetricChecksPassed, summary.Metrics[3].Name)
 
 	assert.Equal(t, "m_gauge", summary.Metrics[4].Name)
 	assert.Equal(t, "gauge", summary.Metrics[4].Type)

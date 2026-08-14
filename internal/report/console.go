@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/gtest/internal/metric"
 )
 
 // GenerateConsoleReport formats and writes the console summary report to w.
@@ -35,9 +36,9 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 	fmt.Fprintf(&sb, "Duration:     %s  (ramp-up: %v | run: %v | ramp-down: %v)\n",
 		durStr, data.Config.RampUp, data.Config.RunPeriod, data.Config.RampDown)
 
-	totalIters := data.Metrics.AggregatedCounterValue("gtest.vu.iterations_total")
-	failedIters := data.Metrics.AggregatedCounterValue("gtest.vu.iterations_failed")
-	timeoutIters := data.Metrics.AggregatedCounterValue("gtest.vu.iterations_timeout")
+	totalIters := data.Metrics.AggregatedCounterValue(metric.MetricIterationsTotal)
+	failedIters := data.Metrics.AggregatedCounterValue(metric.MetricIterationsFailed)
+	timeoutIters := data.Metrics.AggregatedCounterValue(metric.MetricIterationsTimeout)
 
 	var failPct float64
 	if totalIters > 0 {
@@ -51,13 +52,13 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 	sb.WriteString("BUILT-IN METRICS\n")
 	sb.WriteString("────────────────────────────────────────────────────────────────\n")
 	builtInNames := []string{
-		"gtest.vu.iterations_total",
-		"gtest.vu.iterations_failed",
-		"gtest.vu.iterations_timeout",
-		"gtest.vu.panics",
-		"gtest.vu.pretest_errors",
-		"gtest.checks.passed",
-		"gtest.checks.failed",
+		metric.MetricIterationsTotal,
+		metric.MetricIterationsFailed,
+		metric.MetricIterationsTimeout,
+		metric.MetricVUPanics,
+		metric.MetricVUPretestErrors,
+		metric.MetricChecksPassed,
+		metric.MetricChecksFailed,
 	}
 	for _, name := range builtInNames {
 		val := data.Metrics.AggregatedCounterValue(name)
@@ -99,22 +100,22 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 	var customEntries []customMetricEntry
 
 	for _, name := range customHistograms {
-		if !strings.HasPrefix(name, "gtest.") {
+		if !strings.HasPrefix(name, metric.MetricPrefix) {
 			customEntries = append(customEntries, customMetricEntry{name: name, kind: "Duration"})
 		}
 	}
 	for _, name := range customCounters {
-		if !strings.HasPrefix(name, "gtest.") {
+		if !strings.HasPrefix(name, metric.MetricPrefix) {
 			customEntries = append(customEntries, customMetricEntry{name: name, kind: "Counter"})
 		}
 	}
 	for _, name := range customGauges {
-		if !strings.HasPrefix(name, "gtest.") {
+		if !strings.HasPrefix(name, metric.MetricPrefix) {
 			customEntries = append(customEntries, customMetricEntry{name: name, kind: "Gauge"})
 		}
 	}
 	for _, name := range customRates {
-		if !strings.HasPrefix(name, "gtest.") {
+		if !strings.HasPrefix(name, metric.MetricPrefix) {
 			customEntries = append(customEntries, customMetricEntry{name: name, kind: "Rate"})
 		}
 	}

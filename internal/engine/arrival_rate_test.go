@@ -10,6 +10,7 @@ import (
 
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/engine"
+	"github.com/morphy76/gtest/internal/metric"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +38,7 @@ func TestArrivalRateTargetTPS(t *testing.T) {
 	err := exec.Execute(context.Background())
 	require.NoError(t, err)
 
-	total := metrics.AggregatedCounterValue("gtest.vu.iterations_total")
+	total := metrics.AggregatedCounterValue(metric.MetricIterationsTotal)
 	// Target is 10 calls. ±20% tolerance means 8..12 calls.
 	assert.GreaterOrEqual(t, total, int64(8), "expected at least 8 completed iterations, got %d", total)
 	assert.LessOrEqual(t, total, int64(13), "expected at most 13 completed iterations, got %d", total)
@@ -67,7 +68,7 @@ func TestArrivalRatePoolSaturationDropsIterations(t *testing.T) {
 	err := exec.Execute(context.Background())
 	require.NoError(t, err)
 
-	dropped := metrics.AggregatedCounterValue("gtest.pacing.dropped_iterations")
+	dropped := metrics.AggregatedCounterValue(metric.MetricPacingDroppedIterations)
 	assert.Greater(t, dropped, int64(0), "gtest.pacing.dropped_iterations must be > 0 when pool saturates")
 }
 

@@ -140,6 +140,8 @@ ctx.Metrics().Gauge("active_connections", gtest.Tags{}).Set(42)
 ctx.Metrics().Rate("checkout_success_rate", gtest.Tags{}).Add(1, 1) // 1 success out of 1 trial
 ```
 
+Built-in framework metrics (`gtest.MetricIterationsTotal`, `gtest.MetricChecksPassed`, etc.) are pre-registered and exported as constants in package `gtest`. See [Developer Guide](docs/GUIDE.md#built-in-metrics-auto-recorded-by-the-framework) for the full inventory.
+
 ---
 
 ## Configuration (`gtest.yaml`)

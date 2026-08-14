@@ -336,9 +336,9 @@ func TestStoreImplementsInterfaces(t *testing.T) {
 func TestCheckSummaries(t *testing.T) {
 	store := metric.NewStore()
 
-	store.Counter("gtest.checks.passed", metric.Tags{"name": "status is 200"}).Add(8)
-	store.Counter("gtest.checks.failed", metric.Tags{"name": "status is 200"}).Add(2)
-	store.Counter("gtest.checks.passed", metric.Tags{"name": "content-type is json"}).Add(10)
+	store.Counter(metric.MetricChecksPassed, metric.Tags{"name": "status is 200"}).Add(8)
+	store.Counter(metric.MetricChecksFailed, metric.Tags{"name": "status is 200"}).Add(2)
+	store.Counter(metric.MetricChecksPassed, metric.Tags{"name": "content-type is json"}).Add(10)
 
 	summaries := store.CheckSummaries()
 	require.Len(t, summaries, 2)

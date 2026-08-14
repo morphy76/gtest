@@ -52,11 +52,11 @@ func TestRegistry_RegisterAndMetricType(t *testing.T) {
 func TestRegistry_PreRegisteredMetrics(t *testing.T) {
 	reg := metric.NewRegistry()
 
-	mt, ok := reg.MetricType("gtest.checks.passed")
+	mt, ok := reg.MetricType(metric.MetricChecksPassed)
 	assert.True(t, ok)
 	assert.Equal(t, metric.MetricTypeCounter, mt)
 
-	mt, ok = reg.MetricType("gtest.checks.failed")
+	mt, ok = reg.MetricType(metric.MetricChecksFailed)
 	assert.True(t, ok)
 	assert.Equal(t, metric.MetricTypeCounter, mt)
 }
@@ -113,7 +113,7 @@ func TestRegistry_NamesByType(t *testing.T) {
 	reg.MustRegister("rate_r", metric.MetricTypeRate)
 
 	// Built-in metrics: gtest.checks.failed, gtest.checks.passed
-	assert.Equal(t, []string{"cnt_a", "cnt_b", "gtest.checks.failed", "gtest.checks.passed"}, reg.CounterNames())
+	assert.Equal(t, []string{"cnt_a", "cnt_b", metric.MetricChecksFailed, metric.MetricChecksPassed}, reg.CounterNames())
 	assert.Equal(t, []string{"gauge_y", "gauge_z"}, reg.GaugeNames())
 	assert.Equal(t, []string{"dur_p"}, reg.HistogramNames())
 	assert.Equal(t, []string{"rate_r"}, reg.RateNames())

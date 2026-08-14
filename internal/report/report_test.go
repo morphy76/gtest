@@ -21,11 +21,11 @@ func createTestReportData() report.ReportData {
 	store := metric.NewStore()
 
 	// Built-in metrics
-	store.Counter("gtest.vu.iterations_total", metric.Tags{}).Add(100)
-	store.Counter("gtest.vu.iterations_failed", metric.Tags{}).Add(2)
-	store.Counter("gtest.vu.iterations_timeout", metric.Tags{}).Add(1)
-	store.Counter("gtest.checks.passed", metric.Tags{"name": "status is 200"}).Add(95)
-	store.Counter("gtest.checks.failed", metric.Tags{"name": "status is 200"}).Add(5)
+	store.Counter(metric.MetricIterationsTotal, metric.Tags{}).Add(100)
+	store.Counter(metric.MetricIterationsFailed, metric.Tags{}).Add(2)
+	store.Counter(metric.MetricIterationsTimeout, metric.Tags{}).Add(1)
+	store.Counter(metric.MetricChecksPassed, metric.Tags{"name": "status is 200"}).Add(95)
+	store.Counter(metric.MetricChecksFailed, metric.Tags{"name": "status is 200"}).Add(5)
 
 	// Custom metrics (out of order to test alphabetical sorting)
 	store.Counter("z_requests_total", metric.Tags{}).Add(100)
@@ -337,7 +337,7 @@ func (m *mockReportMetricReader) CheckSummaries() []metric.CheckSummary {
 func TestReportWithMockMetricReader(t *testing.T) {
 	mockReader := &mockReportMetricReader{
 		counters: map[string]int64{
-			"gtest.vu.iterations_total": 10,
+			metric.MetricIterationsTotal: 10,
 			"custom_counter":            5,
 		},
 		histograms: map[string]metric.HistogramSnapshot{

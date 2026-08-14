@@ -462,17 +462,20 @@ and increments the built-in `vu_iteration_errors` counter. The run loop continue
 The framework automatically records these metrics (always available in the report, not controllable by
 test developers):
 
-| Metric Name | Type | Description |
-|-------------|------|-------------|
-| `gtest.vu.iterations_total` | Counter | Total completed `RunVU` calls (success + failure) |
-| `gtest.vu.iterations_failed` | Counter | `RunVU` calls returning non-nil error or panic |
-| `gtest.vu.iterations_timeout` | Counter | `RunVU` calls that hit the `vu_timeout` deadline |
-| `gtest.vu.panics` | Counter | `RunVU` panics recovered by the framework |
-| `gtest.vu.pretest_errors` | Counter | VUs where `PreTest` returned non-nil error |
-| `gtest.vu.active` | Gauge | Active VU goroutines at current instant |
+| Metric Constant | String Identifier | Type | Description |
+|-----------------|-------------------|------|-------------|
+| `MetricIterationsTotal` | `gtest.vu.iterations_total` | Counter | Total completed `RunVU` calls (success + failure) |
+| `MetricIterationsFailed` | `gtest.vu.iterations_failed` | Counter | `RunVU` calls returning non-nil error or panic |
+| `MetricIterationsTimeout` | `gtest.vu.iterations_timeout` | Counter | `RunVU` calls that hit the `vu_timeout` deadline |
+| `MetricVUPanics` | `gtest.vu.panics` | Counter | `RunVU` panics recovered by the framework |
+| `MetricVUPretestErrors` | `gtest.vu.pretest_errors` | Counter | VUs where `PreTest` returned non-nil error |
+| `MetricVUActive` | `gtest.vu.active` | Gauge | Active VU goroutines at current instant |
+| `MetricIterationDuration` | `gtest.vu.iteration_duration` | Duration | Latency of completed VU iterations |
+| `MetricPacingDroppedIterations` | `gtest.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
+| `MetricChecksPassed` | `gtest.checks.passed` | Counter | Total inline checks that passed |
+| `MetricChecksFailed` | `gtest.checks.failed` | Counter | Total inline checks that failed |
 
-Test-developer-defined metrics use any other name. Framework metrics are prefixed `gtest.*` and must not be
-used by test developers.
+Built-in metric names are defined as exported package-level constants in `internal/metric/names.go` and re-exported in `pkg/gtest/metrics.go` for public use. All framework metrics are prefixed with `MetricPrefix = "gtest."` and must not be used as names for test-developer-defined custom metrics.
 
 ---
 
@@ -826,6 +829,7 @@ Return structured errors for all failure modes.
 **Goal:** Implement `MetricsCollector` with all four metric types. Verify thread safety.
 
 **Deliverables:**
+- `internal/metric/names.go` — Built-in telemetry metric name constants
 - `internal/metric/registry.go` — `Registry` interface & thread-safe type registry
 - `internal/metric/collector.go` — `Collector` interface & metric ingestion with generic double-checked locking sync helper
 - `internal/metric/aggregator.go` — `Aggregator` interface & summary statistics computation

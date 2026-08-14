@@ -208,7 +208,7 @@ func TestTeardownCalledOnceAfterVUsExit(t *testing.T) {
 		},
 		Teardown: func(ctx engine.ScenarioContext, state map[string]any) error {
 			teardownCount.Add(1)
-			activeVUsAtTeardown = int64(metrics.LastGaugeValue("gtest.vu.active"))
+			activeVUsAtTeardown = int64(metrics.LastGaugeValue(metric.MetricVUActive))
 			return nil
 		},
 	}
@@ -255,8 +255,8 @@ func TestRunVUPanicDoesNotTerminateOtherVUs(t *testing.T) {
 	err := exec.Execute(context.Background())
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(1), metrics.AggregatedCounterValue("gtest.vu.panics"))
-	assert.Greater(t, metrics.AggregatedCounterValue("gtest.vu.iterations_total"), int64(1))
+	assert.Equal(t, int64(1), metrics.AggregatedCounterValue(metric.MetricVUPanics))
+	assert.Greater(t, metrics.AggregatedCounterValue(metric.MetricIterationsTotal), int64(1))
 }
 
 // AC-1.6.8: A PreTest failure skips RunVU but still calls AfterTest for that VU
@@ -294,7 +294,7 @@ func TestPreTestFailureSkipsRunVUButCallsAfterTest(t *testing.T) {
 	err := exec.Execute(context.Background())
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(1), metrics.AggregatedCounterValue("gtest.vu.pretest_errors"))
+	assert.Equal(t, int64(1), metrics.AggregatedCounterValue(metric.MetricVUPretestErrors))
 	assert.Equal(t, int64(3), afterTestCount.Load(), "AfterTest must run for all 3 VUs")
 }
 
@@ -325,8 +325,8 @@ func TestVUTimeoutCountsAsFailedIterationAndContinuesLoop(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.GreaterOrEqual(t, runVUCallCount.Load(), int64(2), "RunVU should have been called at least twice after timeouts")
-	assert.GreaterOrEqual(t, metrics.AggregatedCounterValue("gtest.vu.iterations_timeout"), int64(2))
-	assert.GreaterOrEqual(t, metrics.AggregatedCounterValue("gtest.vu.iterations_failed"), int64(2))
+	assert.GreaterOrEqual(t, metrics.AggregatedCounterValue(metric.MetricIterationsTimeout), int64(2))
+	assert.GreaterOrEqual(t, metrics.AggregatedCounterValue(metric.MetricIterationsFailed), int64(2))
 }
 
 // AC-1.6.10: ramp_up=200ms, vus=4 → VU goroutines spawned at ~50ms intervals

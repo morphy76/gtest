@@ -105,9 +105,9 @@ func TestAggregator_CheckSummaries(t *testing.T) {
 	// No checks
 	assert.Nil(t, agg.CheckSummaries())
 
-	coll.Counter("gtest.checks.passed", metric.Tags{"name": "status 200"}).Add(9)
-	coll.Counter("gtest.checks.failed", metric.Tags{"name": "status 200"}).Add(1)
-	coll.Counter("gtest.checks.passed", metric.Tags{"name": "body valid"}).Add(20)
+	coll.Counter(metric.MetricChecksPassed, metric.Tags{"name": "status 200"}).Add(9)
+	coll.Counter(metric.MetricChecksFailed, metric.Tags{"name": "status 200"}).Add(1)
+	coll.Counter(metric.MetricChecksPassed, metric.Tags{"name": "body valid"}).Add(20)
 
 	summaries := agg.CheckSummaries()
 	require.Len(t, summaries, 2)
