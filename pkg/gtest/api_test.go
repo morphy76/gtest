@@ -3,6 +3,7 @@ package gtest_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -216,3 +217,13 @@ func TestCheckFunc(t *testing.T) {
 	assert.Empty(t, passing())
 	assert.Equal(t, "expected 200, got 500", failing())
 }
+
+func TestThinkTimeConfig_HasNoStructTags(t *testing.T) {
+	rt := reflect.TypeOf(gtest.ThinkTimeConfig{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		tag := f.Tag
+		assert.Empty(t, string(tag), "field %s on gtest.ThinkTimeConfig must not have struct tags, found %q", f.Name, string(tag))
+	}
+}
+

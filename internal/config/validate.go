@@ -2,12 +2,9 @@ package config
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/go-viper/mapstructure/v2"
 )
 
 // durationStats is the set of stat values that require a time.Duration target.
@@ -177,35 +174,6 @@ func validateGaussianDelay(prefix string, delay *ThinkTimeConfig) error {
 		}
 	}
 	return nil
-}
-
-// durationDecodeHook returns a mapstructure decode hook that converts string values
-// to time.Duration for fields typed as time.Duration.
-func durationDecodeHook() mapstructure.DecodeHookFuncType {
-	return func(from reflect.Type, to reflect.Type, data any) (any, error) {
-		if from.Kind() != reflect.String {
-			return data, nil
-		}
-		if to != reflect.TypeOf(time.Duration(0)) {
-			return data, nil
-		}
-
-		s, ok := data.(string)
-		if !ok {
-			return data, nil
-		}
-
-		// Empty string means zero duration (for optional fields with default "0s").
-		if s == "" {
-			return time.Duration(0), nil
-		}
-
-		d, err := time.ParseDuration(s)
-		if err != nil {
-			return nil, fmt.Errorf("cannot parse duration %q: %w", s, err)
-		}
-		return d, nil
-	}
 }
 
 // Validate checks all semantic invariants on a parsed Config.

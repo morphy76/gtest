@@ -809,9 +809,11 @@ Return structured errors for all failure modes.
 
 **Deliverables:**
 - `internal/config/loader.go` — Viper-based config loading
-- `internal/config/model.go` — `Config`, `ScenarioConfig`, `ThresholdConfig` types (pure DTOs)
+- `internal/config/dto.go` — `configDTO`, `scenarioConfigDTO`, `thinkTimeConfigDTO`, `thresholdConfigDTO` parsing DTOs with mapstructure tags and mapping methods
+- `internal/config/model.go` — `Config`, `ScenarioConfig`, `ThinkTimeConfig`, `ThresholdConfig` types (pure domain models without framework tags)
 - `internal/config/errors.go` — Structured error types (`ConfigError`, `ValidationError`)
 - `internal/config/validate.go` — Validation logic, stat/operator lookup tables, and delay validator registry
+
 
 **Acceptance Criteria (testable):**
 
@@ -1354,8 +1356,8 @@ scenarios:
 
 ```go
 type StageConfig struct {
-    Target   int           `mapstructure:"target"`    // target VU count at end of stage
-    Duration time.Duration `mapstructure:"duration"`  // stage duration
+    Target   int           // target VU count at end of stage
+    Duration time.Duration // stage duration
 }
 ```
 
