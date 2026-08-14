@@ -26,6 +26,11 @@ type AfterTestHook = engine.AfterTestHook
 // A non-nil error is logged but does not affect the overall pass/fail verdict.
 type TeardownHook = engine.TeardownHook
 
+// SummaryHook is called after test execution and report generation.
+// It receives the complete execution summary data.
+type SummaryHook = engine.SummaryHook
+
 // Scenario groups all lifecycle hooks for a named test scenario.
 // Only RunVU is required. All other hooks are optional and may be nil.
 type Scenario = engine.Scenario
+

@@ -29,15 +29,16 @@ go get github.com/morphy76/gtest
 
 ## Core Facilities & Lifecycle Hooks
 
-Test suites are created using `gtest.NewSuite("Suite Name")`. Each scenario registers up to 5 lifecycle hooks:
+Test suites are created using `gtest.NewSuite("Suite Name")`. Each scenario registers up to 6 lifecycle hooks:
 
 ```go
 type Scenario struct {
-    Setup      func(ctx ScenarioContext) (map[string]any, error)
-    PreTest    func(ctx ScenarioContext) error
-    RunVU      func(ctx ScenarioContext) error
-    AfterTest  func(ctx ScenarioContext) error
-    Teardown   func(ctx ScenarioContext, state map[string]any) error
+    Setup          func(ctx ScenarioContext) (map[string]any, error)
+    PreTest        func(ctx ScenarioContext) error
+    RunVU          func(ctx ScenarioContext) error
+    AfterTest      func(ctx ScenarioContext) error
+    Teardown       func(ctx ScenarioContext, state map[string]any) error
+    HandleSummary  func(ctx context.Context, summary SummaryData) error
 }
 ```
 
@@ -70,8 +71,14 @@ type Scenario struct {
                    ▼
        ┌────────────────────────┐
        │  Teardown(ctx, state)  │  (Runs once after all VUs exit)
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │  HandleSummary(summary)│  (Runs post-report with full execution summary)
        └────────────────────────┘
 ```
+
 
 ---
 
@@ -289,6 +296,10 @@ func main() {
 		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
 			return nil
 		},
+		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+			fmt.Printf("Summary Hook: %s completed in %v, passed=%v\n", summary.Scenario, summary.Duration, summary.Passed)
+			return nil
+		},
 	})
 
 	if err := suite.Execute(); err != nil {
@@ -298,6 +309,34 @@ func main() {
 ```
 
 ---
+
+## Execution Summary Hook (`HandleSummary`)
+
+`HandleSummary` enables developers to receive the complete execution summary programmatically after the test run and terminal/JSON report generation. This is ideal for posting results to Slack, Datadog, webhooks, or generating custom artifacts.
+
+```go
+HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+    // Check SLA verdict
+    if !summary.Passed {
+        sendSlackAlert(fmt.Sprintf("SLA breached for %s!", summary.Scenario))
+    }
+
+    // Access metrics & thresholds
+    reqCount := summary.Counter("http_requests_total")
+    latencyMetric := summary.Metric("http_request_duration")
+    fmt.Printf("Processed %d requests, p95 latency: %v\n", reqCount, latencyMetric.P95)
+
+    // Export JSON summary directly
+    jsonBytes, _ := summary.JSON()
+    os.WriteFile("summary-custom.json", jsonBytes, 0644)
+    return nil
+}
+```
+
+> **Note:** Any error returned by `HandleSummary` is logged to the output stream but does not modify the final exit code.
+
+---
+
 
 ## CLI Options & Execution
 

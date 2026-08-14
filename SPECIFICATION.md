@@ -1064,7 +1064,8 @@ scenarios:
 
 ---
 
-### Increment 1.15 — Execution Summary Hooks (`HandleSummary`)
+### Increment 1.15 — Execution Summary Hooks (`HandleSummary`) ✅ COMPLETED (2026-08-14)
+
 
 **Goal:** Allow test developers to programmatically receive the complete structured execution summary post-run (for Slack alerts, webhooks, or custom output generation).
 
