@@ -197,7 +197,14 @@ func (c *scenarioContext) Check(name string, fn CheckFunc) bool {
 	return false
 }
 
-// Compile-time interface satisfaction check.
-var _ ScenarioContext = (*scenarioContext)(nil)
+// Compile-time interface satisfaction checks.
+var (
+	_ ScenarioContext       = (*scenarioContext)(nil)
+	_ ExecutionIdentity     = (*scenarioContext)(nil)
+	_ ConfigProvider        = (*scenarioContext)(nil)
+	_ StateProvider         = (*scenarioContext)(nil)
+	_ ObservabilityProvider = (*scenarioContext)(nil)
+	_ WorkflowController    = (*scenarioContext)(nil)
+)
 
 

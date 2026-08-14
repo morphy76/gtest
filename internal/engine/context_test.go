@@ -237,5 +237,58 @@ func TestScenarioContextSleep(t *testing.T) {
 	})
 }
 
+func TestScenarioContext_InterfaceSegregation(t *testing.T) {
+	logger, metrics := newTestDeps()
+	cfg := config.ScenarioConfig{
+		Params: map[string]string{
+			"env":     "staging",
+			"retries": "3",
+			"timeout": "500ms",
+		},
+	}
+	state := map[string]any{"token": "jwt_secret_123"}
+
+	sCtx := engine.NewScenarioContext(context.Background(), 5, 12, cfg, "order_scenario", state, logger, metrics)
+
+	t.Run("satisfies ExecutionIdentity", func(t *testing.T) {
+		var id engine.ExecutionIdentity = sCtx
+		assert.Equal(t, int64(5), id.VUID())
+		assert.Equal(t, int64(12), id.Iteration())
+		assert.Equal(t, "order_scenario", id.ScenarioName())
+	})
+
+	t.Run("satisfies ConfigProvider", func(t *testing.T) {
+		var cp engine.ConfigProvider = sCtx
+		assert.Equal(t, "staging", cp.Param("env"))
+		assert.Equal(t, "", cp.Param("missing"))
+		assert.Equal(t, 3, cp.ParamInt("retries", 1))
+		assert.Equal(t, 10, cp.ParamInt("missing_int", 10))
+		assert.Equal(t, 500*time.Millisecond, cp.ParamDuration("timeout", time.Second))
+		assert.Equal(t, 2*time.Second, cp.ParamDuration("missing_dur", 2*time.Second))
+	})
+
+	t.Run("satisfies StateProvider", func(t *testing.T) {
+		var sp engine.StateProvider = sCtx
+		assert.Equal(t, "jwt_secret_123", sp.GlobalState("token"))
+		assert.Nil(t, sp.GlobalState("missing_key"))
+	})
+
+	t.Run("satisfies ObservabilityProvider", func(t *testing.T) {
+		var op engine.ObservabilityProvider = sCtx
+		assert.NotNil(t, op.Log())
+		assert.NotNil(t, op.Metrics())
+	})
+
+	t.Run("satisfies WorkflowController", func(t *testing.T) {
+		var wc engine.WorkflowController = sCtx
+		passed := wc.Check("is_ok", func() string { return "" })
+		assert.True(t, passed)
+
+		failed := wc.Check("is_fail", func() string { return "check error" })
+		assert.False(t, failed)
+	})
+}
+
+
 
 
