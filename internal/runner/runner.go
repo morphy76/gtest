@@ -13,15 +13,27 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// RunSuite coordinates scenario resolution, execution, metric aggregation, report dispatch, and exit handling.
-func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func(int)) error {
+// Result represents the outcome of running a load test suite.
+type Result struct {
+	Passed      bool
+	Aborted     bool
+	AbortReason string
+	Error       error
+}
+
+// RunSuite executes the suite CLI workflow.
+func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+
 	resolved, err := resolveScenario(s, args, stdout)
 	if err != nil {
-		return err
+		return Result{Error: err}
 	}
 
 	if resolved.ShowVersion {
-		return nil
+		return Result{Passed: true}
 	}
 
 	// Setup logger
@@ -41,9 +53,9 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 	if execErr != nil {
 		var setupErr *engine.SetupError
 		if errors.As(execErr, &setupErr) {
-			return setupErr
+			return Result{Error: setupErr}
 		}
-		return execErr
+		return Result{Error: execErr}
 	}
 
 	// Evaluate SLA thresholds
@@ -70,13 +82,10 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer, exitFunc func
 		Logger:           logger.Zerolog(),
 	})
 
-	if exitFunc != nil {
-		if allPassed {
-			exitFunc(0)
-		} else {
-			exitFunc(1)
-		}
+	return Result{
+		Passed:      allPassed,
+		Aborted:     executor.Aborted,
+		AbortReason: executor.AbortReason,
+		Error:       nil,
 	}
-
-	return nil
 }

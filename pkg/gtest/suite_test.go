@@ -83,3 +83,39 @@ func TestRegisterMultipleScenarios(t *testing.T) {
 		suite.RegisterScenario("scenario_b", gtest.Scenario{RunVU: runner})
 	})
 }
+
+// Issue #39: RegisterScenario panics if called after Execute
+func TestRegisterScenarioPanicsAfterExecute(t *testing.T) {
+	suite := gtest.NewSuite("test")
+	suite.RegisterScenario("scenario_a", gtest.Scenario{
+		RunVU: func(ctx gtest.ScenarioContext) error { return nil },
+	})
+
+	_ = suite.ExecuteWithArgs([]string{"--version"}, nil)
+
+	assert.PanicsWithValue(t, "gtest: cannot call RegisterScenario after Execute", func() {
+		suite.RegisterScenario("scenario_b", gtest.Scenario{
+			RunVU: func(ctx gtest.ScenarioContext) error { return nil },
+		})
+	})
+}
+
+// Issue #39: ExecutionResult.ExitCode() returns 0 on success and 1 on failure/abort/error
+func TestExecutionResultExitCode(t *testing.T) {
+	// Clean success
+	resSuccess := gtest.ExecutionResult{Passed: true}
+	assert.Equal(t, 0, resSuccess.ExitCode())
+
+	// Failed threshold (Passed == false)
+	resFailed := gtest.ExecutionResult{Passed: false}
+	assert.Equal(t, 1, resFailed.ExitCode())
+
+	// Aborted (Aborted == true)
+	resAborted := gtest.ExecutionResult{Passed: false, Aborted: true, AbortReason: "error rate exceeded"}
+	assert.Equal(t, 1, resAborted.ExitCode())
+
+	// Error (Error != nil)
+	resError := gtest.ExecutionResult{Passed: true, Error: assert.AnError}
+	assert.Equal(t, 1, resError.ExitCode())
+}
+
