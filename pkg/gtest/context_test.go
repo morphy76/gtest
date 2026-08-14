@@ -20,6 +20,27 @@ var (
 	_ gtest.WorkflowController  = (gtest.ScenarioContext)(nil)
 	_ data.ContextAccessor      = (gtest.ExecutionIdentity)(nil)
 	_ data.ContextAccessor      = (gtest.ScenarioContext)(nil)
+
+	// Role-specific context interfaces
+	_ context.Context           = (gtest.SetupContext)(nil)
+	_ gtest.ConfigProvider      = (gtest.SetupContext)(nil)
+	_ gtest.ObservabilityProvider = (gtest.SetupContext)(nil)
+
+	_ context.Context           = (gtest.VUContext)(nil)
+	_ gtest.ExecutionIdentity   = (gtest.VUContext)(nil)
+	_ gtest.ConfigProvider      = (gtest.VUContext)(nil)
+	_ gtest.StateProvider       = (gtest.VUContext)(nil)
+	_ gtest.ObservabilityProvider = (gtest.VUContext)(nil)
+	_ gtest.WorkflowController  = (gtest.VUContext)(nil)
+
+	_ context.Context           = (gtest.TeardownContext)(nil)
+	_ gtest.ConfigProvider      = (gtest.TeardownContext)(nil)
+	_ gtest.StateProvider       = (gtest.TeardownContext)(nil)
+	_ gtest.ObservabilityProvider = (gtest.TeardownContext)(nil)
+
+	_ context.Context           = (gtest.SummaryContext)(nil)
+	_ gtest.ConfigProvider      = (gtest.SummaryContext)(nil)
+	_ gtest.ObservabilityProvider = (gtest.SummaryContext)(nil)
 )
 
 // Mock implementations verifying that clients only need to implement the small interface they consume

@@ -33,14 +33,14 @@ func main() {
 	suite := gtest.NewSuite("Checks Demo Suite")
 
 	suite.RegisterScenario("checks_demo", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
 			return map[string]any{
 				"client":     client,
 				"server_url": ts.URL,
 			}, nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 

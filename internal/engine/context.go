@@ -53,6 +53,38 @@ type WorkflowController interface {
 	Check(name string, fn CheckFunc) bool
 }
 
+// SetupContext provides configuration access and structured observability during scenario setup.
+type SetupContext interface {
+	context.Context
+	ConfigProvider
+	ObservabilityProvider
+}
+
+// VUContext is the scoped execution context passed to active Virtual User hooks (PreTest, RunVU, AfterTest).
+type VUContext interface {
+	context.Context
+	ExecutionIdentity
+	ConfigProvider
+	StateProvider
+	ObservabilityProvider
+	WorkflowController
+}
+
+// TeardownContext provides configuration, read-only global state, and observability for scenario teardown.
+type TeardownContext interface {
+	context.Context
+	ConfigProvider
+	StateProvider
+	ObservabilityProvider
+}
+
+// SummaryContext provides context cancellation, scenario params, and structured logging for post-run reporting.
+type SummaryContext interface {
+	context.Context
+	ConfigProvider
+	ObservabilityProvider
+}
+
 // ScenarioContext is the scoped execution context passed to every VU hook.
 // It embeds context.Context and composes focused capability interfaces.
 type ScenarioContext interface {
@@ -269,6 +301,10 @@ func (c *scenarioContext) Check(name string, fn CheckFunc) bool {
 // Compile-time interface satisfaction checks.
 var (
 	_ ScenarioContext       = (*scenarioContext)(nil)
+	_ SetupContext          = (*scenarioContext)(nil)
+	_ VUContext             = (*scenarioContext)(nil)
+	_ TeardownContext       = (*scenarioContext)(nil)
+	_ SummaryContext        = (*scenarioContext)(nil)
 	_ ExecutionIdentity     = (*scenarioContext)(nil)
 	_ ConfigProvider        = (*scenarioContext)(nil)
 	_ StateProvider         = (*scenarioContext)(nil)

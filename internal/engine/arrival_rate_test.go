@@ -20,7 +20,7 @@ func TestArrivalRateTargetTPS(t *testing.T) {
 	logger, metrics := newTestDeps()
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			time.Sleep(5 * time.Millisecond)
 			return nil
 		},
@@ -50,7 +50,7 @@ func TestArrivalRatePoolSaturationDropsIterations(t *testing.T) {
 	logger, metrics := newTestDeps()
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			time.Sleep(500 * time.Millisecond)
 			return nil
 		},
@@ -81,7 +81,7 @@ func TestArrivalRateRampUpMidpointFirstIteration(t *testing.T) {
 	startTime := time.Now()
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			once.Do(func() {
 				firstCallTime = time.Now()
 			})
@@ -118,25 +118,25 @@ func TestArrivalRateLifecycleHooks(t *testing.T) {
 	var teardownCount atomic.Int64
 
 	scenario := engine.Scenario{
-		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx engine.SetupContext) (map[string]any, error) {
 			setupCount.Add(1)
 			return map[string]any{"data": "ok"}, nil
 		},
-		PreTest: func(ctx engine.ScenarioContext) error {
+		PreTest: func(ctx engine.VUContext) error {
 			preTestCount.Add(1)
 			return nil
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			if ctx.VUID() == 1 {
 				return errors.New("iteration error")
 			}
 			return nil
 		},
-		AfterTest: func(ctx engine.ScenarioContext) error {
+		AfterTest: func(ctx engine.VUContext) error {
 			afterTestCount.Add(1)
 			return nil
 		},
-		Teardown: func(ctx engine.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx engine.TeardownContext, state map[string]any) error {
 			teardownCount.Add(1)
 			assert.Equal(t, "ok", state["data"])
 			return nil
@@ -167,7 +167,7 @@ func TestArrivalRateZeroRampDownInFlightWorkersNotReportedAsTimeoutsOrFailures(t
 	logger, metrics := newTestDeps()
 
 	scenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			// Simulate context-aware iteration work (25ms)
 			select {
 			case <-time.After(25 * time.Millisecond):

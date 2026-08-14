@@ -1,7 +1,6 @@
 package gtest_test
 
 import (
-	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -20,28 +19,28 @@ func TestPublicDomainTypesDirectInstantiation(t *testing.T) {
 	var setupCalled, preTestCalled, runVUCalled, afterTestCalled, teardownCalled, handleSummaryCalled bool
 
 	sc := gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			setupCalled = true
 			return map[string]any{"token": "xyz"}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			preTestCalled = true
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			runVUCalled = true
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			afterTestCalled = true
 			return nil
 		},
-		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
 			teardownCalled = true
 			assert.Equal(t, "xyz", state["token"])
 			return nil
 		},
-		HandleSummary: func(ctx context.Context, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			handleSummaryCalled = true
 			assert.Equal(t, "Public Domain Suite", summary.SuiteName)
 			return nil
@@ -72,7 +71,7 @@ func TestPublicDomainTypesDirectInstantiation(t *testing.T) {
 	assert.NoError(t, sc.Teardown(nil, map[string]any{"token": "xyz"}))
 	assert.True(t, teardownCalled)
 
-	assert.NoError(t, sc.HandleSummary(context.Background(), gtest.SummaryData{SuiteName: "Public Domain Suite"}))
+	assert.NoError(t, sc.HandleSummary(nil, gtest.SummaryData{SuiteName: "Public Domain Suite"}))
 	assert.True(t, handleSummaryCalled)
 }
 

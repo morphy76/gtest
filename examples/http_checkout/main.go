@@ -24,7 +24,7 @@ func main() {
 	suite := gtest.NewSuite("HTTP Checkout Flow Suite")
 
 	suite.RegisterScenario("http_checkout_flow", gtest.Scenario{
-		Setup: func(ctx gtest.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{
 				Timeout: 2 * time.Second,
 			}
@@ -33,11 +33,11 @@ func main() {
 				"server_url": ts.URL,
 			}, nil
 		},
-		PreTest: func(ctx gtest.ScenarioContext) error {
+		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("preparing checkout iteration")
 			return nil
 		},
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
@@ -71,11 +71,11 @@ func main() {
 			ctx.Metrics().Counter("http_requests_total", gtest.Tags{"status": "200"}).Inc()
 			return nil
 		},
-		AfterTest: func(ctx gtest.ScenarioContext) error {
+		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Msg("completed checkout iteration")
 			return nil
 		},
-		Teardown: func(ctx gtest.ScenarioContext, state map[string]any) error {
+		Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
 			return nil
 		},
 	})

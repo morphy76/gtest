@@ -58,10 +58,10 @@ scenarios:
 
 	suite := gtest.NewSuite("Test Suite")
 	suite.RegisterScenario("scenario_a", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error { return nil },
+		RunVU: func(ctx gtest.VUContext) error { return nil },
 	})
 	suite.RegisterScenario("unconfigured_scenario", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error { return nil },
+		RunVU: func(ctx gtest.VUContext) error { return nil },
 	})
 
 	var stdout bytes.Buffer
@@ -92,7 +92,7 @@ scenarios:
 
 	suite := gtest.NewSuite("Test Suite")
 	suite.RegisterScenario("scenario_a", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error { return nil },
+		RunVU: func(ctx gtest.VUContext) error { return nil },
 	})
 
 	var stdout bytes.Buffer
@@ -128,7 +128,7 @@ scenarios:
 
 	suite := gtest.NewSuite("Test Suite")
 	suite.RegisterScenario("scenario_a", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			ctx.Metrics().Counter("http_requests", gtest.Tags{}).Inc()
 			return nil
 		},
@@ -168,7 +168,7 @@ scenarios:
 
 	suite := gtest.NewSuite("Test Suite")
 	suite.RegisterScenario("scenario_a", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			ctx.Metrics().Counter("http_requests", gtest.Tags{}).Inc()
 			time.Sleep(10 * time.Millisecond)
 			return nil
@@ -203,7 +203,7 @@ scenarios:
 
 	suite := gtest.NewSuite("JSON Export Test Suite")
 	suite.RegisterScenario("scenario_a", gtest.Scenario{
-		RunVU: func(ctx gtest.ScenarioContext) error {
+		RunVU: func(ctx gtest.VUContext) error {
 			ctx.Metrics().Counter("http_requests", gtest.Tags{}).Inc()
 			return nil
 		},

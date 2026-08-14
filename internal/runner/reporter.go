@@ -9,6 +9,7 @@ import (
 	"github.com/morphy76/gtest/internal/cli"
 	"github.com/morphy76/gtest/internal/config"
 	"github.com/morphy76/gtest/internal/engine"
+	"github.com/morphy76/gtest/internal/log"
 	"github.com/morphy76/gtest/internal/metric"
 	"github.com/morphy76/gtest/internal/report"
 	"github.com/morphy76/gtest/internal/sla"
@@ -112,7 +113,8 @@ func ReportExecution(ctx context.Context, p ReportParams) {
 			Aborted:          p.Aborted,
 			AbortReason:      p.AbortReason,
 		})
-		if err := p.Scenario.HandleSummary(ctx, summaryData); err != nil {
+		summaryCtx := engine.NewScenarioContext(ctx, 0, 0, p.ScenarioCfg, p.ScenarioName, nil, log.NewWithZerolog(p.Logger), nil)
+		if err := p.Scenario.HandleSummary(summaryCtx, summaryData); err != nil {
 			p.Logger.Error().Err(err).Msg("HandleSummary hook error")
 		}
 	}

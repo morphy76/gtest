@@ -27,7 +27,7 @@ func TestScenarioContextSleep(t *testing.T) {
 		var mu sync.Mutex
 
 		scenario := engine.Scenario{
-			RunVU: func(ctx engine.ScenarioContext) error {
+			RunVU: func(ctx engine.VUContext) error {
 				start := time.Now()
 				err := ctx.Sleep(50 * time.Millisecond)
 				if err == nil {
@@ -66,7 +66,7 @@ func TestScenarioContextSleep(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		scenario := engine.Scenario{
-			RunVU: func(sc engine.ScenarioContext) error {
+			RunVU: func(sc engine.VUContext) error {
 				go func() {
 					time.Sleep(20 * time.Millisecond)
 					cancel()
@@ -98,7 +98,7 @@ func TestScenarioContextSleep(t *testing.T) {
 		var mu sync.Mutex
 
 		scenario := engine.Scenario{
-			RunVU: func(ctx engine.ScenarioContext) error {
+			RunVU: func(ctx engine.VUContext) error {
 				start := time.Now()
 				err := ctx.Sleep()
 				if err == nil {
@@ -138,7 +138,7 @@ func TestScenarioContextSleep(t *testing.T) {
 		var sleptDuration time.Duration
 
 		scenario := engine.Scenario{
-			RunVU: func(ctx engine.ScenarioContext) error {
+			RunVU: func(ctx engine.VUContext) error {
 				start := time.Now()
 				err := ctx.Sleep()
 				sleptDuration = time.Since(start)
@@ -165,7 +165,7 @@ func TestScenarioContextSleep(t *testing.T) {
 		var mu sync.Mutex
 
 		scenario := engine.Scenario{
-			RunVU: func(ctx engine.ScenarioContext) error {
+			RunVU: func(ctx engine.VUContext) error {
 				start := time.Now()
 				err := ctx.Sleep()
 				if err == nil {
@@ -204,7 +204,7 @@ func TestScenarioContextSleep(t *testing.T) {
 		var sleptDuration time.Duration
 
 		scenario := engine.Scenario{
-			RunVU: func(ctx engine.ScenarioContext) error {
+			RunVU: func(ctx engine.VUContext) error {
 				start := time.Now()
 				err1 := ctx.Sleep(0)
 				err2 := ctx.Sleep(-50 * time.Millisecond)
@@ -291,6 +291,24 @@ func TestScenarioContext_InterfaceSegregation(t *testing.T) {
 
 		failed := wc.Check("is_fail", func() string { return "check error" })
 		assert.False(t, failed)
+	})
+
+	t.Run("satisfies role-specific context interfaces", func(t *testing.T) {
+		var setupCtx engine.SetupContext = sCtx
+		assert.Equal(t, "staging", setupCtx.Param("env"))
+		assert.NotNil(t, setupCtx.Log())
+
+		var vuCtx engine.VUContext = sCtx
+		assert.Equal(t, int64(5), vuCtx.VUID())
+		assert.Equal(t, "jwt_secret_123", vuCtx.GlobalState("token"))
+
+		var teardownCtx engine.TeardownContext = sCtx
+		assert.Equal(t, "staging", teardownCtx.Param("env"))
+		assert.Equal(t, "jwt_secret_123", teardownCtx.GlobalState("token"))
+
+		var summaryCtx engine.SummaryContext = sCtx
+		assert.Equal(t, "staging", summaryCtx.Param("env"))
+		assert.NotNil(t, summaryCtx.Log())
 	})
 }
 

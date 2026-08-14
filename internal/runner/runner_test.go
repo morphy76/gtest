@@ -192,7 +192,7 @@ scenarios:
 `)
 	reg := newMockRegistry("test-suite")
 	reg.Register("missing_from_config", engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error { return nil },
+		RunVU: func(ctx engine.VUContext) error { return nil },
 	})
 	resolver := runner.NewScenarioResolver(reg)
 
@@ -225,8 +225,8 @@ scenarios:
     vu_timeout: 1s
 `)
 	reg := newMockRegistry("test-suite")
-	scDefault := engine.Scenario{RunVU: func(ctx engine.ScenarioContext) error { return nil }}
-	scExplicit := engine.Scenario{RunVU: func(ctx engine.ScenarioContext) error { return nil }}
+	scDefault := engine.Scenario{RunVU: func(ctx engine.VUContext) error { return nil }}
+	scExplicit := engine.Scenario{RunVU: func(ctx engine.VUContext) error { return nil }}
 	reg.Register("scenario_default", scDefault)
 	reg.Register("scenario_explicit", scExplicit)
 
@@ -372,8 +372,8 @@ func TestReportExecution_ConsoleAndJSONAndHook(t *testing.T) {
 	var capturedSummary report.SummaryData
 
 	hookScenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error { return nil },
-		HandleSummary: func(ctx context.Context, summary report.SummaryData) error {
+		RunVU: func(ctx engine.VUContext) error { return nil },
+		HandleSummary: func(ctx engine.SummaryContext, summary report.SummaryData) error {
 			hookInvoked = true
 			capturedSummary = summary
 			return nil
@@ -427,8 +427,8 @@ func TestReportExecution_ConsoleAndJSONAndHook(t *testing.T) {
 
 func TestReportExecution_HookErrorDoesNotPanic(t *testing.T) {
 	hookScenario := engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error { return nil },
-		HandleSummary: func(ctx context.Context, summary report.SummaryData) error {
+		RunVU: func(ctx engine.VUContext) error { return nil },
+		HandleSummary: func(ctx engine.SummaryContext, summary report.SummaryData) error {
 			return errors.New("slack webhook failed")
 		},
 	}
@@ -464,7 +464,7 @@ func TestReportExecution_InvalidFilePathsHandledGracefully(t *testing.T) {
 	p := runner.ReportParams{
 		SuiteName:    "suite_test",
 		ScenarioName: "sc_test",
-		Scenario:     engine.Scenario{RunVU: func(ctx engine.ScenarioContext) error { return nil }},
+		Scenario:     engine.Scenario{RunVU: func(ctx engine.VUContext) error { return nil }},
 		ScenarioCfg:  config.ScenarioConfig{Type: config.ScenarioTypeConstantVUs},
 		Flags: &cli.Flags{
 			ReportFormat:  "console",
@@ -499,7 +499,7 @@ scenarios:
 	reg := newMockRegistry("e2e-suite")
 	executed := false
 	reg.Register("happy_path", engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			executed = true
 			return nil
 		},
@@ -531,7 +531,7 @@ scenarios:
 `)
 	reg := newMockRegistry("e2e-suite")
 	reg.Register("failing_sla", engine.Scenario{
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			ctx.Metrics().Counter("req_counter", nil).Inc()
 			return nil
 		},
@@ -556,10 +556,10 @@ scenarios:
 `)
 	reg := newMockRegistry("e2e-suite")
 	reg.Register("setup_fail", engine.Scenario{
-		Setup: func(ctx engine.ScenarioContext) (map[string]any, error) {
+		Setup: func(ctx engine.SetupContext) (map[string]any, error) {
 			return nil, errors.New("db connection refused")
 		},
-		RunVU: func(ctx engine.ScenarioContext) error {
+		RunVU: func(ctx engine.VUContext) error {
 			return nil
 		},
 	})

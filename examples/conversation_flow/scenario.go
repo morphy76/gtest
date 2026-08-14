@@ -135,7 +135,7 @@ func startMockServer() *httptest.Server {
 
 // Setup initializes global scenario state, starting the mock server if BASE_URL is unset or "mock".
 // If a messages_file param is provided, loads user prompts from CSV; otherwise uses built-in defaults.
-func Setup(ctx gtest.ScenarioContext) (map[string]any, error) {
+func Setup(ctx gtest.SetupContext) (map[string]any, error) {
 	baseURL := ctx.Param("base_url")
 	var mockServer *httptest.Server
 
@@ -174,14 +174,14 @@ func defaultMessages() []dsl.Message {
 }
 
 // PreTest executes per-VU initialization before iterations start.
-func PreTest(ctx gtest.ScenarioContext) error {
+func PreTest(ctx gtest.VUContext) error {
 	ctx.Log().Debug().Msg("initiating conversation session")
 	return nil
 }
 
 // RunVU executes the multi-turn conversational AI load iteration for a single virtual user.
 // It delegates to the event-driven ConversationFlow which mirrors the JS k6 SSE callback architecture.
-func RunVU(ctx gtest.ScenarioContext) error {
+func RunVU(ctx gtest.VUContext) error {
 	baseURL := ctx.GlobalState("server_url").(string)
 	messages := ctx.GlobalState("messages").([]dsl.Message)
 
@@ -204,13 +204,13 @@ func RunVU(ctx gtest.ScenarioContext) error {
 }
 
 // AfterTest executes per-VU cleanup after iterations complete.
-func AfterTest(ctx gtest.ScenarioContext) error {
+func AfterTest(ctx gtest.VUContext) error {
 	ctx.Log().Debug().Msg("completed conversation session")
 	return nil
 }
 
 // Teardown cleans up global resources created in Setup.
-func Teardown(ctx gtest.ScenarioContext, state map[string]any) error {
+func Teardown(ctx gtest.TeardownContext, state map[string]any) error {
 	if mockServer, ok := state["mock_server"].(*httptest.Server); ok && mockServer != nil {
 		mockServer.Close()
 	}

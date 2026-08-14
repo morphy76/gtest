@@ -230,10 +230,11 @@ type Rate interface {
 }
 ```
 
-### 4.3 `ScenarioContext` Interface
+### 4.3 `ScenarioContext` and Composed Context Interfaces
 
-To adhere to the **Interface Segregation Principle (ISP)**, `ScenarioContext` is decomposed into focused single-responsibility interfaces:
+To adhere to the **Interface Segregation Principle (ISP)** and eliminate dummy/meaningless methods during non-VU lifecycle phases, the framework defines focused single-responsibility capability interfaces and aggregates them into role-specific composed context interfaces:
 
+#### Capability Interfaces
 ```go
 // ExecutionIdentity provides execution identity attributes (VU ID, iteration index, and scenario name).
 type ExecutionIdentity interface {
@@ -273,10 +274,10 @@ type StateProvider interface {
 
 // ObservabilityProvider provides access to structured logging and metric collection.
 type ObservabilityProvider interface {
-    // Log returns the VU-scoped logger pre-enriched with scenario, vu_id, iteration fields.
+    // Log returns the structured logger pre-enriched with scenario/VU/iteration context.
     Log() Logger
 
-    // Metrics returns the shared metrics collector.
+    // Metrics returns the metrics collector handle for recording custom telemetry.
     Metrics() MetricsCollector
 }
 
@@ -288,9 +289,45 @@ type WorkflowController interface {
     // Check evaluates an inline pass/fail assertion function without stopping iteration.
     Check(name string, fn CheckFunc) bool
 }
+```
+
+#### Role-Specific Composed Context Interfaces
+```go
+// SetupContext provides configuration access and structured observability during scenario setup.
+type SetupContext interface {
+    context.Context
+    ConfigProvider
+    ObservabilityProvider
+}
+
+// VUContext is the scoped execution context passed to active Virtual User hooks (PreTest, RunVU, AfterTest).
+type VUContext interface {
+    context.Context
+    ExecutionIdentity
+    ConfigProvider
+    StateProvider
+    ObservabilityProvider
+    WorkflowController
+}
+
+// TeardownContext provides configuration, read-only global state, and observability for scenario teardown.
+type TeardownContext interface {
+    context.Context
+    ConfigProvider
+    StateProvider
+    ObservabilityProvider
+}
+
+// SummaryContext provides context cancellation, scenario params, and structured logging for post-run reporting.
+type SummaryContext interface {
+    context.Context
+    ConfigProvider
+    ObservabilityProvider
+}
 
 // ScenarioContext is the scoped execution context passed to every VU hook.
 // It embeds context.Context and composes focused capability interfaces.
+// Maintained for backward compatibility as equivalent to VUContext.
 type ScenarioContext interface {
     context.Context
     ExecutionIdentity
@@ -311,28 +348,32 @@ type ScenarioContext interface {
 
 ```go
 // SetupHook is called once before any VU is spawned.
-// It returns a global state map shared (read-only) with all VUs via ScenarioContext.GlobalState().
+// It returns a global state map shared (read-only) with all VUs via VUContext.GlobalState().
 // A non-nil error aborts the test run immediately.
-type SetupHook func(ctx ScenarioContext) (state map[string]any, err error)
+type SetupHook func(ctx SetupContext) (state map[string]any, err error)
 
 // PreTestHook is called once per VU goroutine before its iteration loop begins.
 // A non-nil error skips RunVU but still guarantees AfterTestHook execution for that VU.
-type PreTestHook func(ctx ScenarioContext) error
+type PreTestHook func(ctx VUContext) error
 
 // VURunnerHook is called repeatedly in a loop for each VU during the run_period.
 // Each call receives a fresh child context with the vu_timeout deadline applied.
 // A non-nil error or panic is caught, logged, and counted; the loop continues.
-type VURunnerHook func(ctx ScenarioContext) error
+type VURunnerHook func(ctx VUContext) error
 
 // AfterTestHook is called once per VU after the run loop ends (or after PreTest failure).
 // It runs in a deferred call, so it executes even if RunVU panicked.
 // A non-nil error is logged but does not affect the overall pass/fail verdict.
-type AfterTestHook func(ctx ScenarioContext) error
+type AfterTestHook func(ctx VUContext) error
 
 // TeardownHook is called once after all VU goroutines have exited.
 // It receives the same global state produced by Setup.
 // A non-nil error is logged but does not affect the overall pass/fail verdict.
-type TeardownHook func(ctx ScenarioContext, state map[string]any) error
+type TeardownHook func(ctx TeardownContext, state map[string]any) error
+
+// SummaryHook is called after test execution and report generation.
+// It receives the execution context and complete execution summary data.
+type SummaryHook func(ctx SummaryContext, summary SummaryData) error
 ```
 
 ### 4.5 `Scenario` Struct
@@ -341,11 +382,12 @@ type TeardownHook func(ctx ScenarioContext, state map[string]any) error
 // Scenario groups all lifecycle hooks for a named test scenario.
 // Only RunVU is required. All other hooks are optional and may be nil.
 type Scenario struct {
-    Setup     SetupHook     // optional
-    PreTest   PreTestHook   // optional
-    RunVU     VURunnerHook  // required
-    AfterTest AfterTestHook // optional
-    Teardown  TeardownHook  // optional
+    Setup         SetupHook     // optional
+    PreTest       PreTestHook   // optional
+    RunVU         VURunnerHook  // required
+    AfterTest     AfterTestHook // optional
+    Teardown      TeardownHook  // optional
+    HandleSummary SummaryHook   // optional
 }
 ```
 
@@ -1138,7 +1180,7 @@ scenarios:
 **Goal:** Allow test developers to programmatically receive the complete structured execution summary post-run (for Slack alerts, webhooks, or custom output generation).
 
 **Deliverables:**
-- `pkg/gtest/scenario.go` — `SummaryHook` type (`func(ctx context.Context, summary SummaryData) error`) and `Scenario.HandleSummary` field
+- `pkg/gtest/scenario.go` — `SummaryHook` type (`func(ctx SummaryContext, summary SummaryData) error`) and `Scenario.HandleSummary` field
 - `pkg/gtest/summary.go` — `SummaryData` export struct containing run metadata, metrics snapshot, and SLA results
 - `internal/runner/reporter.go` & `internal/runner/runner.go` — post-report execution of `HandleSummary`
 
