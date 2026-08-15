@@ -14,10 +14,9 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 
-
-func main() {
-	// Start an in-process mock server serving both the target business API and a webhook endpoint
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// startMockServiceAndWebhookServer starts an in-process mock server serving both the target API and a webhook endpoint.
+func startMockServiceAndWebhookServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
@@ -40,10 +39,17 @@ func main() {
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		}
 	}))
+}
+
+func main() {
+	// 1. Launch in-process mock service & webhook receiver
+	ts := startMockServiceAndWebhookServer()
 	defer ts.Close()
 
+	// 2. Initialize gtest suite
 	suite := gtest.NewSuite("Execution Summary Hook Demo Suite")
 
+	// 3. Register scenario with HandleSummary hook
 	suite.RegisterScenario("summary_hook_demo", gtest.Scenario{
 		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
@@ -53,10 +59,12 @@ func main() {
 				"webhook_url": ts.URL + "/webhook/alerts",
 			}, nil
 		},
+
 		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
+			// Step 1: Execute task request and measure latency
 			start := time.Now()
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/api/task", nil)
 			if err != nil {
@@ -68,6 +76,7 @@ func main() {
 			latency := time.Since(start)
 			ctx.Metrics().Duration("task_latency", gtest.Tags{}).Observe(latency)
 
+			// Step 2: Validate response and record metrics
 			if err != nil || resp.StatusCode != http.StatusOK {
 				ctx.Metrics().Rate("task_success_rate", gtest.Tags{}).Add(0, 1)
 				if resp != nil {
@@ -81,17 +90,21 @@ func main() {
 			ctx.Metrics().Counter("tasks_completed_total", gtest.Tags{}).Inc()
 			return nil
 		},
-		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
-			// HandleSummary executes ONCE post-test run after all reports have been generated.
-			// It receives the full SummaryData model with metadata, metrics, and threshold outcomes.
 
+		// HandleSummary executes ONCE post-test run after all reports (console & JSON) have been generated.
+		// It receives the full SummaryData model with metadata, metric aggregates, and threshold outcomes.
+		// Use this hook for:
+		// - Posting results or alerts to Slack, Discord, MS Teams, or Datadog
+		// - Generating custom CSV, Markdown, or HTML test summary artifacts
+		// - Triggering downstream CI/CD pipelines
+		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
 			fmt.Println("\n--- [HandleSummary Hook Invoked] ---")
 			fmt.Printf("Suite:       %s\n", summary.SuiteName)
 			fmt.Printf("Scenario:    %s\n", summary.Scenario)
 			fmt.Printf("Duration:    %v\n", summary.Duration)
 			fmt.Printf("SLA Verdict: Passed=%v\n", summary.Passed)
 
-			// 1. Inspect metric aggregates
+			// Step 1: Inspect aggregated metrics
 			totalTasks := summary.Counter("tasks_completed_total")
 			successRate := summary.Rate("task_success_rate")
 			latencyMetric := summary.Metric("task_latency")
@@ -101,7 +114,7 @@ func main() {
 				fmt.Printf("Latency p95: %v | Max: %v\n", latencyMetric.P95, latencyMetric.Max)
 			}
 
-			// 2. Evaluate SLA threshold outcomes programmatically
+			// Step 2: Programmatically inspect SLA threshold results
 			for _, th := range summary.Thresholds {
 				status := "PASS"
 				if !th.Passed {
@@ -111,7 +124,7 @@ func main() {
 					status, th.Metric, th.Stat, th.Target, th.Actual)
 			}
 
-			// 3. Post structured results to a webhook endpoint
+			// Step 3: Post structured results payload to a webhook alert endpoint
 			notification := map[string]any{
 				"suite":            summary.SuiteName,
 				"scenario":         summary.Scenario,
@@ -121,7 +134,11 @@ func main() {
 				"success_rate":     successRate,
 			}
 
-			bodyBytes, _ := json.Marshal(notification)
+			bodyBytes, err := json.Marshal(notification)
+			if err != nil {
+				return fmt.Errorf("failed to marshal notification: %w", err)
+			}
+
 			webhookReq, err := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/webhook/alerts", bytes.NewReader(bodyBytes))
 			if err != nil {
 				return fmt.Errorf("failed to prepare webhook request: %w", err)
@@ -141,6 +158,7 @@ func main() {
 		},
 	})
 
+	// 4. Run the suite
 	res := suite.Execute()
 	if res.Error != nil {
 		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)

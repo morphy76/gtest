@@ -12,10 +12,9 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 
-
-func main() {
-	// Start an in-process mock HTTP server simulating an e-commerce platform
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// startMockECommerceServer starts an in-process HTTP mock server simulating catalog, cart, and checkout endpoints.
+func startMockECommerceServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/catalog":
@@ -32,14 +31,24 @@ func main() {
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		}
 	}))
+}
+
+func main() {
+	// 1. Start mock e-commerce backend
+	ts := startMockECommerceServer()
 	defer ts.Close()
 
+	// 2. Initialize gtest suite
 	suite := gtest.NewSuite("Thinking Time & User Delay Demo Suite")
 
+	// 3. Register multi-step scenario with thinking time pauses
 	suite.RegisterScenario("user_journey_with_think_time", gtest.Scenario{
 		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 3 * time.Second}
-			// Initialize a custom exponential delay generator for intra-step decision modeling
+
+			// Pedagogical Note:
+			// Initialize custom mathematical delay generators (e.g. ExpoDelay, GaussianDelay, RangeDelay)
+			// once during Setup so that distribution generators can be reused efficiently across VUs.
 			expoGen := gtest.ExpoDelay(25*time.Millisecond, 10*time.Millisecond, 50*time.Millisecond)
 
 			return map[string]any{
@@ -48,10 +57,12 @@ func main() {
 				"expo_delay": expoGen,
 			}, nil
 		},
+
 		PreTest: func(ctx gtest.VUContext) error {
-			ctx.Log().Debug().Msg("initiating user journey iteration")
+			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating user journey iteration")
 			return nil
 		},
+
 		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
@@ -71,8 +82,10 @@ func main() {
 			_ = resp1.Body.Close()
 			ctx.Metrics().Duration("catalog_view_duration", gtest.Tags{}).Observe(time.Since(startCatalog))
 
-			// Pause 1: Configured interaction delay from gtest.yaml (respects ctx.Done())
-			// Calling ctx.Sleep() with no arguments uses the scenario's configured interaction_delay strategy
+			// Pause 1: Declarative thinking time configured in gtest.yaml
+			// Calling ctx.Sleep() with NO arguments automatically evaluates the scenario's
+			// configured interaction_delay strategy (e.g. range, fixed, expo, gaussian).
+			// It actively respects ctx.Done() for instantaneous cancellation during shutdown.
 			thinkStart1 := time.Now()
 			if err := ctx.Sleep(); err != nil {
 				return fmt.Errorf("think time aborted: %w", err)
@@ -93,7 +106,8 @@ func main() {
 			_ = resp2.Body.Close()
 			ctx.Metrics().Duration("add_to_cart_duration", gtest.Tags{}).Observe(time.Since(startCart))
 
-			// Pause 2: Programmatic pause using custom exponential delay generator
+			// Pause 2: Programmatic pause using exponential delay generator
+			// Calling ctx.Sleep(duration) pauses for an explicit duration, still respecting ctx.Done().
 			customPause := expoGen.Next()
 			if err := ctx.Sleep(customPause); err != nil {
 				return fmt.Errorf("custom pause aborted: %w", err)
@@ -113,18 +127,20 @@ func main() {
 			_ = resp3.Body.Close()
 			ctx.Metrics().Duration("checkout_duration", gtest.Tags{}).Observe(time.Since(startCheckout))
 
-			// Flow completed successfully
+			// Record overall journey metrics
 			ctx.Metrics().Rate("user_flow_success_rate", gtest.Tags{}).Add(1, 1)
 			ctx.Metrics().Counter("user_journeys_completed_total", gtest.Tags{}).Inc()
 
 			return nil
 		},
+
 		AfterTest: func(ctx gtest.VUContext) error {
-			ctx.Log().Debug().Msg("completed user journey iteration")
+			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed user journey iteration")
 			return nil
 		},
 	})
 
+	// 4. Run the suite
 	res := suite.Execute()
 	if res.Error != nil {
 		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)

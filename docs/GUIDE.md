@@ -904,43 +904,32 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 
 ## 13. Reference Implementations (`examples/`)
 
-The repository includes a comprehensive set of compilable, self-contained example suites under `examples/`. Each example is paired with an in-process mock server (`httptest.Server` or simulated domain model) and a companion `gtest.yaml` configuration:
+The repository includes a comprehensive set of compilable, self-contained example suites under [`examples/`](../examples/README.md). Each example is paired with an in-process mock server (`httptest.Server` or simulated domain model), a companion `gtest.yaml` configuration, and a dedicated `README.md` reference guide.
 
-| Example | Directory | Core Concepts |
-|---|---|---|
-| **HTTP REST Checkout** | [`examples/http_checkout/`](../examples/http_checkout/) | Standard REST API load test, HDR duration histogram, success rate, constant VU concurrency. |
-| **gRPC RPC Service** | [`examples/grpc_user_service/`](../examples/grpc_user_service/) | Open-system arrival rate pacing (`arrival_rate`), target TPS, bounded worker pool (`max_vus`). |
-| **Ramping VUs Spike Test** | [`examples/ramping_vus/`](../examples/ramping_vus/) | Multi-stage spike test with dynamic VU scaling and recovery observation (`ramping_vus`). |
-| **Conversational AI Flow** | [`examples/conversation_flow/`](../examples/conversation_flow/) | Real-time Server-Sent Events (SSE) streaming, multi-turn state machine, DSL client architecture. |
-| **Thinking Time & Delays** | [`examples/think_time/`](../examples/think_time/) | Multi-step journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. |
-| **Inline Checks (Assertions)** | [`examples/checks/`](../examples/checks/) | Inline assertions (`ctx.Check`), non-aborting validations, auto-instrumented check counters and report tables. |
-| **Data Parameterization** | [`examples/data_parameterization/`](../examples/data_parameterization/) | `pkg/gtest/data` dataset ingestion (CSV, JSON, JSONL) with `Sequential`, `Random`, and `SharedQueue` strategies. |
-| **SLA Thresholds & Quality Gates** | [`examples/sla_thresholds/`](../examples/sla_thresholds/) | Multi-metric thresholds, percentile gates, rate assertions, and early test termination with `abort_on_fail`. |
-| **Execution Summary Hook** | [`examples/handle_summary/`](../examples/handle_summary/) | `HandleSummary` lifecycle hook, summary data inspection, programmatic webhook dispatch and artifact generation. |
+See the [**Examples Reference Suite Index**](../examples/README.md) for a structured 3-tier learning path and full capability matrix.
+
+| Example | Directory | Core Concepts | Guide |
+|---|---|---|---|
+| **HTTP REST Checkout** | [`examples/http_checkout/`](../examples/http_checkout/) | Standard REST API load test, HDR duration histogram, success rate, constant VU concurrency. | [Read Guide](../examples/http_checkout/README.md) |
+| **Inline Checks (Assertions)** | [`examples/checks/`](../examples/checks/) | Inline assertions (`ctx.Check`), non-aborting validations, auto-instrumented check counters and report tables. | [Read Guide](../examples/checks/README.md) |
+| **Thinking Time & Delays** | [`examples/think_time/`](../examples/think_time/) | Multi-step journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. | [Read Guide](../examples/think_time/README.md) |
+| **Data Parameterization** | [`examples/data_parameterization/`](../examples/data_parameterization/) | `pkg/gtest/data` dataset ingestion (CSV, JSON, JSONL) with `Sequential`, `Random`, and `SharedQueue` strategies. | [Read Guide](../examples/data_parameterization/README.md) |
+| **Ramping VUs Spike Test** | [`examples/ramping_vus/`](../examples/ramping_vus/) | Multi-stage spike test with dynamic VU scaling and recovery observation (`ramping_vus`). | [Read Guide](../examples/ramping_vus/README.md) |
+| **SLA Thresholds & Quality Gates** | [`examples/sla_thresholds/`](../examples/sla_thresholds/) | Multi-metric thresholds, percentile gates, rate assertions, and early test termination with `abort_on_fail`. | [Read Guide](../examples/sla_thresholds/README.md) |
+| **Execution Summary Hook** | [`examples/handle_summary/`](../examples/handle_summary/) | `HandleSummary` lifecycle hook, summary data inspection, programmatic webhook dispatch and artifact generation. | [Read Guide](../examples/handle_summary/README.md) |
+| **Conversational AI Flow** | [`examples/conversation_flow/`](../examples/conversation_flow/) | Real-time Server-Sent Events (SSE) streaming, multi-turn state machine, DSL client architecture. | [Read Guide](../examples/conversation_flow/README.md) |
+| **gRPC RPC Service** | [`examples/grpc_user_service/`](../examples/grpc_user_service/) | Open-system arrival rate pacing (`arrival_rate`), target TPS, bounded worker pool (`max_vus`). | [Read Guide](../examples/grpc_user_service/README.md) |
 
 ### Running Examples
 
-Run any example directly by navigating to its directory:
+Run any example directly by navigating to its directory or passing the config path:
 
 ```bash
-# Run the think_time example:
+# Run any example directly from repo root:
+go run -tags=gtest_example ./examples/think_time --config ./examples/think_time/gtest.yaml
+
+# Or navigate to the directory:
 cd examples/think_time
-go run -tags=gtest_example .
-
-# Run the checks example:
-cd examples/checks
-go run -tags=gtest_example .
-
-# Run the data parameterization example:
-cd examples/data_parameterization
-go run -tags=gtest_example .
-
-# Run the SLA thresholds example:
-cd examples/sla_thresholds
-go run -tags=gtest_example .
-
-# Run the summary hook example:
-cd examples/handle_summary
 go run -tags=gtest_example .
 ```
 

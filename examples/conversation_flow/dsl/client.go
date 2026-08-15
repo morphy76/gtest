@@ -194,6 +194,9 @@ func (s *ConversationSession) readLoop(body io.ReadCloser) {
 
 // AddMessage posts a customer message to an active dialog.
 func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *ConversationSession, messageText string) error {
+	if session == nil {
+		return fmt.Errorf("cannot add message: session is nil")
+	}
 	metrics := NewMetrics(ctx.Metrics())
 	start := time.Now()
 	url := fmt.Sprintf("%s/api/v1/message/%s", c.BaseURL, session.DialogID)

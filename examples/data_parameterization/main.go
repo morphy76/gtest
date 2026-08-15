@@ -14,7 +14,6 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest/data"
 )
 
-
 // Sample CSV dataset: user credentials and roles
 const sampleCSV = `username,user_id,role
 alice,u101,admin
@@ -38,9 +37,9 @@ const sampleJSONL = `{"code": "SUMMER10", "discount_pct": "10", "max_uses": "100
 {"code": "WELCOME5", "discount_pct": "5", "max_uses": "500"}
 `
 
-func main() {
-	// Start an in-process HTTP mock server simulating an e-commerce API
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// startMockDataServer creates an in-process HTTP mock server simulating user, product, and coupon lookup endpoints.
+func startMockDataServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/user":
@@ -78,25 +77,40 @@ func main() {
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		}
 	}))
+}
+
+func main() {
+	// 1. Launch in-process API server
+	ts := startMockDataServer()
 	defer ts.Close()
 
+	// 2. Initialize gtest suite
 	suite := gtest.NewSuite("Data Parameterization Demo Suite")
 
+	// 3. Register scenario demonstrating dataset parameterization
 	suite.RegisterScenario("data_parameterization_flow", gtest.Scenario{
 		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
-			// 1. Load CSV dataset with Sequential round-robin strategy (deterministic per VU + iteration)
+			// Pedagogical Note:
+			// Load datasets once in Setup. The pkg/gtest/data module provides thread-safe
+			// dataset distribution strategies:
+			//
+			// 1. data.Sequential: Deterministic round-robin per VU + iteration index ((vu-1+iter)%N).
+			// 2. data.Random: Lock-free, uniform random selection across rows.
+			// 3. data.SharedQueue: Atomic single-consumption FIFO queue across concurrent VUs.
+
+			// 1. Load CSV dataset with Sequential strategy
 			csvDS, err := data.LoadCSV(strings.NewReader(sampleCSV), data.Sequential)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load CSV dataset: %w", err)
 			}
 
-			// 2. Load JSON dataset with Random distribution strategy
+			// 2. Load JSON dataset with Random strategy
 			jsonDS, err := data.LoadJSON(strings.NewReader(sampleJSON), data.Random)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load JSON dataset: %w", err)
 			}
 
-			// 3. Load JSONL dataset with SharedQueue strategy (thread-safe atomic cursor)
+			// 3. Load JSONL dataset with SharedQueue strategy
 			jsonlDS, err := data.LoadJSONL(strings.NewReader(sampleJSONL), data.SharedQueue)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load JSONL dataset: %w", err)
@@ -111,17 +125,19 @@ func main() {
 				"server_url":    ts.URL,
 			}, nil
 		},
+
 		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("starting parameterized iteration")
 			return nil
 		},
+
 		RunVU: func(ctx gtest.VUContext) error {
 			csvDS := ctx.GlobalState("csv_dataset").(*data.DataSet)
 			jsonDS := ctx.GlobalState("json_dataset").(*data.DataSet)
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
-			// Step 1: Query User API using CSV record (Sequential strategy)
+			// Step 1: Ingest next record from CSV (Sequential strategy) and query User API
 			userRec, err := csvDS.Next(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get CSV record: %w", err)
@@ -144,7 +160,7 @@ func main() {
 				return ""
 			})
 
-			// Step 2: Query Product API using JSON record (Random strategy)
+			// Step 2: Ingest next record from JSON (Random strategy) and query Product API
 			productRec, err := jsonDS.Next(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get JSON record: %w", err)
@@ -166,17 +182,20 @@ func main() {
 				return ""
 			})
 
+			// Step 3: Record aggregated dataset execution metrics
 			ctx.Metrics().Rate("dataset_success_rate", gtest.Tags{}).Add(1, 1)
 			ctx.Metrics().Counter("parameterized_requests_total", gtest.Tags{"format": "csv_and_json"}).Inc()
 
 			return nil
 		},
+
 		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed parameterized iteration")
 			return nil
 		},
 	})
 
+	// 4. Run the suite
 	res := suite.Execute()
 	if res.Error != nil {
 		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)

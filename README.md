@@ -510,19 +510,19 @@ For complete architectural details, Go runtime tuning (`GOMEMLIMIT`, `GOGC`, `GO
 
 ## Examples & Reference Implementations
 
-The `examples/` directory contains self-contained, compilable load test suites demonstrating all framework capabilities:
+The [`examples/`](examples/README.md) directory contains self-contained, compilable load test suites demonstrating all framework capabilities. See the [**Examples Reference Suite**](examples/README.md) for a structured 3-tier learning progression path and complete feature matrix.
 
-| Example Directory | Scenario Type | Features Demonstrated |
-|---|---|---|
-| [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, custom duration/counter/rate metrics, linear ramp-up/down. |
-| [`examples/grpc_user_service/`](examples/grpc_user_service/) | `arrival_rate` | High-throughput RPC simulation, token bucket TPS pacing, bounded worker pool. |
-| [`examples/ramping_vus/`](examples/ramping_vus/) | `ramping_vus` | Multi-stage spike test with dynamic VU scaling and recovery observation. |
-| [`examples/conversation_flow/`](examples/conversation_flow/) | `constant_vus` | Real-time SSE streaming conversational AI load test, multi-turn state machine, DSL client. |
-| [`examples/think_time/`](examples/think_time/) | `constant_vus` | Multi-step user journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. |
-| [`examples/checks/`](examples/checks/) | `constant_vus` | Inline assertions (`ctx.Check`) for HTTP status, headers, JSON body validation, check metrics. |
-| [`examples/data_parameterization/`](examples/data_parameterization/) | `constant_vus` | CSV (`Sequential`), JSON (`Random`), and JSONL (`SharedQueue`) dataset parameterization. |
-| [`examples/sla_thresholds/`](examples/sla_thresholds/) | `constant_vus` | Quality gate SLA thresholds across metrics, percentile operators, and early stop with `abort_on_fail`. |
-| [`examples/handle_summary/`](examples/handle_summary/) | `constant_vus` | Post-test execution hook (`HandleSummary`), summary metric inspection, webhook notification dispatch. |
+| Example Directory | Scenario Type | Features Demonstrated | Documentation |
+|---|---|---|---|
+| [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, custom duration/counter/rate metrics, linear ramp-up/down. | [Guide](examples/http_checkout/README.md) |
+| [`examples/checks/`](examples/checks/) | `constant_vus` | Inline assertions (`ctx.Check`) for HTTP status, headers, JSON body validation, check metrics. | [Guide](examples/checks/README.md) |
+| [`examples/think_time/`](examples/think_time/) | `constant_vus` | Multi-step user journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. | [Guide](examples/think_time/README.md) |
+| [`examples/data_parameterization/`](examples/data_parameterization/) | `constant_vus` | CSV (`Sequential`), JSON (`Random`), and JSONL (`SharedQueue`) dataset parameterization. | [Guide](examples/data_parameterization/README.md) |
+| [`examples/ramping_vus/`](examples/ramping_vus/) | `ramping_vus` | Multi-stage spike test with dynamic VU scaling and recovery observation. | [Guide](examples/ramping_vus/README.md) |
+| [`examples/sla_thresholds/`](examples/sla_thresholds/) | `constant_vus` | Quality gate SLA thresholds across metrics, percentile operators, and early stop with `abort_on_fail`. | [Guide](examples/sla_thresholds/README.md) |
+| [`examples/handle_summary/`](examples/handle_summary/) | `constant_vus` | Post-test execution hook (`HandleSummary`), summary metric inspection, webhook notification dispatch. | [Guide](examples/handle_summary/README.md) |
+| [`examples/conversation_flow/`](examples/conversation_flow/) | `constant_vus` | Real-time SSE streaming conversational AI load test, multi-turn state machine, DSL client. | [Guide](examples/conversation_flow/README.md) |
+| [`examples/grpc_user_service/`](examples/grpc_user_service/) | `arrival_rate` | High-throughput RPC simulation, token bucket TPS pacing, bounded worker pool. | [Guide](examples/grpc_user_service/README.md) |
 
 ### Running Examples
 
@@ -535,4 +535,5 @@ cd examples/think_time && go run -tags=gtest_example .
 # Verify compilation across all example binaries:
 make test-examples
 ```
+
 
