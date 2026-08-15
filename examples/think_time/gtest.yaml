@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json
 version: "1.0"
 default_scenario: user_journey_with_think_time
 
@@ -10,7 +11,8 @@ scenarios:
     ramp_down: 200ms
     vu_timeout: 2s
 
-    # Configured think time strategy evaluated by ctx.Sleep() when called with no arguments
+    # Declarative thinking time strategy evaluated by ctx.Sleep() when called with no arguments.
+    # Supported types: "range" (uniform random), "fixed", "expo" (exponential), "gaussian" (normal).
     interaction_delay:
       type: range
       min: 20ms

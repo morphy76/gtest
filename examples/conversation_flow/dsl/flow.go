@@ -66,8 +66,10 @@ func (f *ConversationFlow) Run(ctx gtest.ScenarioContext) error {
 
 	session, err := f.client.OpenConversation(ctx, externalID, f.config.DialogModel, f.config.SSEEventTimeout)
 	if err != nil {
-		f.metrics.RecordSSEConnectionFailed()
-		f.metrics.RecordConversationResult(0, false)
+		if ctx.Err() == nil {
+			f.metrics.RecordSSEConnectionFailed()
+			f.metrics.RecordConversationResult(0, false)
+		}
 		return fmt.Errorf("OpenConversation failed: %w", err)
 	}
 	f.session = session
@@ -81,7 +83,9 @@ func (f *ConversationFlow) Run(ctx gtest.ScenarioContext) error {
 
 	// Event dispatch loop
 	if err := f.eventLoop(ctx); err != nil {
-		f.metrics.RecordConversationResult(0, false)
+		if ctx.Err() == nil {
+			f.metrics.RecordConversationResult(0, false)
+		}
 		return err
 	}
 
@@ -238,6 +242,9 @@ func (f *ConversationFlow) sendNextMessage(ctx gtest.ScenarioContext) error {
 
 // closeConversation sends the DELETE request to close the dialog.
 func (f *ConversationFlow) closeConversation(ctx gtest.ScenarioContext) error {
+	if f.session == nil {
+		return nil
+	}
 	if err := f.client.CloseConversation(ctx, f.session.ExternalID, f.session.DialogID); err != nil {
 		f.conversationSuccess = false
 		return fmt.Errorf("CloseConversation failed: %w", err)

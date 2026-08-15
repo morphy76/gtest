@@ -13,13 +13,12 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 
-
-func main() {
-	// Start an in-process HTTP mock server simulating backend services with varied latency
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// startMockBackendServer starts an in-process HTTP mock server simulating order and payment endpoints with jitter.
+func startMockBackendServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		// Simulate minor latency variation (5ms - 25ms)
+		// Simulate realistic backend processing latency with jitter (5ms - 25ms)
 		jitter := time.Duration(5+rand.Intn(20)) * time.Millisecond
 		time.Sleep(jitter)
 
@@ -37,10 +36,17 @@ func main() {
 			_, _ = w.Write([]byte(`{"error":"route not found"}`))
 		}
 	}))
+}
+
+func main() {
+	// 1. Launch in-process backend mock server
+	ts := startMockBackendServer()
 	defer ts.Close()
 
+	// 2. Initialize gtest suite
 	suite := gtest.NewSuite("SLA Thresholds & Error Handling Suite")
 
+	// 3. Register scenario with multi-step operations and quality gates
 	suite.RegisterScenario("sla_quality_gates", gtest.Scenario{
 		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
@@ -49,20 +55,25 @@ func main() {
 				"server_url": ts.URL,
 			}, nil
 		},
+
 		PreTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating SLA evaluation iteration")
-			// Initialize counter so the metric exists in the store with value 0 before any errors occur
+
+			// Pedagogical Note:
+			// Pre-initialize counters with Add(0) in PreTest so the metric is registered in the
+			// metric store with value 0 before any errors occur, ensuring accurate threshold evaluation.
 			ctx.Metrics().Counter("api_errors_total", gtest.Tags{}).Add(0)
 			return nil
 		},
+
 		RunVU: func(ctx gtest.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
-			// Track active sessions gauge
+			// Update active concurrent operations gauge metric
 			ctx.Metrics().Gauge("concurrent_operations", gtest.Tags{}).Set(float64(ctx.VUID()))
 
-			// Step 1: Place order
+			// Step 1: Place Order
 			startOrder := time.Now()
 			reqOrder, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/api/orders", nil)
 			if err != nil {
@@ -86,7 +97,7 @@ func main() {
 			ctx.Metrics().Rate("order_success_rate", gtest.Tags{}).Add(1, 1)
 			ctx.Metrics().Counter("api_requests_total", gtest.Tags{"endpoint": "/api/orders"}).Inc()
 
-			// Perform inline check assertion on order response
+			// Check 1: Inline assertion on order response
 			ctx.Check("order status is 200", func() string {
 				if respOrder.StatusCode != http.StatusOK {
 					return fmt.Sprintf("expected HTTP 200, got %d", respOrder.StatusCode)
@@ -94,7 +105,7 @@ func main() {
 				return ""
 			})
 
-			// Step 2: Authorize payment
+			// Step 2: Authorize Payment
 			startPayment := time.Now()
 			reqPay, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/api/payments", nil)
 			if err != nil {
@@ -118,6 +129,7 @@ func main() {
 			ctx.Metrics().Rate("payment_success_rate", gtest.Tags{}).Add(1, 1)
 			ctx.Metrics().Counter("api_requests_total", gtest.Tags{"endpoint": "/api/payments"}).Inc()
 
+			// Check 2: Inline assertion on payment response
 			ctx.Check("payment status is 200", func() string {
 				if respPay.StatusCode != http.StatusOK {
 					return fmt.Sprintf("expected HTTP 200, got %d", respPay.StatusCode)
@@ -127,12 +139,14 @@ func main() {
 
 			return nil
 		},
+
 		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed SLA evaluation iteration")
 			return nil
 		},
 	})
 
+	// 4. Run the suite and exit with pass/fail exit code
 	res := suite.Execute()
 	if res.Error != nil {
 		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)

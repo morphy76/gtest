@@ -21,17 +21,24 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func main() {
-	// Start an in-process HTTP server simulating an API backend
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// startMockAPIServer starts an in-process HTTP server simulating an API backend with JSON responses.
+func startMockAPIServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"success","code":200,"message":"operation completed"}`))
 	}))
+}
+
+func main() {
+	// 1. Launch in-process API server
+	ts := startMockAPIServer()
 	defer ts.Close()
 
+	// 2. Initialize gtest suite
 	suite := gtest.NewSuite("Checks Demo Suite")
 
+	// 3. Register scenario demonstrating inline assertions (checks)
 	suite.RegisterScenario("checks_demo", gtest.Scenario{
 		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
@@ -40,10 +47,13 @@ func main() {
 				"server_url": ts.URL,
 			}, nil
 		},
+
 		RunVU: func(ctx gtest.VUContext) error {
+			// Step 1: Extract client and server URL from global state
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
+			// Step 2: Execute HTTP request
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL+"/api/resource", nil)
 			if err != nil {
 				return fmt.Errorf("failed to create request: %w", err)
@@ -60,7 +70,16 @@ func main() {
 				return fmt.Errorf("failed to read response body: %w", err)
 			}
 
-			// Check 1: HTTP Status Code is 200
+			// Step 3: Perform inline assertions using ctx.Check()
+			//
+			// Check contract:
+			// - Return "" (empty string) to indicate the check PASSED.
+			// - Return a descriptive failure reason string to indicate the check FAILED.
+			// - Unlike returning an error from RunVU, failed checks DO NOT abort the iteration.
+			// - gtest automatically records gtest.checks.passed and gtest.checks.failed metrics
+			//   tagged with the check name, and prints a dedicated CHECKS table in the report.
+
+			// Check 1: Validate HTTP Status Code is 200
 			ctx.Check("status code is 200", func() string {
 				if resp.StatusCode != http.StatusOK {
 					return fmt.Sprintf("expected HTTP 200, got %d", resp.StatusCode)
@@ -68,7 +87,7 @@ func main() {
 				return ""
 			})
 
-			// Check 2: Content-Type header is JSON
+			// Check 2: Validate Content-Type header is JSON
 			ctx.Check("content-type is json", func() string {
 				ct := resp.Header.Get("Content-Type")
 				if !strings.Contains(ct, "application/json") {
@@ -77,7 +96,7 @@ func main() {
 				return ""
 			})
 
-			// Check 3: JSON response payload status field is "success"
+			// Check 3: Validate JSON payload structure and status field value
 			var res apiResponse
 			if err := json.Unmarshal(bodyBytes, &res); err != nil {
 				ctx.Check("response body is valid json", func() string {
@@ -96,10 +115,10 @@ func main() {
 		},
 	})
 
+	// 4. Run the suite
 	res := suite.Execute()
 	if res.Error != nil {
 		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)
 	}
 	os.Exit(res.ExitCode())
 }
-

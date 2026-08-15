@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json
 version: "1.0"
 default_scenario: checks_demo
 
@@ -10,12 +11,13 @@ scenarios:
     ramp_down: 50ms
     vu_timeout: 1s
 
+    # Quality gates targeting built-in inline check metrics
     thresholds:
       - metric: gtest.checks.failed
         stat: count
         operator: "<="
-        target: "0"
+        target: "0"      # Zero check failures allowed
       - metric: gtest.checks.passed
         stat: count
         operator: ">="
-        target: "10"
+        target: "10"     # At least 10 checks must pass

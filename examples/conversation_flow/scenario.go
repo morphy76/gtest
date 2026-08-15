@@ -15,6 +15,103 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 
+// Setup initializes global scenario state, starting the mock server if BASE_URL is unset or "mock".
+// If a messages_file param is provided, loads user prompts from CSV; otherwise uses built-in defaults.
+func Setup(ctx gtest.SetupContext) (map[string]any, error) {
+	baseURL := ctx.Param("base_url")
+	var mockServer *httptest.Server
+
+	if baseURL == "" || baseURL == "mock" {
+		mockServer = startMockServer()
+		baseURL = mockServer.URL
+	}
+
+	// Load prompt dataset (from CSV file or fallback defaults)
+	var messages []dsl.Message
+	if messagesFile := ctx.Param("messages_file"); messagesFile != "" {
+		loaded, err := dsl.LoadMessages(messagesFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load messages dataset: %w", err)
+		}
+		messages = loaded
+	}
+	if len(messages) == 0 {
+		messages = defaultMessages()
+	}
+
+	// Initialize HTTP client with connection pooling
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        1000,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     90 * time.Second,
+			DisableKeepAlives:   false,
+		},
+		Timeout: 30 * time.Second,
+	}
+	client := dsl.NewConversationClient(baseURL, ctx.Param("token"), ctx.Param("tenant"), httpClient)
+
+	return map[string]any{
+		"server_url":  baseURL,
+		"mock_server": mockServer,
+		"messages":    messages,
+		"client":      client,
+	}, nil
+}
+
+// PreTest executes per-VU initialization before iterations start.
+func PreTest(ctx gtest.VUContext) error {
+	ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating conversation session")
+	return nil
+}
+
+// RunVU executes the multi-turn conversational AI load iteration for a single virtual user.
+// It delegates to the event-driven ConversationFlow which mirrors an SSE callback architecture.
+func RunVU(ctx gtest.VUContext) error {
+	client := ctx.GlobalState("client").(*dsl.ConversationClient)
+	messages := ctx.GlobalState("messages").([]dsl.Message)
+
+	dialogModel := ctx.Param("dialog_model")
+	if dialogModel == "" {
+		dialogModel = "gpt-4o"
+	}
+
+	flow := dsl.NewConversationFlow(client, dsl.FlowConfig{
+		DialogModel:      dialogModel,
+		Turns:            ctx.ParamInt("turns", 2),
+		InteractionDelay: ctx.ParamDuration("interaction_delay", 0),
+		SSEEventTimeout:  ctx.ParamDuration("sse_event_timeout", 5*time.Second),
+		Messages:         messages,
+	})
+
+	return flow.Run(ctx)
+}
+
+// AfterTest executes per-VU cleanup after iterations complete.
+func AfterTest(ctx gtest.VUContext) error {
+	ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed conversation session")
+	return nil
+}
+
+// Teardown cleans up global resources created in Setup.
+func Teardown(ctx gtest.TeardownContext, state map[string]any) error {
+	if mockServer, ok := state["mock_server"].(*httptest.Server); ok && mockServer != nil {
+		mockServer.Close()
+	}
+	return nil
+}
+
+// defaultMessages returns the built-in prompt set used when no external CSV is configured.
+func defaultMessages() []dsl.Message {
+	return []dsl.Message{
+		{ID: "1", Text: "Hello, what services do you offer?", Category: "general", ExpectedTokens: 15},
+		{ID: "2", Text: "Can you help me with pricing details?", Category: "pricing", ExpectedTokens: 20},
+		{ID: "3", Text: "Thank you, goodbye!", Category: "closing", ExpectedTokens: 10},
+	}
+}
+
+// --- In-Process Mock Server Harness ---
+
 type sseChannel struct {
 	w       http.ResponseWriter
 	flusher http.Flusher
@@ -131,88 +228,4 @@ func startMockServer() *httptest.Server {
 
 		http.NotFound(w, r)
 	}))
-}
-
-// Setup initializes global scenario state, starting the mock server if BASE_URL is unset or "mock".
-// If a messages_file param is provided, loads user prompts from CSV; otherwise uses built-in defaults.
-func Setup(ctx gtest.SetupContext) (map[string]any, error) {
-	baseURL := ctx.Param("base_url")
-	var mockServer *httptest.Server
-
-	if baseURL == "" || baseURL == "mock" {
-		mockServer = startMockServer()
-		baseURL = mockServer.URL
-	}
-
-	// Load message dataset
-	var messages []dsl.Message
-	if messagesFile := ctx.Param("messages_file"); messagesFile != "" {
-		loaded, err := dsl.LoadMessages(messagesFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load messages dataset: %w", err)
-		}
-		messages = loaded
-	}
-	if len(messages) == 0 {
-		messages = defaultMessages()
-	}
-
-	return map[string]any{
-		"server_url":  baseURL,
-		"mock_server": mockServer,
-		"messages":    messages,
-	}, nil
-}
-
-// defaultMessages returns the built-in prompt set used when no CSV is configured.
-func defaultMessages() []dsl.Message {
-	return []dsl.Message{
-		{ID: "1", Text: "Hello, what services do you offer?", Category: "general", ExpectedTokens: 15},
-		{ID: "2", Text: "Can you help me with pricing details?", Category: "pricing", ExpectedTokens: 20},
-		{ID: "3", Text: "Thank you, goodbye!", Category: "closing", ExpectedTokens: 10},
-	}
-}
-
-// PreTest executes per-VU initialization before iterations start.
-func PreTest(ctx gtest.VUContext) error {
-	ctx.Log().Debug().Msg("initiating conversation session")
-	return nil
-}
-
-// RunVU executes the multi-turn conversational AI load iteration for a single virtual user.
-// It delegates to the event-driven ConversationFlow which mirrors the JS k6 SSE callback architecture.
-func RunVU(ctx gtest.VUContext) error {
-	baseURL := ctx.GlobalState("server_url").(string)
-	messages := ctx.GlobalState("messages").([]dsl.Message)
-
-	dialogModel := ctx.Param("dialog_model")
-	if dialogModel == "" {
-		dialogModel = "gpt-4o"
-	}
-
-	client := dsl.NewConversationClient(baseURL, ctx.Param("token"), ctx.Param("tenant"), nil)
-
-	flow := dsl.NewConversationFlow(client, dsl.FlowConfig{
-		DialogModel:      dialogModel,
-		Turns:            ctx.ParamInt("turns", 2),
-		InteractionDelay: ctx.ParamDuration("interaction_delay", 0),
-		SSEEventTimeout:  ctx.ParamDuration("sse_event_timeout", 5*time.Second),
-		Messages:         messages,
-	})
-
-	return flow.Run(ctx)
-}
-
-// AfterTest executes per-VU cleanup after iterations complete.
-func AfterTest(ctx gtest.VUContext) error {
-	ctx.Log().Debug().Msg("completed conversation session")
-	return nil
-}
-
-// Teardown cleans up global resources created in Setup.
-func Teardown(ctx gtest.TeardownContext, state map[string]any) error {
-	if mockServer, ok := state["mock_server"].(*httptest.Server); ok && mockServer != nil {
-		mockServer.Close()
-	}
-	return nil
 }

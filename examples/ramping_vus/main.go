@@ -13,19 +13,27 @@ import (
 	"github.com/morphy76/gtest/pkg/gtest"
 )
 
-func main() {
+// startMockTargetServer starts an in-process HTTP mock server simulating an API backend with request counters.
+func startMockTargetServer() *httptest.Server {
 	var requestCount int64
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&requestCount, 1)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
 	}))
+}
+
+func main() {
+	// 1. Launch in-process HTTP mock target server
+	ts := startMockTargetServer()
 	defer ts.Close()
 
+	// 2. Initialize gtest suite
 	suite := gtest.NewSuite("Ramping VUs Spike Test Demo Suite")
 
+	// 3. Register scenario configured with ramping_vus pacing in gtest.yaml
 	suite.RegisterScenario("spike_test", gtest.Scenario{
 		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 3 * time.Second}
@@ -34,20 +42,25 @@ func main() {
 				"server_url": ts.URL,
 			}, nil
 		},
+
 		PreTest: func(ctx gtest.VUContext) error {
-			ctx.Log().Debug().Int64("vu_id", ctx.VUID()).Msg("initializing virtual user for ramping test")
+			ctx.Log().Debug().Int64("vu_id", ctx.VUID()).Msg("initializing virtual user for ramping stage")
 			return nil
 		},
+
 		RunVU: func(ctx gtest.VUContext) error {
+			// Step 1: Extract shared client and server URL
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
+			// Step 2: Build HTTP request with context
 			start := time.Now()
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL, nil)
 			if err != nil {
 				return fmt.Errorf("failed to create request: %w", err)
 			}
 
+			// Step 3: Execute request
 			resp, err := client.Do(req)
 			if err != nil {
 				ctx.Metrics().Rate("api_success_rate", gtest.Tags{}).Add(0, 1)
@@ -55,18 +68,21 @@ func main() {
 			}
 			_ = resp.Body.Close()
 
+			// Step 4: Record duration, success rate, and request counters
 			ctx.Metrics().Duration("api_response_time", gtest.Tags{}).Observe(time.Since(start))
 			ctx.Metrics().Rate("api_success_rate", gtest.Tags{}).Add(1, 1)
 			ctx.Metrics().Counter("api_requests_total", gtest.Tags{}).Inc()
 
 			return nil
 		},
+
 		AfterTest: func(ctx gtest.VUContext) error {
 			ctx.Log().Debug().Int64("vu_id", ctx.VUID()).Msg("virtual user ramping lifecycle finished")
 			return nil
 		},
 	})
 
+	// 4. Run the suite
 	res := suite.Execute()
 	if res.Error != nil {
 		fmt.Fprintf(os.Stderr, "Execution error: %v\n", res.Error)
