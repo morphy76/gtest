@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 )
 
-// counter implements gtest.Counter using atomic operations for lock-free thread safety.
+// counter implements vuhive.Counter using atomic operations for lock-free thread safety.
 type counter struct {
 	val atomic.Int64
 }

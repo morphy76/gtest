@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'VERSION.gtest'
+      - 'VERSION.vuhive'
 
 permissions:
   contents: write
@@ -36,7 +36,7 @@ jobs:
       - name: Read Version
         id: semver
         run: |
-          VERSION=$(cat VERSION.gtest | tr -d '[:space:]')
+          VERSION=$(cat VERSION.vuhive | tr -d '[:space:]')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Releasing version: v${VERSION}"
 

@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 )
 
-// rate implements gtest.Rate using two atomic accumulators for lock-free thread safety.
+// rate implements vuhive.Rate using two atomic accumulators for lock-free thread safety.
 type rate struct {
 	numerator   atomic.Int64
 	denominator atomic.Int64

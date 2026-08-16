@@ -6,7 +6,7 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/vuhive/internal/config"
 )
 
 // DelayStrategy defines the algorithm used for generating interaction delays.

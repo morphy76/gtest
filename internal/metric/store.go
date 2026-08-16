@@ -1,4 +1,4 @@
-// Package metric provides an in-memory metrics store implementing gtest.MetricsCollector.
+// Package metric provides an in-memory metrics store implementing vuhive.MetricsCollector.
 // All metric handles are safe for concurrent use from multiple VU goroutines.
 package metric
 

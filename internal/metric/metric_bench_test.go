@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/metric"
 )
 
 func BenchmarkCollector_Counter_Parallel(b *testing.B) {

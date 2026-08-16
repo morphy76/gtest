@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // mockUserStore simulates a backend user database/service state.
@@ -27,30 +27,30 @@ func newMockUserStore() *mockUserStore {
 }
 
 func main() {
-	// 1. Initialize gtest suite
-	suite := gtest.NewSuite("gRPC User Service Load Test")
+	// 1. Initialize vuhive suite
+	suite := vuhive.NewSuite("gRPC User Service Load Test")
 
 	// 2. Register scenario configured with open-system arrival_rate pacing
-	suite.RegisterScenario("grpc_user_service_flow", gtest.Scenario{
+	suite.RegisterScenario("grpc_user_service_flow", vuhive.Scenario{
 		// Setup runs ONCE before any workers or token dispatches start.
 		// Pedagogical Note:
 		// When load testing a real gRPC service, initialize your *grpc.ClientConn or connection
 		// pool (e.g. grpc.Dial / grpc.NewClient) and generated protobuf client stubs (pb.NewUserServiceClient)
 		// here, storing them in the returned global state map.
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			store := newMockUserStore()
 			return map[string]any{
 				"user_store": store,
 			}, nil
 		},
 
-		PreTest: func(ctx gtest.VUContext) error {
+		PreTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Msg("preparing RPC invocation")
 			return nil
 		},
 
 		// RunVU is invoked by worker goroutines upon arrival of each rate-limited token.
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			store := ctx.GlobalState("user_store").(*mockUserStore)
 
 			// Step 1: Read RPC service and method parameters from YAML configuration
@@ -68,29 +68,29 @@ func main() {
 			elapsed := time.Since(start)
 
 			// Step 3: Record gRPC latency duration histogram tagged with service and method dimensions
-			ctx.Metrics().Duration("grpc_latency", gtest.Tags{
+			ctx.Metrics().Duration("grpc_latency", vuhive.Tags{
 				"service": serviceName,
 				"method":  method,
 			}).Observe(elapsed)
 
 			// Step 4: Validate RPC outcome and record success rate and call counter
 			if !found {
-				ctx.Metrics().Rate("rpc_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("rpc_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("user %d not found", userID)
 			}
 
 			_ = userName
-			ctx.Metrics().Rate("rpc_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("grpc_calls_total", gtest.Tags{"status": "OK"}).Inc()
+			ctx.Metrics().Rate("rpc_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("grpc_calls_total", vuhive.Tags{"status": "OK"}).Inc()
 			return nil
 		},
 
-		AfterTest: func(ctx gtest.VUContext) error {
+		AfterTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Msg("completed RPC invocation")
 			return nil
 		},
 
-		Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
+		Teardown: func(ctx vuhive.TeardownContext, state map[string]any) error {
 			// In real gRPC load tests, close the gRPC connection pool here (e.g. conn.Close())
 			return nil
 		},

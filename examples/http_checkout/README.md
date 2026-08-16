@@ -1,18 +1,18 @@
 # HTTP Checkout Flow Example
 
-A foundational reference example demonstrating standard REST API load testing with `gtest`.
+A foundational reference example demonstrating standard REST API load testing with `vuhive`.
 
 ---
 
 ## Concept Overview
 
-This example demonstrates the fundamental workflow of a `gtest` load test:
+This example demonstrates the fundamental workflow of a `vuhive` load test:
 - Initializing shared, thread-safe resources (like an `http.Client`) once during the `Setup` lifecycle phase.
 - Passing shared handles to Virtual Users (VUs) via `GlobalState`.
 - Reading scenario configuration parameters dynamically via `ctx.Param()`.
 - Recording high-resolution latency percentiles with HDR Histograms (`ctx.Metrics().Duration(...)`).
 - Tracking success rates (`ctx.Metrics().Rate(...)`) and throughput counters (`ctx.Metrics().Counter(...)`).
-- Defining and evaluating declarative SLA threshold quality gates in `gtest.yaml`.
+- Defining and evaluating declarative SLA threshold quality gates in `vuhive.yaml`.
 
 ---
 
@@ -21,7 +21,7 @@ This example demonstrates the fundamental workflow of a `gtest` load test:
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario definition, lifecycle hooks (`Setup`, `PreTest`, `RunVU`, `AfterTest`, `Teardown`), HTTP request execution, and metric recording. Includes an in-process mock HTTP backend server. |
-| [`gtest.yaml`](gtest.yaml) | Declarative load profile configuration specifying `constant_vus` concurrency, durations, custom parameters, and SLA quality gates. |
+| [`vuhive.yaml`](vuhive.yaml) | Declarative load profile configuration specifying `constant_vus` concurrency, durations, custom parameters, and SLA quality gates. |
 
 ---
 
@@ -30,19 +30,19 @@ This example demonstrates the fundamental workflow of a `gtest` load test:
 Run the example directly from the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/http_checkout --config ./examples/http_checkout/gtest.yaml
+go run -tags=vuhive_example ./examples/http_checkout --config ./examples/http_checkout/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/http_checkout
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -77,7 +77,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     http_checkout_flow              Version: dev
 Mode:         constant_vus (5 VUs)            Commit:  none
@@ -86,13 +86,13 @@ Iterations:   389 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    389
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    0
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    389
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    0
+vuhive.checks.failed            Counter    0
 
 CUSTOM METRICS
 ────────────────────────────────────────────────────────────────

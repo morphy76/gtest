@@ -24,7 +24,7 @@ type histShard struct {
 	hist *hdrhistogram.Histogram
 }
 
-// histogram implements gtest.Duration using sharded HDR histograms merged at report time.
+// histogram implements vuhive.Duration using sharded HDR histograms merged at report time.
 // Observations are striped across 16 independent mutex-guarded shards to eliminate lock contention.
 type histogram struct {
 	shards     [histShards]histShard

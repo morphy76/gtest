@@ -1,6 +1,6 @@
-# `gtest` — Golang Load Testing Library Specification
+# `vuhive` — Golang Load Testing Library Specification
 
-**Module:** `github.com/morphy76/gtest`  
+**Module:** `github.com/morphy76/vuhive`  
 **Language:** Go 1.26+  
 **Revision:** 2 (post-challenge hardening)
 
@@ -8,14 +8,14 @@
 
 ## 1. Purpose & Adoption Model
 
-`gtest` is a **Go library** — not a standalone binary. Test developers import it, implement test logic using
+`vuhive` is a **Go library** — not a standalone binary. Test developers import it, implement test logic using
 lifecycle hooks, compile their own `main` package, and run the resulting binary against a YAML configuration.
 
 ```
 Test Developer's Project
-├── go.mod   (imports github.com/morphy76/gtest/pkg/gtest)
+├── go.mod   (imports github.com/morphy76/vuhive/pkg/vuhive)
 ├── main.go  (registers scenarios, calls suite.Execute())
-└── gtest.yaml
+└── vuhive.yaml
 ```
 
 The compiled binary is self-contained: it loads config, runs the selected scenario, emits a terminal report,
@@ -26,15 +26,15 @@ evaluates SLA thresholds, and exits with the appropriate code.
 ## 2. Module Layout
 
 ```text
-github.com/morphy76/gtest/               ← module root
+github.com/morphy76/vuhive/               ← module root
 ├── go.mod
 ├── go.sum
-├── VERSION.gtest                        ← SemVer plain-text file (e.g., "0.1.0")
+├── VERSION.vuhive                        ← SemVer plain-text file (e.g., "0.1.0")
 ├── Makefile
 ├── SPECIFICATION.md
 │
 ├── pkg/
-│   └── gtest/                           ← Public API surface (package gtest)
+│   └── vuhive/                           ← Public API surface (package vuhive)
 │       ├── suite.go                     ← Suite, NewSuite(), Execute()
 │       ├── scenario.go                  ← Scenario struct and all hook types
 │       ├── context.go                   ← ScenarioContext interface
@@ -54,7 +54,7 @@ github.com/morphy76/gtest/               ← module root
 │   ├── engine/                          ← VU lifecycle, pacing (constant_vus, arrival_rate, ramping_vus)
 │   ├── metric/                          ← In-memory metrics engine (Registry, Collector, Aggregator, Reader, Store)
 │   ├── sla/                             ← Threshold evaluation and results
-│   ├── log/                             ← Zerolog adapter implementing gtest.Logger
+│   ├── log/                             ← Zerolog adapter implementing vuhive.Logger
 │   ├── cli/                             ← CLI flag parsing
 │   ├── report/                          ← Console and JSON report formatters
 │   └── runner/                          ← Execution orchestration & lifecycle dispatch
@@ -88,7 +88,7 @@ failing test pass, followed by a refactor step.
 |-----|---------|---------|
 | *(none)* | Framework unit tests — always run with `go test ./...` | `internal/**/*_test.go`, `*_test.go` at root |
 | `integration` | Tests requiring external services (e.g., a real HTTP server) | `internal/**/*_integration_test.go` |
-| `gtest_example` | Compilable example load tests in `examples/` | `examples/**/*.go` |
+| `vuhive_example` | Compilable example load tests in `examples/` | `examples/**/*.go` |
 
 ### 3.2 Applying Tags
 
@@ -98,11 +98,11 @@ test files in a downstream project).
 
 Example integration tests are guarded:
 ```go
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
-import "github.com/morphy76/gtest/pkg/gtest"
+import "github.com/morphy76/vuhive/pkg/vuhive"
 ```
 
 ### 3.3 Makefile Targets
@@ -110,14 +110,14 @@ import "github.com/morphy76/gtest/pkg/gtest"
 All targets must be `.PHONY`.
 
 ```makefile
-COMPONENT  := gtest
+COMPONENT  := vuhive
 VERSION    ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || echo "0.0.0")
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := -s -w \
-  -X 'github.com/morphy76/gtest/internal/version.Version=$(VERSION)' \
-  -X 'github.com/morphy76/gtest/internal/version.Commit=$(COMMIT)' \
-  -X 'github.com/morphy76/gtest/internal/version.BuildTime=$(BUILD_TIME)'
+  -X 'github.com/morphy76/vuhive/internal/version.Version=$(VERSION)' \
+  -X 'github.com/morphy76/vuhive/internal/version.Commit=$(COMMIT)' \
+  -X 'github.com/morphy76/vuhive/internal/version.BuildTime=$(BUILD_TIME)'
 
 ## test: Run all library unit tests
 test:
@@ -129,7 +129,7 @@ test-integration:
 
 ## test-examples: Build example binaries to verify they compile
 test-examples:
-	go build -tags=gtest_example ./examples/...
+	go build -tags=vuhive_example ./examples/...
 
 ## test-race: Run unit tests with race detector
 test-race:
@@ -150,7 +150,7 @@ help:
 
 ---
 
-## 4. Public API Surface (Package `gtest`)
+## 4. Public API Surface (Package `vuhive`)
 
 This section is the **contract** between the library and test developers. Every exported symbol here must be
 stable within a minor version.
@@ -187,7 +187,7 @@ type Logger interface {
 
 ```go
 // Tags is an optional set of key-value labels attached to a metric observation.
-// Tag keys and values must be non-empty strings. Panics on nil map — use gtest.Tags{} for no tags.
+// Tag keys and values must be non-empty strings. Panics on nil map — use vuhive.Tags{} for no tags.
 type Tags map[string]string
 
 // MetricsCollector is available inside ScenarioContext.
@@ -246,7 +246,7 @@ type ExecutionIdentity interface {
     // Always 0 inside PreTest and AfterTest hooks.
     Iteration() int64
 
-    // ScenarioName returns the active scenario name as declared in gtest.yaml.
+    // ScenarioName returns the active scenario name as declared in vuhive.yaml.
     ScenarioName() string
 }
 
@@ -405,7 +405,7 @@ type Suite struct { /* unexported fields */ }
 func NewSuite(name string) *Suite
 
 // RegisterScenario associates a named Scenario with the suite.
-// The name must exactly match a scenario key in gtest.yaml.
+// The name must exactly match a scenario key in vuhive.yaml.
 // Panics if name is empty or if RunVU is nil.
 // Panics if called after Execute has been called.
 func (s *Suite) RegisterScenario(name string, scenario Scenario)
@@ -423,7 +423,7 @@ func (r ExecutionResult) ExitCode() int
 
 // Execute is the CLI entry point. It:
 //  1. Parses CLI flags (see §6 for the full flag inventory).
-//  2. Loads and validates gtest.yaml via Viper.
+//  2. Loads and validates vuhive.yaml via Viper.
 //  3. Resolves the target scenario (--scenario flag or default_scenario).
 //  4. Executes the scenario lifecycle (Setup → ramp-up → run → ramp-down → Teardown).
 //  5. Evaluates SLA thresholds.
@@ -437,12 +437,12 @@ func (s *Suite) Execute() ExecutionResult
 
 | Condition | Behavior |
 |-----------|----------|
-| `--config` file not found | Returns `ExecutionResult{Error: *gtest.ConfigError}` |
-| YAML parse error | Returns `ExecutionResult{Error: *gtest.ConfigError}` |
-| Validation invariant violated | Returns `ExecutionResult{Error: *gtest.ValidationError}` |
-| Scenario in `--scenario` not registered | Returns `ExecutionResult{Error: *gtest.ScenarioNotFoundError}` |
-| Scenario registered but not in config | Returns `ExecutionResult{Error: *gtest.ScenarioNotFoundError}` |
-| `Setup` hook returns error | Returns `ExecutionResult{Error: *gtest.SetupError}` wrapping the hook error |
+| `--config` file not found | Returns `ExecutionResult{Error: *vuhive.ConfigError}` |
+| YAML parse error | Returns `ExecutionResult{Error: *vuhive.ConfigError}` |
+| Validation invariant violated | Returns `ExecutionResult{Error: *vuhive.ValidationError}` |
+| Scenario in `--scenario` not registered | Returns `ExecutionResult{Error: *vuhive.ScenarioNotFoundError}` |
+| Scenario registered but not in config | Returns `ExecutionResult{Error: *vuhive.ScenarioNotFoundError}` |
+| `Setup` hook returns error | Returns `ExecutionResult{Error: *vuhive.SetupError}` wrapping the hook error |
 | SLA threshold breached | Returns `ExecutionResult{Passed: false}`, `ExitCode() == 1` |
 | Execution aborted via abort_on_fail | Returns `ExecutionResult{Passed: false, Aborted: true, AbortReason: "..."}`, `ExitCode() == 1` |
 | Clean completion, all thresholds pass | Returns `ExecutionResult{Passed: true}`, `ExitCode() == 0` |
@@ -514,18 +514,18 @@ test developers):
 
 | Metric Constant | String Identifier | Type | Description |
 |-----------------|-------------------|------|-------------|
-| `MetricIterationsTotal` | `gtest.vu.iterations_total` | Counter | Total completed `RunVU` calls (success + failure) |
-| `MetricIterationsFailed` | `gtest.vu.iterations_failed` | Counter | `RunVU` calls returning non-nil error or panic |
-| `MetricIterationsTimeout` | `gtest.vu.iterations_timeout` | Counter | `RunVU` calls that hit the `vu_timeout` deadline |
-| `MetricVUPanics` | `gtest.vu.panics` | Counter | `RunVU` panics recovered by the framework |
-| `MetricVUPretestErrors` | `gtest.vu.pretest_errors` | Counter | VUs where `PreTest` returned non-nil error |
-| `MetricVUActive` | `gtest.vu.active` | Gauge | Active VU goroutines at current instant |
-| `MetricIterationDuration` | `gtest.vu.iteration_duration` | Duration | Latency of completed VU iterations |
-| `MetricPacingDroppedIterations` | `gtest.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
-| `MetricChecksPassed` | `gtest.checks.passed` | Counter | Total inline checks that passed |
-| `MetricChecksFailed` | `gtest.checks.failed` | Counter | Total inline checks that failed |
+| `MetricIterationsTotal` | `vuhive.vu.iterations_total` | Counter | Total completed `RunVU` calls (success + failure) |
+| `MetricIterationsFailed` | `vuhive.vu.iterations_failed` | Counter | `RunVU` calls returning non-nil error or panic |
+| `MetricIterationsTimeout` | `vuhive.vu.iterations_timeout` | Counter | `RunVU` calls that hit the `vu_timeout` deadline |
+| `MetricVUPanics` | `vuhive.vu.panics` | Counter | `RunVU` panics recovered by the framework |
+| `MetricVUPretestErrors` | `vuhive.vu.pretest_errors` | Counter | VUs where `PreTest` returned non-nil error |
+| `MetricVUActive` | `vuhive.vu.active` | Gauge | Active VU goroutines at current instant |
+| `MetricIterationDuration` | `vuhive.vu.iteration_duration` | Duration | Latency of completed VU iterations |
+| `MetricPacingDroppedIterations` | `vuhive.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
+| `MetricChecksPassed` | `vuhive.checks.passed` | Counter | Total inline checks that passed |
+| `MetricChecksFailed` | `vuhive.checks.failed` | Counter | Total inline checks that failed |
 
-Built-in metric names are defined as exported package-level constants directly in `pkg/gtest/metrics.go` (and mirrored in `internal/metric/names.go` for internal telemetry). All framework metrics are prefixed with `MetricPrefix = "gtest."` and must not be used as names for test-developer-defined custom metrics.
+Built-in metric names are defined as exported package-level constants directly in `pkg/vuhive/metrics.go` (and mirrored in `internal/metric/names.go` for internal telemetry). All framework metrics are prefixed with `MetricPrefix = "vuhive."` and must not be used as names for test-developer-defined custom metrics.
 
 > **Note on In-Flight Iterations:** `MetricIterationsTimeout` only counts iterations that exceed `vu_timeout` during active scenario execution. In-flight iterations interrupted mid-flight by scenario completion (e.g. `run_period` / `ramp_down` expiration or early scenario abort/cancellation) are discarded as incomplete and are not recorded as timeouts or failed iterations.
 
@@ -538,7 +538,7 @@ Built-in metric names are defined as exported package-level constants directly i
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--config` | string | `gtest.yaml` | Path to the YAML configuration file |
+| `--config` | string | `vuhive.yaml` | Path to the YAML configuration file |
 | `--scenario` | string | value of `default_scenario` in YAML | Name of the scenario to execute |
 | `--log-level` | string | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
 | `--log-format` | string | `pretty` | Log output format: `pretty` (human-readable) or `json` |
@@ -608,7 +608,7 @@ Each threshold entry has these fields:
 **Tag Aggregation:** Thresholds evaluate the metric aggregated **across all tag combinations**. Tag-specific
 threshold evaluation is not supported in Phase 1.
 
-### 7.3 Annotated `gtest.yaml` Example
+### 7.3 Annotated `vuhive.yaml` Example
 
 ```yaml
 version: "1.0"
@@ -641,7 +641,7 @@ scenarios:
     target_tps: 500
     max_vus: 200          # Hard cap on concurrent goroutines; if the pool is saturated
                           # and the target TPS cannot be maintained, a built-in
-                          # 'gtest.pacing.dropped_iterations' counter is incremented.
+                          # 'vuhive.pacing.dropped_iterations' counter is incremented.
     ramp_up: "10s"
     run_period: "1m"
     ramp_down: "5s"
@@ -656,11 +656,11 @@ scenarios:
 
 ### 7.4 JSON Schema & IDE Autocompletion
 
-`gtest` publishes an official JSON Schema (`schemas/gtest.schema.json`) supporting Draft 2020-12 / Draft-07 for IntelliSense, live validation, and documentation tooltips across VS Code, GoLand, Cursor, and Neovim.
+`vuhive` publishes an official JSON Schema (`schemas/vuhive.schema.json`) supporting Draft 2020-12 / Draft-07 for IntelliSense, live validation, and documentation tooltips across VS Code, GoLand, Cursor, and Neovim.
 
 #### In-File Schema Directive
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/gtest/main/schemas/gtest.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
 version: "1.0"
 default_scenario: payment_processing
 ...
@@ -690,7 +690,7 @@ Ramp-up uses **linear interpolation** of the target level over `ramp_up` duratio
 ### 8.3 Arrival Rate — Pool Saturation
 
 If the worker pool has reached `max_vus` and a new token is available, the framework increments
-`gtest.pacing.dropped_iterations` and discards the token (does not block or back-pressure). This is
+`vuhive.pacing.dropped_iterations` and discards the token (does not block or back-pressure). This is
 intentional: arrival rate is an open model and cannot block the arrival clock.
 
 ### 8.4 Pacing Goroutine Safety & Worker Pooling
@@ -739,7 +739,7 @@ implementation.
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     http_checkout_flow              Version: 0.1.0
 Mode:         constant_vus (100 VUs)          Commit:  a1b2c3d
@@ -748,11 +748,11 @@ Iterations:   14,520 total  |  12 failed (0.08%)  |  3 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    14,520
-gtest.vu.iterations_failed     Counter    12
-gtest.vu.iterations_timeout    Counter    3
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
+vuhive.vu.iterations_total      Counter    14,520
+vuhive.vu.iterations_failed     Counter    12
+vuhive.vu.iterations_timeout    Counter    3
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
 
 CUSTOM METRICS
 ────────────────────────────────────────────────────────────────
@@ -827,32 +827,32 @@ Each increment specifies: what to build, the acceptance criteria, and the TDD re
 No execution engine yet — just types and compilation guarantees.
 
 **Deliverables:**
-- `pkg/gtest/logger.go` — `Logger`, `LogEvent` interfaces
-- `pkg/gtest/metrics.go` — `MetricsCollector`, `Counter`, `Gauge`, `Duration`, `Rate` interfaces + `Tags` type
-- `pkg/gtest/context.go` — `ScenarioContext` interface
-- `pkg/gtest/scenario.go` — `Scenario` struct, all hook types
-- `pkg/gtest/suite.go` — `Suite` struct, `NewSuite()`, `RegisterScenario()`
+- `pkg/vuhive/logger.go` — `Logger`, `LogEvent` interfaces
+- `pkg/vuhive/metrics.go` — `MetricsCollector`, `Counter`, `Gauge`, `Duration`, `Rate` interfaces + `Tags` type
+- `pkg/vuhive/context.go` — `ScenarioContext` interface
+- `pkg/vuhive/scenario.go` — `Scenario` struct, all hook types
+- `pkg/vuhive/suite.go` — `Suite` struct, `NewSuite()`, `RegisterScenario()`
 - `internal/version/version.go` — version vars
 
 **Acceptance Criteria (testable):**
 
 ```go
 // AC-1.1.1: NewSuite returns a non-nil *Suite
-suite := gtest.NewSuite("test")
+suite := vuhive.NewSuite("test")
 assert.NotNil(t, suite)
 
 // AC-1.1.2: RegisterScenario with a nil RunVU panics
 assert.Panics(t, func() {
-    suite.RegisterScenario("bad", gtest.Scenario{RunVU: nil})
+    suite.RegisterScenario("bad", vuhive.Scenario{RunVU: nil})
 })
 
 // AC-1.1.3: RegisterScenario with an empty name panics
 assert.Panics(t, func() {
-    suite.RegisterScenario("", gtest.Scenario{RunVU: func(ctx gtest.ScenarioContext) error { return nil }})
+    suite.RegisterScenario("", vuhive.Scenario{RunVU: func(ctx vuhive.ScenarioContext) error { return nil }})
 })
 
 // AC-1.1.4: ScenarioContext is embeddable as context.Context (compile-time check)
-var _ context.Context = (gtest.ScenarioContext)(nil)
+var _ context.Context = (vuhive.ScenarioContext)(nil)
 ```
 
 **TDD Cycle:** Write all AC tests first. Compile will fail. Add interface definitions and stub types to make
@@ -862,7 +862,7 @@ compile succeed with tests still failing. Implement `NewSuite` and `RegisterScen
 
 ### Increment 1.2 — Configuration Loading & Validation ✅ COMPLETED (2026-08-13)
 
-**Goal:** Load and validate `gtest.yaml` via Viper. Produce typed `Config` and `ScenarioConfig` structs.
+**Goal:** Load and validate `vuhive.yaml` via Viper. Produce typed `Config` and `ScenarioConfig` structs.
 Return structured errors for all failure modes.
 
 **Deliverables:**
@@ -950,7 +950,7 @@ Return a structured result per threshold.
 field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing.
 
 **Deliverables:**
-- `internal/log/zerolog.go` — zerolog adapter implementing `gtest.Logger` and `gtest.LogEvent`
+- `internal/log/zerolog.go` — zerolog adapter implementing `vuhive.Logger` and `vuhive.LogEvent`
 
 **Acceptance Criteria:**
 
@@ -958,7 +958,7 @@ field injection (`scenario`, `vu_id`, `iteration`) and correct log level routing
 // AC-1.5.1: Log().Info().Str("k","v").Msg("m") emits one JSON line with level=info, k=v, message=m
 // AC-1.5.2: Logger built with vuID=3 auto-injects vu_id=3 on every event
 // AC-1.5.3: Debug events are suppressed when log level is set to "info"
-// AC-1.5.4: Logger satisfies the gtest.Logger interface (compile-time check)
+// AC-1.5.4: Logger satisfies the vuhive.Logger interface (compile-time check)
 ```
 
 **Test Strategy:** Use `zerolog.New(buf)` with a `bytes.Buffer` and parse emitted JSON lines.
@@ -1005,14 +1005,14 @@ completion assertions.
 
 **Deliverables:**
 - `internal/engine/arrival_rate.go` — arrival rate pacing with token bucket and `max_vus` pool
-- `gtest.pacing.dropped_iterations` counter integration
+- `vuhive.pacing.dropped_iterations` counter integration
 
 **Acceptance Criteria:**
 
 ```go
 // AC-1.7.1: target_tps=10, run_period=1s → approximately 10 RunVU calls (±20% tolerance)
 // AC-1.7.2: max_vus=2 with slow RunVU (sleeps 500ms) and target_tps=100 → pool saturates;
-//            gtest.pacing.dropped_iterations > 0
+//            vuhive.pacing.dropped_iterations > 0
 // AC-1.7.3: ramp_up=200ms, target_tps=10 → first iteration starts after ~100ms (midpoint of ramp)
 // AC-1.7.4: All other lifecycle guarantees from Increment 1.6 apply equally to arrival_rate mode
 ```
@@ -1026,15 +1026,15 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 
 **Deliverables:**
 - `internal/cli/flags.go` — CLI flag parsing and wiring
-- `pkg/gtest/suite.go` — `Execute()` implementation
+- `pkg/vuhive/suite.go` — `Execute()` implementation
 
 **Acceptance Criteria:**
 
 ```go
 // AC-1.8.1: --version flag prints version string and returns ExecutionResult (no os.Exit)
-// AC-1.8.2: --config pointing to nonexistent file returns *gtest.ConfigError in ExecutionResult.Error
-// AC-1.8.3: --scenario not in config returns *gtest.ScenarioNotFoundError in ExecutionResult.Error
-// AC-1.8.4: Scenario registered but not in config returns *gtest.ScenarioNotFoundError in ExecutionResult.Error
+// AC-1.8.2: --config pointing to nonexistent file returns *vuhive.ConfigError in ExecutionResult.Error
+// AC-1.8.3: --scenario not in config returns *vuhive.ScenarioNotFoundError in ExecutionResult.Error
+// AC-1.8.4: Scenario registered but not in config returns *vuhive.ScenarioNotFoundError in ExecutionResult.Error
 // AC-1.8.5: All thresholds pass → report printed, ExecutionResult.ExitCode() is 0
 // AC-1.8.6: Any threshold fails → report printed with [FAIL] row, ExecutionResult.ExitCode() is 1
 ```
@@ -1072,22 +1072,22 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 **Goal:** Provide comprehensive, runnable example load tests in `examples/` covering all core framework features introduced across Phase 1 increments to serve as end-to-end reference implementations for developers.
 
 **Deliverables:**
-- `examples/http_checkout/` (`main.go`, `gtest.yaml`) — HTTP REST API load testing with constant VU concurrency
-- `examples/grpc_user_service/` (`main.go`, `gtest.yaml`) — RPC/gRPC simulation with arrival rate token bucket pacing
-- `examples/conversation_flow/` (`main.go`, `scenario.go`, `gtest.yaml`, `dsl/`) — Real-time event-driven SSE conversational AI simulation
-- `examples/think_time/` (`main.go`, `gtest.yaml`) — Thinking time & interaction delay strategies (`interaction_delay`, `ctx.Sleep()`, `ExpoDelay`)
-- `examples/checks/` (`main.go`, `gtest.yaml`) — Inline assertions (`ctx.Check`) and check validation reporting
-- `examples/data_parameterization/` (`main.go`, `gtest.yaml`) — Dataset parameterization for CSV, JSON, and JSONL (`pkg/gtest/data`)
-- `examples/sla_thresholds/` (`main.go`, `gtest.yaml`) — Quality gate SLA thresholds, multi-metric assertions, and error handling with graceful abort (`abort_on_fail`)
-- `examples/handle_summary/` (`main.go`, `gtest.yaml`) — Programmatic post-execution summary hooks (`HandleSummary`) for notifications and custom exports
+- `examples/http_checkout/` (`main.go`, `vuhive.yaml`) — HTTP REST API load testing with constant VU concurrency
+- `examples/grpc_user_service/` (`main.go`, `vuhive.yaml`) — RPC/gRPC simulation with arrival rate token bucket pacing
+- `examples/conversation_flow/` (`main.go`, `scenario.go`, `vuhive.yaml`, `dsl/`) — Real-time event-driven SSE conversational AI simulation
+- `examples/think_time/` (`main.go`, `vuhive.yaml`) — Thinking time & interaction delay strategies (`interaction_delay`, `ctx.Sleep()`, `ExpoDelay`)
+- `examples/checks/` (`main.go`, `vuhive.yaml`) — Inline assertions (`ctx.Check`) and check validation reporting
+- `examples/data_parameterization/` (`main.go`, `vuhive.yaml`) — Dataset parameterization for CSV, JSON, and JSONL (`pkg/vuhive/data`)
+- `examples/sla_thresholds/` (`main.go`, `vuhive.yaml`) — Quality gate SLA thresholds, multi-metric assertions, and error handling with graceful abort (`abort_on_fail`)
+- `examples/handle_summary/` (`main.go`, `vuhive.yaml`) — Programmatic post-execution summary hooks (`HandleSummary`) for notifications and custom exports
 
-**Build Validation:** `go build -tags=gtest_example ./examples/...` (`make test-examples`) must succeed.
+**Build Validation:** `go build -tags=vuhive_example ./examples/...` (`make test-examples`) must succeed.
 
 ---
 
 ### Increment 1.11 — README & Documentation ✅ COMPLETED (2026-08-13)
 
-**Goal:** Create a comprehensive `README.md` file documenting `gtest`, load test creation, lifecycle facilities, configuration options, and execution workflows.
+**Goal:** Create a comprehensive `README.md` file documenting `vuhive`, load test creation, lifecycle facilities, configuration options, and execution workflows.
 
 **Deliverables:**
 - `README.md` — Complete documentation covering overview, scenario definition, lifecycle hooks, metrics, logging, configuration, and CLI execution.
@@ -1097,7 +1097,7 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 ```go
 // AC-1.11.1: README.md provides clear library overview, key features, and clean Hexagonal architecture structure.
 // AC-1.11.2: README.md contains code examples for creating load tests, registering scenarios, and using lifecycle hooks.
-// AC-1.11.3: README.md details gtest.yaml configuration format for constant_vus and arrival_rate pacing modes, as well as SLA thresholds.
+// AC-1.11.3: README.md details vuhive.yaml configuration format for constant_vus and arrival_rate pacing modes, as well as SLA thresholds.
 // AC-1.11.4: README.md documents CLI flags, exit code contracts (exit 0 on pass, exit 1 on SLA breach), and report output options.
 ```
 
@@ -1115,8 +1115,8 @@ the `Execute()` entry point. Implement all CLI flags from §6.
 4. **`gaussian`**: Normal distribution $N(\mu, \sigma)$ with specified `mean` and `std_dev`, with optional `min`/`max` clamping (negative values clamped to 0 or `min`).
 
 **Deliverables:**
-- `pkg/gtest/delay.go` — `DelayGenerator`, `DelayStrategy`, and constructor functions (`FixedDelay`, `RangeDelay`, `ExpoDelay`, `GaussianDelay`)
-- `pkg/gtest/context.go` — `ScenarioContext.Sleep(d ...time.Duration) error` method (respects `ctx.Done()`)
+- `pkg/vuhive/delay.go` — `DelayGenerator`, `DelayStrategy`, and constructor functions (`FixedDelay`, `RangeDelay`, `ExpoDelay`, `GaussianDelay`)
+- `pkg/vuhive/context.go` — `ScenarioContext.Sleep(d ...time.Duration) error` method (respects `ctx.Done()`)
 - `internal/config/model.go` — `InteractionDelayConfig` struct mapped under `scenarios.<name>.interaction_delay`
 - `internal/config/validate.go` — validation rules for delay configs
 
@@ -1153,30 +1153,30 @@ scenarios:
 **Goal:** Enable real-time inline pass/fail assertions inside `RunVU` without terminating the iteration, aggregating results for reporting and threshold gates.
 
 **Deliverables:**
-- `pkg/gtest/check.go` — `CheckFunc` type (`type CheckFunc func() string`) and check evaluation logic
-- `pkg/gtest/context.go` — `ScenarioContext.Check(name string, fn CheckFunc) bool`
+- `pkg/vuhive/check.go` — `CheckFunc` type (`type CheckFunc func() string`) and check evaluation logic
+- `pkg/vuhive/context.go` — `ScenarioContext.Check(name string, fn CheckFunc) bool`
 - `internal/report/console.go` & `internal/report/json.go` — CHECKS section in summary and JSON reports
-- Auto-instrumentation of built-in metrics: `gtest.checks.passed`, `gtest.checks.failed`
+- Auto-instrumentation of built-in metrics: `vuhive.checks.passed`, `vuhive.checks.failed`
 
 **Acceptance Criteria:**
 
 ```go
-// AC-1.13.1: Passing check returns true, increments gtest.checks.passed
-// AC-1.13.2: Failing check returns false, increments gtest.checks.failed, logs reason
+// AC-1.13.1: Passing check returns true, increments vuhive.checks.passed
+// AC-1.13.2: Failing check returns false, increments vuhive.checks.failed, logs reason
 // AC-1.13.3: Multiple checks per iteration are aggregated independently
 // AC-1.13.4: Console and JSON reports display per-check pass/fail counts and percentages
-// AC-1.13.5: Thresholds can evaluate gtest.checks.failed and gtest.checks.passed
+// AC-1.13.5: Thresholds can evaluate vuhive.checks.failed and vuhive.checks.passed
 ```
 
 ---
 
-### Increment 1.14 — Data Parameterization Module (`pkg/gtest/data`) ✅ COMPLETED (2026-08-14)
+### Increment 1.14 — Data Parameterization Module (`pkg/vuhive/data`) ✅ COMPLETED (2026-08-14)
 
 **Goal:** Provide a dedicated data loading and parameterization package for CSV, JSON, and JSON Lines datasets with thread-safe distribution strategies.
 
 **Deliverables:**
-- `pkg/gtest/data/dataset.go` — `DataSet`, `LoadCSV`, `LoadJSON`, `LoadJSONL`
-- `pkg/gtest/data/strategy.go` — `Strategy` enum (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`) and thread-safe row selection
+- `pkg/vuhive/data/dataset.go` — `DataSet`, `LoadCSV`, `LoadJSON`, `LoadJSONL`
+- `pkg/vuhive/data/strategy.go` — `Strategy` enum (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`) and thread-safe row selection
 
 **Acceptance Criteria:**
 
@@ -1196,8 +1196,8 @@ scenarios:
 **Goal:** Allow test developers to programmatically receive the complete structured execution summary post-run (for Slack alerts, webhooks, or custom output generation).
 
 **Deliverables:**
-- `pkg/gtest/scenario.go` — `SummaryHook` type (`func(ctx SummaryContext, summary SummaryData) error`) and `Scenario.HandleSummary` field
-- `pkg/gtest/summary.go` — `SummaryData` export struct containing run metadata, metrics snapshot, and SLA results
+- `pkg/vuhive/scenario.go` — `SummaryHook` type (`func(ctx SummaryContext, summary SummaryData) error`) and `Scenario.HandleSummary` field
+- `pkg/vuhive/summary.go` — `SummaryData` export struct containing run metadata, metrics snapshot, and SLA results
 - `internal/runner/reporter.go` & `internal/runner/runner.go` — post-report execution of `HandleSummary`
 
 **Acceptance Criteria:**
@@ -1235,7 +1235,7 @@ scenarios:
 
 ### Increment 2.1 — Docker & Helm Packaging
 - Multi-stage Dockerfile producing a static binary on `distroless/static-debian12`.
-- Helm chart at `deploy/helm/gtest-operator/` with `Chart.yaml`, `values.yaml`,
+- Helm chart at `deploy/helm/vuhive-operator/` with `Chart.yaml`, `values.yaml`,
   `templates/deployment.yaml`, `templates/configmap.yaml`, `templates/job-template.yaml`.
 
 ### Increment 2.2 — REST Triggering API (Gin)
@@ -1274,7 +1274,7 @@ GET    /api/v1/tests/:id/report  → returns JSON report (same schema as §10.2)
 
 ## 14. Phase 3: Advanced Load Testing Capabilities (Draft)
 
-Phase 3 extends `gtest` with capabilities found in mature load testing frameworks (k6, Gatling, Locust) adapted to the Go library model.
+Phase 3 extends `vuhive` with capabilities found in mature load testing frameworks (k6, Gatling, Locust) adapted to the Go library model.
 
 ### 14.1 Groups (Transaction Boundaries)
 
@@ -1286,7 +1286,7 @@ Groups organize RunVU logic into named transaction boundaries with automatic dur
 
 ```go
 // Group executes fn within a named transaction boundary.
-// Duration is automatically recorded to "gtest.group.<groupName>.duration".
+// Duration is automatically recorded to "vuhive.group.<groupName>.duration".
 // Nested groups are allowed; names are concatenated with "::".
 func (ctx ScenarioContext) Group(name string, fn func(ctx ScenarioContext) error) error
 ```
@@ -1294,10 +1294,10 @@ func (ctx ScenarioContext) Group(name string, fn func(ctx ScenarioContext) error
 #### Usage
 
 ```go
-RunVU: func(ctx gtest.ScenarioContext) error {
-    return ctx.Group("checkout_flow", func(ctx gtest.ScenarioContext) error {
+RunVU: func(ctx vuhive.ScenarioContext) error {
+    return ctx.Group("checkout_flow", func(ctx vuhive.ScenarioContext) error {
         // Step 1
-        if err := ctx.Group("login", func(ctx gtest.ScenarioContext) error {
+        if err := ctx.Group("login", func(ctx vuhive.ScenarioContext) error {
             // ... login logic ...
             return nil
         }); err != nil {
@@ -1305,7 +1305,7 @@ RunVU: func(ctx gtest.ScenarioContext) error {
         }
 
         // Step 2
-        return ctx.Group("payment", func(ctx gtest.ScenarioContext) error {
+        return ctx.Group("payment", func(ctx vuhive.ScenarioContext) error {
             // ... payment logic ...
             return nil
         })
@@ -1317,8 +1317,8 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 
 | Metric | Type | Naming |
 |--------|------|--------|
-| Group duration | Duration | `gtest.group.<name>.duration` |
-| Nested group duration | Duration | `gtest.group.<parent>::<child>.duration` |
+| Group duration | Duration | `vuhive.group.<name>.duration` |
+| Nested group duration | Duration | `vuhive.group.<parent>::<child>.duration` |
 
 ---
 
@@ -1328,10 +1328,10 @@ RunVU: func(ctx gtest.ScenarioContext) error {
 
 A convenience package providing an instrumented HTTP client that **automatically records** latency, status code counters, and error rates — eliminating boilerplate metric recording from every RunVU.
 
-#### Package: `pkg/gtest/http`
+#### Package: `pkg/vuhive/http`
 
 ```go
-import gtesthttp "github.com/morphy76/gtest/pkg/gtest/http"
+import vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
 
 // Client wraps *http.Client with automatic metric instrumentation.
 type Client struct { /* ... */ }
@@ -1377,11 +1377,11 @@ func (r *Response) Text() string          // Body as string
 #### Options
 
 ```go
-gtesthttp.NewClient(ctx,
-    gtesthttp.WithTimeout(5 * time.Second),
-    gtesthttp.WithHeader("Authorization", "Bearer "+token),
-    gtesthttp.WithTLSInsecureSkipVerify(),
-    gtesthttp.WithCustomMetricPrefix("checkout_api"),  // overrides "http_req"
+vuhivehttp.NewClient(ctx,
+    vuhivehttp.WithTimeout(5 * time.Second),
+    vuhivehttp.WithHeader("Authorization", "Bearer "+token),
+    vuhivehttp.WithTLSInsecureSkipVerify(),
+    vuhivehttp.WithCustomMetricPrefix("checkout_api"),  // overrides "http_req"
 )
 ```
 
@@ -1471,7 +1471,7 @@ scenarios:
 
 ```bash
 # Run all scenarios concurrently:
-go run main.go --config gtest.yaml
+go run main.go --config vuhive.yaml
 
 # Run specific scenarios (comma-separated):
 go run main.go --scenario browse_catalog,checkout_flow
@@ -1508,7 +1508,7 @@ type MetricsExporter interface {
 
 ```bash
 go run main.go --out prometheus-rw=http://localhost:9090/api/v1/write
-go run main.go --out influxdb=http://localhost:8086/gtest
+go run main.go --out influxdb=http://localhost:8086/vuhive
 go run main.go --out json-stream=metrics.jsonl
 ```
 
@@ -1583,28 +1583,28 @@ go run main.go --tag-filter endpoint=/api/checkout
 
 Enable real-time inline pass/fail assertions inside `RunVU` without terminating the iteration, aggregating results for reporting and SLA threshold gates.
 
-#### Public API (`pkg/gtest`)
+#### Public API (`pkg/vuhive`)
 - `type CheckFunc func() string`: Return `""` (empty string) on pass; return non-empty failure reason on fail.
 - `ScenarioContext.Check(name string, fn CheckFunc) bool`: Executes `fn()`, records metrics, logs warnings on failure, and returns boolean verdict.
 
 #### Built-in Metrics
-- `gtest.checks.passed` (Counter): Incremented with tag `name: <check_name>` when check passes.
-- `gtest.checks.failed` (Counter): Incremented with tag `name: <check_name>` when check fails.
+- `vuhive.checks.passed` (Counter): Incremented with tag `name: <check_name>` when check passes.
+- `vuhive.checks.failed` (Counter): Incremented with tag `name: <check_name>` when check fails.
 
 #### Acceptance Criteria
-- **AC-1.13.1**: Passing check returns `true`, increments `gtest.checks.passed`.
-- **AC-1.13.2**: Failing check returns `false`, increments `gtest.checks.failed`, logs reason.
+- **AC-1.13.1**: Passing check returns `true`, increments `vuhive.checks.passed`.
+- **AC-1.13.2**: Failing check returns `false`, increments `vuhive.checks.failed`, logs reason.
 - **AC-1.13.3**: Multiple checks per iteration are aggregated independently.
 - **AC-1.13.4**: Console and JSON reports display per-check pass/fail counts and percentages.
-- **AC-1.13.5**: SLA Thresholds evaluate `gtest.checks.failed` and `gtest.checks.passed`.
+- **AC-1.13.5**: SLA Thresholds evaluate `vuhive.checks.failed` and `vuhive.checks.passed`.
 
 ---
 
-### 14.8 Increment 1.14 — Data Parameterization Module (`pkg/gtest/data`)
+### 14.8 Increment 1.14 — Data Parameterization Module (`pkg/vuhive/data`)
 
 Provide a dedicated data loading and parameterization package for CSV, JSON, and JSON Lines datasets with thread-safe distribution strategies.
 
-#### Public API (`pkg/gtest/data`)
+#### Public API (`pkg/vuhive/data`)
 - `type Record = map[string]string`
 - `type Strategy int` (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`)
 - `var ErrDatasetExhausted = errors.New(...)`

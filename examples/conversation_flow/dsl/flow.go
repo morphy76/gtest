@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // FlowConfig holds all configurable parameters for a ConversationFlow execution.
@@ -56,7 +56,7 @@ func NewConversationFlow(client *ConversationClient, config FlowConfig) *Convers
 }
 
 // Run executes the full conversation lifecycle: open SSE → event dispatch loop → close → verify accounting.
-func (f *ConversationFlow) Run(ctx gtest.ScenarioContext) error {
+func (f *ConversationFlow) Run(ctx vuhive.ScenarioContext) error {
 	f.metrics = NewMetrics(ctx.Metrics())
 	startTotal := time.Now()
 
@@ -103,7 +103,7 @@ func (f *ConversationFlow) Run(ctx gtest.ScenarioContext) error {
 
 // eventLoop consumes SSE events from the session and dispatches to handlers.
 // Each iteration resets a per-event timeout to prevent VU hangs on lost SSE answers.
-func (f *ConversationFlow) eventLoop(ctx gtest.ScenarioContext) error {
+func (f *ConversationFlow) eventLoop(ctx vuhive.ScenarioContext) error {
 	// Post first customer message after created event was already handled in OpenConversation
 	if err := f.sendNextMessage(ctx); err != nil {
 		return err
@@ -152,7 +152,7 @@ const (
 )
 
 // dispatch routes an SSE event to the appropriate handler.
-func (f *ConversationFlow) dispatch(ctx gtest.ScenarioContext, evt *SSEEvent) (flowAction, error) {
+func (f *ConversationFlow) dispatch(ctx vuhive.ScenarioContext, evt *SSEEvent) (flowAction, error) {
 	if evt.Lifecycle != nil {
 		return f.handleLifecycle(ctx, evt)
 	}
@@ -165,7 +165,7 @@ func (f *ConversationFlow) dispatch(ctx gtest.ScenarioContext, evt *SSEEvent) (f
 
 // handleLifecycle processes SSE lifecycle events (aborted, closed).
 // Note: 'created' is already handled by OpenConversation.
-func (f *ConversationFlow) handleLifecycle(ctx gtest.ScenarioContext, evt *SSEEvent) (flowAction, error) {
+func (f *ConversationFlow) handleLifecycle(ctx vuhive.ScenarioContext, evt *SSEEvent) (flowAction, error) {
 	switch evt.Lifecycle.Event {
 	case "aborted":
 		f.conversationSuccess = false
@@ -183,7 +183,7 @@ func (f *ConversationFlow) handleLifecycle(ctx gtest.ScenarioContext, evt *SSEEv
 }
 
 // handleMessage processes SSE message events (BOT or CUSTOMER role).
-func (f *ConversationFlow) handleMessage(ctx gtest.ScenarioContext, evt *SSEEvent) (flowAction, error) {
+func (f *ConversationFlow) handleMessage(ctx vuhive.ScenarioContext, evt *SSEEvent) (flowAction, error) {
 	switch evt.Message.Role {
 	case "CUSTOMER":
 		f.customerMessagesReceived++
@@ -228,7 +228,7 @@ func (f *ConversationFlow) handleMessage(ctx gtest.ScenarioContext, evt *SSEEven
 }
 
 // sendNextMessage selects a message from the configured pool and posts it.
-func (f *ConversationFlow) sendNextMessage(ctx gtest.ScenarioContext) error {
+func (f *ConversationFlow) sendNextMessage(ctx vuhive.ScenarioContext) error {
 	f.currentTurn++
 	msg := f.config.Messages[rand.Intn(len(f.config.Messages))]
 	f.turnStart = time.Now()
@@ -241,7 +241,7 @@ func (f *ConversationFlow) sendNextMessage(ctx gtest.ScenarioContext) error {
 }
 
 // closeConversation sends the DELETE request to close the dialog.
-func (f *ConversationFlow) closeConversation(ctx gtest.ScenarioContext) error {
+func (f *ConversationFlow) closeConversation(ctx vuhive.ScenarioContext) error {
 	if f.session == nil {
 		return nil
 	}

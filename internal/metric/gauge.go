@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 )
 
-// gauge implements gtest.Gauge using atomic operations on float64 bits for lock-free thread safety.
+// gauge implements vuhive.Gauge using atomic operations on float64 bits for lock-free thread safety.
 type gauge struct {
 	bits atomic.Uint64
 }

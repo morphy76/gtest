@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/vuhive/internal/config"
 )
 
 type jsonMetricEntry struct {
@@ -75,7 +75,7 @@ func GenerateJSONReport(w io.Writer, data ReportData) error {
 	}
 
 	doc := jsonReportDocument{
-		SuiteName:   sOrDefault(data.SuiteName, "gtest"),
+		SuiteName:   sOrDefault(data.SuiteName, "vuhive"),
 		Scenario:    data.Scenario,
 		Version:     data.Version,
 		Commit:      data.Commit,

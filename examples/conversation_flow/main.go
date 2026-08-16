@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 func main() {
-	// 1. Initialize gtest suite
-	suite := gtest.NewSuite("Conversational AI Load Test Suite")
+	// 1. Initialize vuhive suite
+	suite := vuhive.NewSuite("Conversational AI Load Test Suite")
 
 	// 2. Register conversational flow scenario
-	suite.RegisterScenario("conversation_test_flow", gtest.Scenario{
+	suite.RegisterScenario("conversation_test_flow", vuhive.Scenario{
 		Setup:     Setup,
 		PreTest:   PreTest,
 		RunVU:     RunVU,

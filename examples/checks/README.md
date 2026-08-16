@@ -10,9 +10,9 @@ In load testing, validating API correctness without prematurely aborting virtual
 - **`ctx.Check(name, fn)`** allows you to perform inline assertions (status codes, headers, response JSON values) in `RunVU`.
 - **Non-Fatal**: If a check fails, the iteration continues normally, recording the failure for statistical analysis.
 - **Contract**: The check function returns `""` (empty string) on pass, or a descriptive reason string on failure.
-- **Auto-Instrumentation**: `gtest` automatically tracks `gtest.checks.passed` and `gtest.checks.failed` counters tagged with the check name.
+- **Auto-Instrumentation**: `vuhive` automatically tracks `vuhive.checks.passed` and `vuhive.checks.failed` counters tagged with the check name.
 - **Dedicated Reporting**: Check pass rates and failure counts are displayed in a formatted `CHECKS` summary table.
-- **SLA Threshold Integration**: You can define SLA quality gates on check metrics (e.g. `gtest.checks.failed count <= 0`).
+- **SLA Threshold Integration**: You can define SLA quality gates on check metrics (e.g. `vuhive.checks.failed count <= 0`).
 
 ---
 
@@ -21,7 +21,7 @@ In load testing, validating API correctness without prematurely aborting virtual
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario demonstrating HTTP status code, Content-Type header, and JSON payload checks. Includes an in-process mock API server. |
-| [`gtest.yaml`](gtest.yaml) | Configuration with SLA thresholds asserting zero check failures (`gtest.checks.failed <= 0`). |
+| [`vuhive.yaml`](vuhive.yaml) | Configuration with SLA thresholds asserting zero check failures (`vuhive.checks.failed <= 0`). |
 
 ---
 
@@ -30,19 +30,19 @@ In load testing, validating API correctness without prematurely aborting virtual
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/checks --config ./examples/checks/gtest.yaml
+go run -tags=vuhive_example ./examples/checks --config ./examples/checks/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/checks
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -59,13 +59,13 @@ scenarios:
 
     thresholds:
       # Enforce zero check failures across all iterations
-      - metric: gtest.checks.failed
+      - metric: vuhive.checks.failed
         stat: count
         operator: "<="
         target: "0"
 
       # Ensure at least 10 checks executed and passed
-      - metric: gtest.checks.passed
+      - metric: vuhive.checks.passed
         stat: count
         operator: ">="
         target: "10"
@@ -77,7 +77,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     checks_demo                     Version: dev
 Mode:         constant_vus (4 VUs)            Commit:  none
@@ -86,13 +86,13 @@ Iterations:   13234 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    13234
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    39702
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    13234
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    39702
+vuhive.checks.failed            Counter    0
 
 CHECKS
 ────────────────────────────────────────────────────────────────
@@ -103,8 +103,8 @@ status code is 200             13234      0        100.00%
 
 SLA THRESHOLD EVALUATION
 ────────────────────────────────────────────────────────────────
-  [PASS]  gtest.checks.failed     count <= 0      → actual: 0
-  [PASS]  gtest.checks.passed     count >= 10     → actual: 39702
+  [PASS]  vuhive.checks.failed     count <= 0      → actual: 0
+  [PASS]  vuhive.checks.passed     count >= 10     → actual: 39702
 ────────────────────────────────────────────────────────────────
 OVERALL: PASSED                                         (exit 0)
 ================================================================================

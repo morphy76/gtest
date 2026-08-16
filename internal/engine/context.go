@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/delay"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/delay"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
 )
 
 // ExecutionIdentity provides execution identity attributes (VU ID, iteration index, and scenario name).

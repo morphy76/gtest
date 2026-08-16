@@ -3,8 +3,8 @@ package engine
 import (
 	"context"
 
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
 )
 
 // iterationMetrics holds pre-resolved built-in counter handles for zero-lookup iteration recording.

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/report"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/report"
+	"github.com/morphy76/vuhive/internal/sla"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -202,7 +202,7 @@ func TestWriteReport_ConsoleFormat(t *testing.T) {
 
 	err := report.WriteReport(&buf, "console", data)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "GTEST LOAD TEST SUMMARY")
+	assert.Contains(t, buf.String(), "VUHIVE LOAD TEST SUMMARY")
 }
 
 func TestWriteReport_JSONFormat(t *testing.T) {
@@ -229,7 +229,7 @@ func TestWriteReport_ToFile(t *testing.T) {
 
 	fileBytes, err := os.ReadFile(outFilePath)
 	require.NoError(t, err)
-	assert.Contains(t, string(fileBytes), "GTEST LOAD TEST SUMMARY")
+	assert.Contains(t, string(fileBytes), "VUHIVE LOAD TEST SUMMARY")
 }
 
 

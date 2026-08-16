@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/report"
+	"github.com/morphy76/vuhive/internal/report"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

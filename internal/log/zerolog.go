@@ -1,4 +1,4 @@
-// Package log provides zerolog logging adapters implementing gtest.Logger and gtest.LogEvent.
+// Package log provides zerolog logging adapters implementing vuhive.Logger and vuhive.LogEvent.
 package log
 
 import (
@@ -85,7 +85,7 @@ func (l *ZerologLogger) Error() LogEvent {
 	return &logEvent{event: l.zlog.Error()}
 }
 
-// logEvent implements gtest.LogEvent by wrapping a zerolog.Event.
+// logEvent implements vuhive.LogEvent by wrapping a zerolog.Event.
 type logEvent struct {
 	event *zerolog.Event
 }

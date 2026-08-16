@@ -3,7 +3,7 @@ package engine
 import (
 	"fmt"
 
-	"github.com/morphy76/gtest/internal/report"
+	"github.com/morphy76/vuhive/internal/report"
 )
 
 // SetupHook is called once before any VU is spawned.
@@ -47,7 +47,7 @@ type SetupError struct {
 }
 
 func (e *SetupError) Error() string {
-	return fmt.Sprintf("gtest: setup hook failed: %s", e.Err)
+	return fmt.Sprintf("vuhive: setup hook failed: %s", e.Err)
 }
 
 func (e *SetupError) Unwrap() error {

@@ -6,7 +6,7 @@ A reference example demonstrating protocol extensibility and open-system rate pa
 
 ## Concept Overview
 
-While HTTP/REST is common, `gtest` is protocol-agnostic and well-suited for high-throughput RPC load testing:
+While HTTP/REST is common, `vuhive` is protocol-agnostic and well-suited for high-throughput RPC load testing:
 - **Protocol Agnostic**: The `RunVU` function executes pure Go code—allowing load testing of gRPC (`google.golang.org/grpc`), tRPC, Twirp, database queries, or raw TCP/UDP protocols.
 - **Open-System Pacing (`arrival_rate`)**: Targets a precise Transactions Per Second (TPS) arrival rate driven by a token bucket (`golang.org/x/time/rate`).
 - **Bounded Worker Pool (`max_vus`)**: Pre-allocates up to `max_vus` persistent worker goroutines to process arriving tokens, eliminating per-iteration goroutine creation overhead.
@@ -20,7 +20,7 @@ While HTTP/REST is common, `gtest` is protocol-agnostic and well-suited for high
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario demonstrating RPC execution, open-system arrival rate handling, and tagged metrics. Includes an in-memory mock user store. |
-| [`gtest.yaml`](gtest.yaml) | Configuration with `arrival_rate` pacing (`target_tps: 20`, `max_vus: 10`) and latency thresholds. |
+| [`vuhive.yaml`](vuhive.yaml) | Configuration with `arrival_rate` pacing (`target_tps: 20`, `max_vus: 10`) and latency thresholds. |
 
 ---
 
@@ -29,19 +29,19 @@ While HTTP/REST is common, `gtest` is protocol-agnostic and well-suited for high
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/grpc_user_service --config ./examples/grpc_user_service/gtest.yaml
+go run -tags=vuhive_example ./examples/grpc_user_service --config ./examples/grpc_user_service/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/grpc_user_service
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -78,7 +78,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     grpc_user_service_flow          Version: dev
 Mode:         arrival_rate (20 TPS, max 10 VUs)  Commit:  none
@@ -87,13 +87,13 @@ Iterations:   11 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    11
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    0
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    11
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    0
+vuhive.checks.failed            Counter    0
 
 CUSTOM METRICS
 ────────────────────────────────────────────────────────────────

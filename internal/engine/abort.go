@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/sla"
 )
 
 // MonitorAbortThresholds starts a background goroutine that periodically checks

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/delay"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/delay"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

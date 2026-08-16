@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 
@@ -38,8 +38,8 @@ func (m *mockScenarioContext) Param(key string) string                          
 func (m *mockScenarioContext) ParamInt(key string, def int) int                            { return def }
 func (m *mockScenarioContext) ParamDuration(key string, def time.Duration) time.Duration { return def }
 func (m *mockScenarioContext) GlobalState(key string) any                                  { return nil }
-func (m *mockScenarioContext) Log() gtest.Logger                                           { return noopLogger{} }
-func (m *mockScenarioContext) Metrics() gtest.MetricsCollector                             { return noopMetrics{} }
+func (m *mockScenarioContext) Log() vuhive.Logger                                           { return noopLogger{} }
+func (m *mockScenarioContext) Metrics() vuhive.MetricsCollector                             { return noopMetrics{} }
 func (m *mockScenarioContext) Sleep(d ...time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -50,7 +50,7 @@ func (m *mockScenarioContext) Sleep(d ...time.Duration) error {
 	}
 	return nil
 }
-func (m *mockScenarioContext) Check(name string, fn gtest.CheckFunc) bool {
+func (m *mockScenarioContext) Check(name string, fn vuhive.CheckFunc) bool {
 	if fn != nil && fn() == "" {
 		return true
 	}
@@ -61,28 +61,28 @@ func (m *mockScenarioContext) Check(name string, fn gtest.CheckFunc) bool {
 type noopLogger struct{}
 
 
-func (l noopLogger) Debug() gtest.LogEvent { return noopLogEvent{} }
-func (l noopLogger) Info() gtest.LogEvent  { return noopLogEvent{} }
-func (l noopLogger) Warn() gtest.LogEvent  { return noopLogEvent{} }
-func (l noopLogger) Error() gtest.LogEvent { return noopLogEvent{} }
+func (l noopLogger) Debug() vuhive.LogEvent { return noopLogEvent{} }
+func (l noopLogger) Info() vuhive.LogEvent  { return noopLogEvent{} }
+func (l noopLogger) Warn() vuhive.LogEvent  { return noopLogEvent{} }
+func (l noopLogger) Error() vuhive.LogEvent { return noopLogEvent{} }
 
 type noopLogEvent struct{}
 
-func (e noopLogEvent) Str(k, v string) gtest.LogEvent       { return e }
-func (e noopLogEvent) Int(k string, v int) gtest.LogEvent   { return e }
-func (e noopLogEvent) Int64(k string, v int64) gtest.LogEvent { return e }
-func (e noopLogEvent) Float64(k string, v float64) gtest.LogEvent { return e }
-func (e noopLogEvent) Bool(k string, v bool) gtest.LogEvent { return e }
-func (e noopLogEvent) Dur(k string, v time.Duration) gtest.LogEvent { return e }
-func (e noopLogEvent) Err(err error) gtest.LogEvent         { return e }
+func (e noopLogEvent) Str(k, v string) vuhive.LogEvent       { return e }
+func (e noopLogEvent) Int(k string, v int) vuhive.LogEvent   { return e }
+func (e noopLogEvent) Int64(k string, v int64) vuhive.LogEvent { return e }
+func (e noopLogEvent) Float64(k string, v float64) vuhive.LogEvent { return e }
+func (e noopLogEvent) Bool(k string, v bool) vuhive.LogEvent { return e }
+func (e noopLogEvent) Dur(k string, v time.Duration) vuhive.LogEvent { return e }
+func (e noopLogEvent) Err(err error) vuhive.LogEvent         { return e }
 func (e noopLogEvent) Msg(msg string)                       {}
 
 type noopMetrics struct{}
 
-func (m noopMetrics) Counter(name string, tags gtest.Tags) gtest.Counter { return noopCounter{} }
-func (m noopMetrics) Rate(name string, tags gtest.Tags) gtest.Rate       { return noopRate{} }
-func (m noopMetrics) Duration(name string, tags gtest.Tags) gtest.Duration { return noopDuration{} }
-func (m noopMetrics) Gauge(name string, tags gtest.Tags) gtest.Gauge    { return noopGauge{} }
+func (m noopMetrics) Counter(name string, tags vuhive.Tags) vuhive.Counter { return noopCounter{} }
+func (m noopMetrics) Rate(name string, tags vuhive.Tags) vuhive.Rate       { return noopRate{} }
+func (m noopMetrics) Duration(name string, tags vuhive.Tags) vuhive.Duration { return noopDuration{} }
+func (m noopMetrics) Gauge(name string, tags vuhive.Tags) vuhive.Gauge    { return noopGauge{} }
 
 type noopCounter struct{}
 

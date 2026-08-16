@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/morphy76/gtest/internal/cli"
+	"github.com/morphy76/vuhive/internal/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +14,7 @@ func TestParseFlagsDefaults(t *testing.T) {
 	flags, err := cli.ParseFlags([]string{}, &errBuf)
 	require.NoError(t, err)
 
-	assert.Equal(t, "gtest.yaml", flags.ConfigPath)
+	assert.Equal(t, "vuhive.yaml", flags.ConfigPath)
 	assert.Equal(t, "", flags.ScenarioName)
 	assert.Equal(t, "info", flags.LogLevel)
 	assert.Equal(t, "pretty", flags.LogFormat)

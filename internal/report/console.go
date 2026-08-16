@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/metric"
 )
 
 // GenerateConsoleReport formats and writes the console summary report to w.
@@ -27,7 +27,7 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 
 func writeHeader(sb *strings.Builder, data ReportData) {
 	sb.WriteString("================================================================================\n")
-	sb.WriteString("                        GTEST LOAD TEST SUMMARY\n")
+	sb.WriteString("                        VUHIVE LOAD TEST SUMMARY\n")
 	sb.WriteString("================================================================================\n")
 
 	fmt.Fprintf(sb, "Scenario:     %-30s  Version: %s\n", data.Scenario, data.Version)

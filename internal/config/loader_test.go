@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
+	"github.com/morphy76/vuhive/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -501,12 +501,12 @@ scenarios:
 
 // Additional: LoadFromFile with nonexistent file returns ConfigError
 func TestLoadFromFileNotFoundReturnsConfigError(t *testing.T) {
-	_, err := config.LoadFromFile("/nonexistent/path/gtest.yaml")
+	_, err := config.LoadFromFile("/nonexistent/path/vuhive.yaml")
 	require.Error(t, err)
 
 	var cfgErr *config.ConfigError
 	require.True(t, errors.As(err, &cfgErr), "expected *config.ConfigError, got %T", err)
-	assert.Equal(t, "/nonexistent/path/gtest.yaml", cfgErr.Path)
+	assert.Equal(t, "/nonexistent/path/vuhive.yaml", cfgErr.Path)
 }
 
 func TestInteractionDelayConfigLoading(t *testing.T) {

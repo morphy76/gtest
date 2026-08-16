@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // ConversationClient manages protocol interactions with the conversational AI service.
@@ -67,7 +67,7 @@ func (s *ConversationSession) Events() <-chan SSEEvent { return s.events }
 func (s *ConversationSession) Errors() <-chan error { return s.errs }
 
 // OpenConversation initiates an SSE stream, receives the lifecycle 'created' event, and returns a ConversationSession.
-func (c *ConversationClient) OpenConversation(ctx gtest.ScenarioContext, externalID, dialogModel string, timeout time.Duration) (*ConversationSession, error) {
+func (c *ConversationClient) OpenConversation(ctx vuhive.ScenarioContext, externalID, dialogModel string, timeout time.Duration) (*ConversationSession, error) {
 	metrics := NewMetrics(ctx.Metrics())
 	start := time.Now()
 	sseURL := fmt.Sprintf("%s/api/v1/conversation/%s?with_dialog_model=%s", c.BaseURL, externalID, dialogModel)
@@ -193,7 +193,7 @@ func (s *ConversationSession) readLoop(body io.ReadCloser) {
 }
 
 // AddMessage posts a customer message to an active dialog.
-func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *ConversationSession, messageText string) error {
+func (c *ConversationClient) AddMessage(ctx vuhive.ScenarioContext, session *ConversationSession, messageText string) error {
 	if session == nil {
 		return fmt.Errorf("cannot add message: session is nil")
 	}
@@ -236,7 +236,7 @@ func (c *ConversationClient) AddMessage(ctx gtest.ScenarioContext, session *Conv
 }
 
 // AwaitBotResponse waits for a BOT role message via SSE, enforcing SSE timeout.
-func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
+func (s *ConversationSession) AwaitBotResponse(ctx vuhive.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
 	metrics := NewMetrics(ctx.Metrics())
 	start := time.Now()
 
@@ -260,7 +260,7 @@ func (s *ConversationSession) AwaitBotResponse(ctx gtest.ScenarioContext, timeou
 }
 
 // ReadNextEvent reads the next event line from the SSE stream channel with configurable timeout handling.
-func (s *ConversationSession) ReadNextEvent(ctx gtest.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
+func (s *ConversationSession) ReadNextEvent(ctx vuhive.ScenarioContext, timeout time.Duration) (*SSEEvent, error) {
 	metrics := NewMetrics(ctx.Metrics())
 	select {
 	case evt, ok := <-s.events:
@@ -290,7 +290,7 @@ func (s *ConversationSession) Close() {
 
 
 // CloseConversation sends a DELETE request to close the dialog.
-func (c *ConversationClient) CloseConversation(ctx gtest.ScenarioContext, externalID, dialogID string) error {
+func (c *ConversationClient) CloseConversation(ctx vuhive.ScenarioContext, externalID, dialogID string) error {
 	url := fmt.Sprintf("%s/api/v1/close/%s/%s", c.BaseURL, externalID, dialogID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)

@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 type apiResponse struct {
@@ -35,12 +35,12 @@ func main() {
 	ts := startMockAPIServer()
 	defer ts.Close()
 
-	// 2. Initialize gtest suite
-	suite := gtest.NewSuite("Checks Demo Suite")
+	// 2. Initialize vuhive suite
+	suite := vuhive.NewSuite("Checks Demo Suite")
 
 	// 3. Register scenario demonstrating inline assertions (checks)
-	suite.RegisterScenario("checks_demo", gtest.Scenario{
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+	suite.RegisterScenario("checks_demo", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
 			return map[string]any{
 				"client":     client,
@@ -48,7 +48,7 @@ func main() {
 			}, nil
 		},
 
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			// Step 1: Extract client and server URL from global state
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
@@ -76,7 +76,7 @@ func main() {
 			// - Return "" (empty string) to indicate the check PASSED.
 			// - Return a descriptive failure reason string to indicate the check FAILED.
 			// - Unlike returning an error from RunVU, failed checks DO NOT abort the iteration.
-			// - gtest automatically records gtest.checks.passed and gtest.checks.failed metrics
+			// - vuhive automatically records vuhive.checks.passed and vuhive.checks.failed metrics
 			//   tagged with the check name, and prints a dedicated CHECKS table in the report.
 
 			// Check 1: Validate HTTP Status Code is 200

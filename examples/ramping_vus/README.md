@@ -19,7 +19,7 @@ Simulating realistic traffic profiles often requires dynamic scaling:
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario definition with lifecycle hooks, request execution, and metric collection. Includes an in-process mock server with request counting. |
-| [`gtest.yaml`](gtest.yaml) | 5-stage ramping configuration (ramp up -> hold -> spike -> hold spike -> ramp down) and SLA thresholds. |
+| [`vuhive.yaml`](vuhive.yaml) | 5-stage ramping configuration (ramp up -> hold -> spike -> hold spike -> ramp down) and SLA thresholds. |
 
 ---
 
@@ -28,19 +28,19 @@ Simulating realistic traffic profiles often requires dynamic scaling:
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/ramping_vus --config ./examples/ramping_vus/gtest.yaml
+go run -tags=vuhive_example ./examples/ramping_vus --config ./examples/ramping_vus/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/ramping_vus
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -80,7 +80,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     spike_test                      Version: dev
 Mode:         ramping_vus                     Commit:  none
@@ -89,13 +89,13 @@ Iterations:   9902 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    9902
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    0
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    9902
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    0
+vuhive.checks.failed            Counter    0
 
 CUSTOM METRICS
 ────────────────────────────────────────────────────────────────

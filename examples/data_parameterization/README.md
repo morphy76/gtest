@@ -1,4 +1,4 @@
-# Data Parameterization Example (`pkg/gtest/data`)
+# Data Parameterization Example (`pkg/vuhive/data`)
 
 A reference example demonstrating how to ingest external datasets (CSV, JSON, JSONL) and feed dynamic records into Virtual User load iterations using thread-safe distribution strategies.
 
@@ -7,7 +7,7 @@ A reference example demonstrating how to ingest external datasets (CSV, JSON, JS
 ## Concept Overview
 
 Dynamic data feeds simulate realistic multi-user workloads by parameterizing credentials, SKUs, queries, and IDs:
-- **`pkg/gtest/data` module**: Provides native loaders for CSV (`LoadCSV` / `LoadCSVFile`), JSON arrays (`LoadJSON` / `LoadJSONFile`), and JSON Lines (`LoadJSONL` / `LoadJSONLFile`).
+- **`pkg/vuhive/data` module**: Provides native loaders for CSV (`LoadCSV` / `LoadCSVFile`), JSON arrays (`LoadJSON` / `LoadJSONFile`), and JSON Lines (`LoadJSONL` / `LoadJSONLFile`).
 - **Distribution Strategies**:
   - **`data.Sequential`**: Deterministic round-robin per Virtual User and iteration index: `(vu_id - 1 + iteration) % total_records`.
   - **`data.Random`**: Lock-free, thread-safe uniform random record selection across all rows.
@@ -22,7 +22,7 @@ Dynamic data feeds simulate realistic multi-user workloads by parameterizing cre
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario demonstrating CSV (`Sequential`), JSON (`Random`), and JSONL (`SharedQueue`) loaders, data retrieval in `RunVU`, and mock HTTP endpoints. |
-| [`gtest.yaml`](gtest.yaml) | Scenario configuration with success rate and check failure thresholds. |
+| [`vuhive.yaml`](vuhive.yaml) | Scenario configuration with success rate and check failure thresholds. |
 
 ---
 
@@ -31,19 +31,19 @@ Dynamic data feeds simulate realistic multi-user workloads by parameterizing cre
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/data_parameterization --config ./examples/data_parameterization/gtest.yaml
+go run -tags=vuhive_example ./examples/data_parameterization --config ./examples/data_parameterization/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/data_parameterization
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -63,7 +63,7 @@ scenarios:
         stat: rate
         operator: ">="
         target: "0.95"
-      - metric: gtest.checks.failed
+      - metric: vuhive.checks.failed
         stat: count
         operator: "<="
         target: "0"
@@ -75,7 +75,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     data_parameterization_flow      Version: dev
 Mode:         constant_vus (4 VUs)            Commit:  none
@@ -84,13 +84,13 @@ Iterations:   1382 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    1382
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    2764
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    1382
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    2764
+vuhive.checks.failed            Counter    0
 
 CHECKS
 ────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ parameterized_requests_total   Counter    1382
 SLA THRESHOLD EVALUATION
 ────────────────────────────────────────────────────────────────
   [PASS]  dataset_success_rate    rate >= 0.95    → actual: 1
-  [PASS]  gtest.checks.failed     count <= 0      → actual: 0
+  [PASS]  vuhive.checks.failed     count <= 0      → actual: 0
 ────────────────────────────────────────────────────────────────
 OVERALL: PASSED                                         (exit 0)
 ================================================================================
