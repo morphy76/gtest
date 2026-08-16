@@ -1,4 +1,4 @@
-// Package cli provides command-line flag parsing for gtest suite execution.
+// Package cli provides command-line flag parsing for vuhive suite execution.
 package cli
 
 import (
@@ -30,13 +30,13 @@ type Flags struct {
 // ParseFlags parses command-line arguments into a Flags struct.
 // It uses a local FlagSet to allow isolated unit testing without global state mutation.
 func ParseFlags(args []string, errOutput io.Writer) (*Flags, error) {
-	fs := flag.NewFlagSet("gtest", flag.ContinueOnError)
+	fs := flag.NewFlagSet("vuhive", flag.ContinueOnError)
 	if errOutput != nil {
 		fs.SetOutput(errOutput)
 	}
 
 	flags := &Flags{}
-	fs.StringVar(&flags.ConfigPath, "config", "gtest.yaml", "Path to the YAML configuration file")
+	fs.StringVar(&flags.ConfigPath, "config", "vuhive.yaml", "Path to the YAML configuration file")
 	fs.StringVar(&flags.ScenarioName, "scenario", "", "Name of the scenario to execute")
 	fs.StringVar(&flags.LogLevel, "log-level", "info", "Log verbosity: debug, info, warn, error")
 	fs.StringVar(&flags.LogFormat, "log-format", "pretty", "Log output format: pretty or json")
@@ -46,7 +46,7 @@ func ParseFlags(args []string, errOutput io.Writer) (*Flags, error) {
 	fs.BoolVar(&flags.ShowVersion, "version", false, "Print library version and exit")
 
 	if err := fs.Parse(args); err != nil {
-		return nil, fmt.Errorf("gtest: invalid command line flags: %w", err)
+		return nil, fmt.Errorf("vuhive: invalid command line flags: %w", err)
 	}
 
 	return flags, nil

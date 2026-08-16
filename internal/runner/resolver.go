@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/morphy76/gtest/internal/cli"
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/version"
+	"github.com/morphy76/vuhive/internal/cli"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/version"
 )
 
 // ScenarioNotFoundError indicates a scenario was not found in the config or not registered.
@@ -19,9 +19,9 @@ type ScenarioNotFoundError struct {
 
 func (e *ScenarioNotFoundError) Error() string {
 	if e.Name != "" {
-		return fmt.Sprintf("gtest: scenario %q not found: %s", e.Name, e.Message)
+		return fmt.Sprintf("vuhive: scenario %q not found: %s", e.Name, e.Message)
 	}
-	return fmt.Sprintf("gtest: scenario not found: %s", e.Message)
+	return fmt.Sprintf("vuhive: scenario not found: %s", e.Message)
 }
 
 // ScenarioRegistry provides access to named scenarios.
@@ -60,7 +60,7 @@ func (r *ScenarioResolver) Resolve(args []string, stdout io.Writer) (*ResolvedSc
 	}
 
 	if flags.ShowVersion {
-		if _, err := fmt.Fprintf(stdout, "gtest version %s (commit: %s, build_time: %s)\n",
+		if _, err := fmt.Fprintf(stdout, "vuhive version %s (commit: %s, build_time: %s)\n",
 			version.Version, version.Commit, version.BuildTime); err != nil {
 			return nil, err
 		}

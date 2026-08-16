@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+default_scenario: conversation_test_flow
+
+scenarios:
+  conversation_test_flow:
+    type: constant_vus
+    vus: 3
+    ramp_up: 100ms
+    run_period: 500ms
+    ramp_down: 100ms
+    vu_timeout: 5s
+
+    # In-iteration thinking time between bot reply and next customer message (invoked via ctx.Sleep)
+    interaction_delay:
+      type: range
+      min: 50ms
+      max: 150ms
+
+    params:
+      base_url: "mock"        # Set to target API URL or "mock" for in-process mock server
+      token: "pat_token"      # Set to access token
+      tenant: "tenant_1"
+      dialog_model: "gpt-4o"
+      turns: "2"
+      sse_event_timeout: "5s" # Max wait duration for expected SSE bot reply before failing turn
+      # messages_file: "path/to/messages.csv" # Optional: CSV with columns message_id,user_message,category,expected_tokens
+
+    thresholds:
+      - metric: sse_open_time
+        stat: p95
+        operator: "<"
+        target: "200ms"
+      - metric: answer_received_time
+        stat: p95
+        operator: "<"
+        target: "500ms"
+      - metric: conversation_success_rate
+        stat: rate
+        operator: ">="
+        target: "0.9"

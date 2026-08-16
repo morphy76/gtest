@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
-	"github.com/morphy76/gtest/pkg/gtest/data"
+	"github.com/morphy76/vuhive/pkg/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive/data"
 )
 
 // Sample CSV dataset: user credentials and roles
@@ -84,14 +84,14 @@ func main() {
 	ts := startMockDataServer()
 	defer ts.Close()
 
-	// 2. Initialize gtest suite
-	suite := gtest.NewSuite("Data Parameterization Demo Suite")
+	// 2. Initialize vuhive suite
+	suite := vuhive.NewSuite("Data Parameterization Demo Suite")
 
 	// 3. Register scenario demonstrating dataset parameterization
-	suite.RegisterScenario("data_parameterization_flow", gtest.Scenario{
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+	suite.RegisterScenario("data_parameterization_flow", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			// Pedagogical Note:
-			// Load datasets once in Setup. The pkg/gtest/data module provides thread-safe
+			// Load datasets once in Setup. The pkg/vuhive/data module provides thread-safe
 			// dataset distribution strategies:
 			//
 			// 1. data.Sequential: Deterministic round-robin per VU + iteration index ((vu-1+iter)%N).
@@ -126,12 +126,12 @@ func main() {
 			}, nil
 		},
 
-		PreTest: func(ctx gtest.VUContext) error {
+		PreTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("starting parameterized iteration")
 			return nil
 		},
 
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			csvDS := ctx.GlobalState("csv_dataset").(*data.DataSet)
 			jsonDS := ctx.GlobalState("json_dataset").(*data.DataSet)
 			client := ctx.GlobalState("client").(*http.Client)
@@ -148,7 +148,7 @@ func main() {
 			reqUser, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/api/user?user_id=%s", serverURL, userID), nil)
 			respUser, err := client.Do(reqUser)
 			if err != nil {
-				ctx.Metrics().Rate("dataset_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("dataset_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("user query failed for %s (%s): %w", username, userID, err)
 			}
 			_ = respUser.Body.Close()
@@ -170,7 +170,7 @@ func main() {
 			reqProd, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/api/product?sku=%s", serverURL, sku), nil)
 			respProd, err := client.Do(reqProd)
 			if err != nil {
-				ctx.Metrics().Rate("dataset_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("dataset_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("product query failed for %s: %w", sku, err)
 			}
 			_ = respProd.Body.Close()
@@ -183,13 +183,13 @@ func main() {
 			})
 
 			// Step 3: Record aggregated dataset execution metrics
-			ctx.Metrics().Rate("dataset_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("parameterized_requests_total", gtest.Tags{"format": "csv_and_json"}).Inc()
+			ctx.Metrics().Rate("dataset_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("parameterized_requests_total", vuhive.Tags{"format": "csv_and_json"}).Inc()
 
 			return nil
 		},
 
-		AfterTest: func(ctx gtest.VUContext) error {
+		AfterTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed parameterized iteration")
 			return nil
 		},

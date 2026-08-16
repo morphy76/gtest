@@ -177,7 +177,7 @@ func validateGaussianDelay(prefix string, delay *ThinkTimeConfig) error {
 }
 
 // Validate checks all semantic invariants on a parsed Config.
-// Returns a *gtest.ValidationError on the first violation found.
+// Returns a *ValidationError on the first violation found.
 func Validate(cfg *Config) error {
 	// Version must be "1.0".
 	if cfg.Version != "1.0" {

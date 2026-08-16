@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // startMockECommerceServer starts an in-process HTTP mock server simulating catalog, cart, and checkout endpoints.
@@ -38,18 +38,18 @@ func main() {
 	ts := startMockECommerceServer()
 	defer ts.Close()
 
-	// 2. Initialize gtest suite
-	suite := gtest.NewSuite("Thinking Time & User Delay Demo Suite")
+	// 2. Initialize vuhive suite
+	suite := vuhive.NewSuite("Thinking Time & User Delay Demo Suite")
 
 	// 3. Register multi-step scenario with thinking time pauses
-	suite.RegisterScenario("user_journey_with_think_time", gtest.Scenario{
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+	suite.RegisterScenario("user_journey_with_think_time", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 3 * time.Second}
 
 			// Pedagogical Note:
 			// Initialize custom mathematical delay generators (e.g. ExpoDelay, GaussianDelay, RangeDelay)
 			// once during Setup so that distribution generators can be reused efficiently across VUs.
-			expoGen := gtest.ExpoDelay(25*time.Millisecond, 10*time.Millisecond, 50*time.Millisecond)
+			expoGen := vuhive.ExpoDelay(25*time.Millisecond, 10*time.Millisecond, 50*time.Millisecond)
 
 			return map[string]any{
 				"client":     client,
@@ -58,15 +58,15 @@ func main() {
 			}, nil
 		},
 
-		PreTest: func(ctx gtest.VUContext) error {
+		PreTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating user journey iteration")
 			return nil
 		},
 
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
-			expoGen := ctx.GlobalState("expo_delay").(gtest.DelayGenerator)
+			expoGen := ctx.GlobalState("expo_delay").(vuhive.DelayGenerator)
 
 			// Step 1: Browse catalog
 			startCatalog := time.Now()
@@ -76,13 +76,13 @@ func main() {
 			}
 			resp1, err := client.Do(req1)
 			if err != nil {
-				ctx.Metrics().Rate("user_flow_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("user_flow_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("catalog request failed: %w", err)
 			}
 			_ = resp1.Body.Close()
-			ctx.Metrics().Duration("catalog_view_duration", gtest.Tags{}).Observe(time.Since(startCatalog))
+			ctx.Metrics().Duration("catalog_view_duration", vuhive.Tags{}).Observe(time.Since(startCatalog))
 
-			// Pause 1: Declarative thinking time configured in gtest.yaml
+			// Pause 1: Declarative thinking time configured in vuhive.yaml
 			// Calling ctx.Sleep() with NO arguments automatically evaluates the scenario's
 			// configured interaction_delay strategy (e.g. range, fixed, expo, gaussian).
 			// It actively respects ctx.Done() for instantaneous cancellation during shutdown.
@@ -90,7 +90,7 @@ func main() {
 			if err := ctx.Sleep(); err != nil {
 				return fmt.Errorf("think time aborted: %w", err)
 			}
-			ctx.Metrics().Duration("think_time_catalog", gtest.Tags{}).Observe(time.Since(thinkStart1))
+			ctx.Metrics().Duration("think_time_catalog", vuhive.Tags{}).Observe(time.Since(thinkStart1))
 
 			// Step 2: Add item to cart
 			startCart := time.Now()
@@ -100,11 +100,11 @@ func main() {
 			}
 			resp2, err := client.Do(req2)
 			if err != nil {
-				ctx.Metrics().Rate("user_flow_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("user_flow_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("add-to-cart request failed: %w", err)
 			}
 			_ = resp2.Body.Close()
-			ctx.Metrics().Duration("add_to_cart_duration", gtest.Tags{}).Observe(time.Since(startCart))
+			ctx.Metrics().Duration("add_to_cart_duration", vuhive.Tags{}).Observe(time.Since(startCart))
 
 			// Pause 2: Programmatic pause using exponential delay generator
 			// Calling ctx.Sleep(duration) pauses for an explicit duration, still respecting ctx.Done().
@@ -121,20 +121,20 @@ func main() {
 			}
 			resp3, err := client.Do(req3)
 			if err != nil {
-				ctx.Metrics().Rate("user_flow_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("user_flow_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("checkout request failed: %w", err)
 			}
 			_ = resp3.Body.Close()
-			ctx.Metrics().Duration("checkout_duration", gtest.Tags{}).Observe(time.Since(startCheckout))
+			ctx.Metrics().Duration("checkout_duration", vuhive.Tags{}).Observe(time.Since(startCheckout))
 
 			// Record overall journey metrics
-			ctx.Metrics().Rate("user_flow_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("user_journeys_completed_total", gtest.Tags{}).Inc()
+			ctx.Metrics().Rate("user_flow_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("user_journeys_completed_total", vuhive.Tags{}).Inc()
 
 			return nil
 		},
 
-		AfterTest: func(ctx gtest.VUContext) error {
+		AfterTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed user journey iteration")
 			return nil
 		},

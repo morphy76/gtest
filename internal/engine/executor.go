@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/sla"
 )
 
 // MetricsStore defines the metric recording and reading capabilities required by the scenario executor.
@@ -103,7 +103,7 @@ func (e *Executor) Execute(ctx context.Context) error {
 	abortedCh, getReason := MonitorAbortThresholds(pacingCtx, cancel, startTime, e.Config.Thresholds, e.Metrics, e.Logger)
 
 	if e.Pacer == nil {
-		return fmt.Errorf("gtest: unsupported scenario type %q", e.Config.Type)
+		return fmt.Errorf("vuhive: unsupported scenario type %q", e.Config.Type)
 	}
 
 	e.Pacer.Run(pacingCtx, e.Scenario, e.Config, e.ScenarioName, globalState, e.Logger, e.Metrics)

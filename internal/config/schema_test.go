@@ -13,11 +13,11 @@ import (
 )
 
 func findSchemaPath(t *testing.T) string {
-	// Locate schemas/gtest.schema.json relative to repository root
+	// Locate schemas/vuhive.schema.json relative to repository root
 	candidates := []string{
-		"../../schemas/gtest.schema.json",
-		"../schemas/gtest.schema.json",
-		"schemas/gtest.schema.json",
+		"../../schemas/vuhive.schema.json",
+		"../schemas/vuhive.schema.json",
+		"schemas/vuhive.schema.json",
 	}
 	for _, c := range candidates {
 		if abs, err := filepath.Abs(c); err == nil {
@@ -26,7 +26,7 @@ func findSchemaPath(t *testing.T) string {
 			}
 		}
 	}
-	t.Fatalf("schemas/gtest.schema.json not found in candidate paths")
+	t.Fatalf("schemas/vuhive.schema.json not found in candidate paths")
 	return ""
 }
 
@@ -37,7 +37,7 @@ func loadSchema(t *testing.T) map[string]any {
 
 	var schema map[string]any
 	err = json.Unmarshal(data, &schema)
-	require.NoError(t, err, "schemas/gtest.schema.json must be valid JSON")
+	require.NoError(t, err, "schemas/vuhive.schema.json must be valid JSON")
 	return schema
 }
 
@@ -47,7 +47,7 @@ func TestJSONSchema_StructuralValidity(t *testing.T) {
 	// Validate top-level schema metadata
 	assert.NotEmpty(t, schema["$schema"])
 	assert.NotEmpty(t, schema["$id"])
-	assert.Equal(t, "gtest Configuration Schema", schema["title"])
+	assert.Equal(t, "vuhive Configuration Schema", schema["title"])
 	assert.NotEmpty(t, schema["description"])
 
 	// Validate required top-level properties
@@ -222,7 +222,7 @@ scenarios:
     run_period: 1m
     vu_timeout: 1s
     thresholds:
-      - metric: gtest.pacing.dropped_iterations
+      - metric: vuhive.pacing.dropped_iterations
         stat: count
         operator: "<="
         target: "0"

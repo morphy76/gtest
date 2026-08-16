@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/sla"
 )
 
 // ReportData gathers all scenario metadata, metric store snapshots, and SLA results for reporting.

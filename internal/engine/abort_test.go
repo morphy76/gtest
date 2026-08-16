@@ -11,10 +11,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
 )
 
 // AC-1.16.1 & AC-1.16.3: Threshold configured with abort_on_fail=true evaluates periodically and cancels context immediately on breach

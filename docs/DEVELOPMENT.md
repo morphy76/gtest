@@ -1,17 +1,17 @@
-# gtest Framework Developer Guidelines
+# vuhive Framework Developer Guidelines
 
-This document defines the development standards, release workflow, and architecture rules for developers and autonomous agents contributing to the `gtest` framework.
+This document defines the development standards, release workflow, and architecture rules for developers and autonomous agents contributing to the `vuhive` framework.
 
 ---
 
 ## 1. Release Process
 
-`gtest` follows the **Quarkus release pattern**: releases are fully automated, pull-request driven, and require no manual workflow dispatching or configuration parameterization.
+`vuhive` follows the **Quarkus release pattern**: releases are fully automated, pull-request driven, and require no manual workflow dispatching or configuration parameterization.
 
 ```text
  ┌──────────────────────┐        ┌───────────────────────┐        ┌──────────────────────┐
  │ Developer bumps      │        │ PR CI Checks Pass     │        │ Release Workflow     │
- │ VERSION.gtest in PR  ├───────►│ & PR Merged to main   ├───────►│ Runs Tests, Tags     │
+ │ VERSION.vuhive in PR  ├───────►│ & PR Merged to main   ├───────►│ Runs Tests, Tags     │
  │ (Atomic Commit)      │        │                       │        │ & Publishes Release  │
  └──────────────────────┘        └───────────────────────┘        └──────────────────────┘
 ```
@@ -19,10 +19,10 @@ This document defines the development standards, release workflow, and architect
 ### Release Workflow Mechanics
 
 1. **Semantic Version Tracking**:
-   - The framework version is maintained in the root file `VERSION.gtest` using Semantic Versioning 2.0.0 (`MAJOR.MINOR.PATCH`).
+   - The framework version is maintained in the root file `VERSION.vuhive` using Semantic Versioning 2.0.0 (`MAJOR.MINOR.PATCH`).
 
 2. **Atomic Version Bump Pull Request**:
-   - Releases are initiated by opening a standalone pull request that modifies only `VERSION.gtest` (e.g., bumping `0.1.2` to `0.1.3`).
+   - Releases are initiated by opening a standalone pull request that modifies only `VERSION.vuhive` (e.g., bumping `0.1.2` to `0.1.3`).
    - Per project non-functional requirements, version bumps must be isolated atomic commits (never mixed with functional code changes).
 
 3. **PR Validation & Review**:
@@ -30,18 +30,18 @@ This document defines the development standards, release workflow, and architect
    - The PR is reviewed and merged into `main` following repository branch protection rules.
 
 4. **Automated Release on Merge**:
-   - Merging a PR that updates `VERSION.gtest` triggers `.github/workflows/release.yml` on `push` to `main`:
+   - Merging a PR that updates `VERSION.vuhive` triggers `.github/workflows/release.yml` on `push` to `main`:
      ```yaml
      on:
        push:
          branches:
            - main
          paths:
-           - 'VERSION.gtest'
+           - 'VERSION.vuhive'
      ```
    - The workflow automatically executes the following steps:
      1. Runs the complete test suite (`make test`, `make test-race`, `make test-examples`).
-     2. Reads the new version string from `VERSION.gtest`.
+     2. Reads the new version string from `VERSION.vuhive`.
      3. Tags the merge commit with `v${VERSION}` (`git tag -a "v${VERSION}" -m "Release v${VERSION}"`).
      4. Pushes the tag to GitHub (`git push origin "v${VERSION}"`).
      5. Creates the official GitHub Release with auto-generated release notes via `gh release create`.
@@ -56,7 +56,7 @@ All development must strictly adhere to the following architecture, non-function
 
 #### 1. Hexagonal Architecture with DDD Boundaries
 - **Layering & Import Rules**:
-  - **Domain Layer (`domain/` or `pkg/gtest` domain models)**: Pure business logic, aggregates, entities, value objects, domain errors, and stateless domain services. Must **never** import from `application/` or `adapters/` layers.
+  - **Domain Layer (`domain/` or `pkg/vuhive` domain models)**: Pure business logic, aggregates, entities, value objects, domain errors, and stateless domain services. Must **never** import from `application/` or `adapters/` layers.
   - **Application Layer (`application/`)**: Use case orchestration and workflow coordination. Defines driving interfaces (`ports/inbound/`) and driven interfaces (`ports/outbound/`). Must **never** import from `adapters/` layer.
   - **Adapters Layer (`adapters/`)**: Infrastructure bindings (HTTP handlers, storage adapters, metrics collectors). Driving adapters (`adapters/inbound/`) and driven adapters (`adapters/outbound/`) implement the port interfaces defined by the application layer.
 - **Dependency Injection**:
@@ -94,7 +94,7 @@ The approved technology stack is strictly locked:
 
 #### 2. Monorepo Build System (`Makefile`)
 - All Makefile targets must be explicitly declared `.PHONY`.
-- Versioning is injected at compile time via `ldflags` reading `VERSION.gtest` and Git metadata into package variables in `internal/version/`.
+- Versioning is injected at compile time via `ldflags` reading `VERSION.vuhive` and Git metadata into package variables in `internal/version/`.
 - Required targets: `test`, `test-integration`, `test-bench`, `test-race`, `test-examples`, `lint`, `generate`, and `help`.
 
 #### 3. Structured Logging Strategy (`zerolog`)

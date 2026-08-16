@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -11,13 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/morphy76/gtest/examples/conversation_flow/dsl"
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/examples/conversation_flow/dsl"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // Setup initializes global scenario state, starting the mock server if BASE_URL is unset or "mock".
 // If a messages_file param is provided, loads user prompts from CSV; otherwise uses built-in defaults.
-func Setup(ctx gtest.SetupContext) (map[string]any, error) {
+func Setup(ctx vuhive.SetupContext) (map[string]any, error) {
 	baseURL := ctx.Param("base_url")
 	var mockServer *httptest.Server
 
@@ -60,14 +60,14 @@ func Setup(ctx gtest.SetupContext) (map[string]any, error) {
 }
 
 // PreTest executes per-VU initialization before iterations start.
-func PreTest(ctx gtest.VUContext) error {
+func PreTest(ctx vuhive.VUContext) error {
 	ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating conversation session")
 	return nil
 }
 
 // RunVU executes the multi-turn conversational AI load iteration for a single virtual user.
 // It delegates to the event-driven ConversationFlow which mirrors an SSE callback architecture.
-func RunVU(ctx gtest.VUContext) error {
+func RunVU(ctx vuhive.VUContext) error {
 	client := ctx.GlobalState("client").(*dsl.ConversationClient)
 	messages := ctx.GlobalState("messages").([]dsl.Message)
 
@@ -88,13 +88,13 @@ func RunVU(ctx gtest.VUContext) error {
 }
 
 // AfterTest executes per-VU cleanup after iterations complete.
-func AfterTest(ctx gtest.VUContext) error {
+func AfterTest(ctx vuhive.VUContext) error {
 	ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed conversation session")
 	return nil
 }
 
 // Teardown cleans up global resources created in Setup.
-func Teardown(ctx gtest.TeardownContext, state map[string]any) error {
+func Teardown(ctx vuhive.TeardownContext, state map[string]any) error {
 	if mockServer, ok := state["mock_server"].(*httptest.Server); ok && mockServer != nil {
 		mockServer.Close()
 	}

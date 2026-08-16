@@ -6,14 +6,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/morphy76/gtest/internal/cli"
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/report"
-	"github.com/morphy76/gtest/internal/sla"
-	"github.com/morphy76/gtest/internal/version"
+	"github.com/morphy76/vuhive/internal/cli"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/report"
+	"github.com/morphy76/vuhive/internal/sla"
+	"github.com/morphy76/vuhive/internal/version"
 	"github.com/rs/zerolog"
 )
 

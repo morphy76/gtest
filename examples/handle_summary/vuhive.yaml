@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+default_scenario: summary_hook_demo
+
+scenarios:
+  summary_hook_demo:
+    type: constant_vus
+    vus: 3
+    ramp_up: 50ms
+    run_period: 300ms
+    ramp_down: 50ms
+    vu_timeout: 1s
+
+    thresholds:
+      - metric: task_latency
+        stat: p95
+        operator: "<"
+        target: "100ms"
+      - metric: task_success_rate
+        stat: rate
+        operator: ">="
+        target: "0.95"

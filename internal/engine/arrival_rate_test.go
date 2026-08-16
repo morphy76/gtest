@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/metric"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +45,7 @@ func TestArrivalRateTargetTPS(t *testing.T) {
 }
 
 // AC-1.7.2: max_vus=2 with slow RunVU (sleeps 500ms) and target_tps=100 → pool saturates;
-// gtest.pacing.dropped_iterations > 0
+// vuhive.pacing.dropped_iterations > 0
 func TestArrivalRatePoolSaturationDropsIterations(t *testing.T) {
 	logger, metrics := newTestDeps()
 
@@ -69,7 +69,7 @@ func TestArrivalRatePoolSaturationDropsIterations(t *testing.T) {
 	require.NoError(t, err)
 
 	dropped := metrics.AggregatedCounterValue(metric.MetricPacingDroppedIterations)
-	assert.Greater(t, dropped, int64(0), "gtest.pacing.dropped_iterations must be > 0 when pool saturates")
+	assert.Greater(t, dropped, int64(0), "vuhive.pacing.dropped_iterations must be > 0 when pool saturates")
 }
 
 // AC-1.7.3: ramp_up=200ms, target_tps=10 → first iteration starts after ~100ms (midpoint of ramp)

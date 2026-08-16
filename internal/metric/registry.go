@@ -42,7 +42,7 @@ type ErrTypeCollision struct {
 }
 
 func (e *ErrTypeCollision) Error() string {
-	return fmt.Sprintf("gtest: metric %q already registered as %s, cannot register as %s",
+	return fmt.Sprintf("vuhive: metric %q already registered as %s, cannot register as %s",
 		e.Name, e.Existing, e.New)
 }
 

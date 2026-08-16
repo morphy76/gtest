@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/metric"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,7 +84,7 @@ func TestRegistry_TypeCollision_MustRegisterPanics(t *testing.T) {
 	reg.MustRegister("metric_y", metric.MetricTypeCounter)
 
 	assert.PanicsWithValue(t,
-		`gtest: metric "metric_y" already registered as Counter, cannot register as Duration`,
+		`vuhive: metric "metric_y" already registered as Counter, cannot register as Duration`,
 		func() {
 			reg.MustRegister("metric_y", metric.MetricTypeDuration)
 		},
@@ -112,7 +112,7 @@ func TestRegistry_NamesByType(t *testing.T) {
 	reg.MustRegister("dur_p", metric.MetricTypeDuration)
 	reg.MustRegister("rate_r", metric.MetricTypeRate)
 
-	// Built-in metrics: gtest.checks.failed, gtest.checks.passed
+	// Built-in metrics: vuhive.checks.failed, vuhive.checks.passed
 	assert.Equal(t, []string{"cnt_a", "cnt_b", metric.MetricChecksFailed, metric.MetricChecksPassed}, reg.CounterNames())
 	assert.Equal(t, []string{"gauge_y", "gauge_z"}, reg.GaugeNames())
 	assert.Equal(t, []string{"dur_p"}, reg.HistogramNames())

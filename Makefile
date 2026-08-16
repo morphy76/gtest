@@ -1,4 +1,4 @@
-COMPONENT  := gtest
+COMPONENT  := vuhive
 VERSION    ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || echo "0.0.0")
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -6,9 +6,9 @@ GOPATH        ?= $(shell go env GOPATH)
 GOLANGCI_LINT ?= $(shell which golangci-lint 2>/dev/null || echo $(GOPATH)/bin/golangci-lint)
 
 LDFLAGS    := -s -w \
-  -X 'github.com/morphy76/gtest/internal/version.Version=$(VERSION)' \
-  -X 'github.com/morphy76/gtest/internal/version.Commit=$(COMMIT)' \
-  -X 'github.com/morphy76/gtest/internal/version.BuildTime=$(BUILD_TIME)'
+  -X 'github.com/morphy76/vuhive/internal/version.Version=$(VERSION)' \
+  -X 'github.com/morphy76/vuhive/internal/version.Commit=$(COMMIT)' \
+  -X 'github.com/morphy76/vuhive/internal/version.BuildTime=$(BUILD_TIME)'
 
 ## test: Run all library unit tests
 .PHONY: test
@@ -23,7 +23,7 @@ test-integration:
 ## test-examples: Build example binaries to verify they compile
 .PHONY: test-examples
 test-examples:
-	go build -tags=gtest_example ./examples/...
+	go build -tags=vuhive_example ./examples/...
 
 ## test-race: Run unit tests with race detector
 .PHONY: test-race

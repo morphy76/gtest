@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+default_scenario: data_parameterization_flow
+
+scenarios:
+  data_parameterization_flow:
+    type: constant_vus
+    vus: 4
+    ramp_up: 50ms
+    run_period: 300ms
+    ramp_down: 50ms
+    vu_timeout: 1s
+
+    thresholds:
+      - metric: dataset_success_rate
+        stat: rate
+        operator: ">="
+        target: "0.95"
+      - metric: vuhive.checks.failed
+        stat: count
+        operator: "<="
+        target: "0"

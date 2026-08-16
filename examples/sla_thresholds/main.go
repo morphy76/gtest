@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // startMockBackendServer starts an in-process HTTP mock server simulating order and payment endpoints with jitter.
@@ -43,12 +43,12 @@ func main() {
 	ts := startMockBackendServer()
 	defer ts.Close()
 
-	// 2. Initialize gtest suite
-	suite := gtest.NewSuite("SLA Thresholds & Error Handling Suite")
+	// 2. Initialize vuhive suite
+	suite := vuhive.NewSuite("SLA Thresholds & Error Handling Suite")
 
 	// 3. Register scenario with multi-step operations and quality gates
-	suite.RegisterScenario("sla_quality_gates", gtest.Scenario{
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+	suite.RegisterScenario("sla_quality_gates", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
 			return map[string]any{
 				"client":     client,
@@ -56,46 +56,46 @@ func main() {
 			}, nil
 		},
 
-		PreTest: func(ctx gtest.VUContext) error {
+		PreTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("initiating SLA evaluation iteration")
 
 			// Pedagogical Note:
 			// Pre-initialize counters with Add(0) in PreTest so the metric is registered in the
 			// metric store with value 0 before any errors occur, ensuring accurate threshold evaluation.
-			ctx.Metrics().Counter("api_errors_total", gtest.Tags{}).Add(0)
+			ctx.Metrics().Counter("api_errors_total", vuhive.Tags{}).Add(0)
 			return nil
 		},
 
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
 			// Update active concurrent operations gauge metric
-			ctx.Metrics().Gauge("concurrent_operations", gtest.Tags{}).Set(float64(ctx.VUID()))
+			ctx.Metrics().Gauge("concurrent_operations", vuhive.Tags{}).Set(float64(ctx.VUID()))
 
 			// Step 1: Place Order
 			startOrder := time.Now()
 			reqOrder, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/api/orders", nil)
 			if err != nil {
-				ctx.Metrics().Rate("order_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("order_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("failed to build order request: %w", err)
 			}
 
 			respOrder, err := client.Do(reqOrder)
 			orderDuration := time.Since(startOrder)
-			ctx.Metrics().Duration("order_placement_latency", gtest.Tags{"endpoint": "/api/orders"}).Observe(orderDuration)
+			ctx.Metrics().Duration("order_placement_latency", vuhive.Tags{"endpoint": "/api/orders"}).Observe(orderDuration)
 
 			if err != nil || respOrder.StatusCode != http.StatusOK {
-				ctx.Metrics().Rate("order_success_rate", gtest.Tags{}).Add(0, 1)
-				ctx.Metrics().Counter("api_errors_total", gtest.Tags{"type": "http_failure"}).Inc()
+				ctx.Metrics().Rate("order_success_rate", vuhive.Tags{}).Add(0, 1)
+				ctx.Metrics().Counter("api_errors_total", vuhive.Tags{"type": "http_failure"}).Inc()
 				if respOrder != nil {
 					_ = respOrder.Body.Close()
 				}
 				return fmt.Errorf("order placement failed: %v", err)
 			}
 			_ = respOrder.Body.Close()
-			ctx.Metrics().Rate("order_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("api_requests_total", gtest.Tags{"endpoint": "/api/orders"}).Inc()
+			ctx.Metrics().Rate("order_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("api_requests_total", vuhive.Tags{"endpoint": "/api/orders"}).Inc()
 
 			// Check 1: Inline assertion on order response
 			ctx.Check("order status is 200", func() string {
@@ -109,25 +109,25 @@ func main() {
 			startPayment := time.Now()
 			reqPay, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/api/payments", nil)
 			if err != nil {
-				ctx.Metrics().Rate("payment_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("payment_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("failed to build payment request: %w", err)
 			}
 
 			respPay, err := client.Do(reqPay)
 			paymentDuration := time.Since(startPayment)
-			ctx.Metrics().Duration("payment_auth_latency", gtest.Tags{"endpoint": "/api/payments"}).Observe(paymentDuration)
+			ctx.Metrics().Duration("payment_auth_latency", vuhive.Tags{"endpoint": "/api/payments"}).Observe(paymentDuration)
 
 			if err != nil || respPay.StatusCode != http.StatusOK {
-				ctx.Metrics().Rate("payment_success_rate", gtest.Tags{}).Add(0, 1)
-				ctx.Metrics().Counter("api_errors_total", gtest.Tags{"type": "payment_failure"}).Inc()
+				ctx.Metrics().Rate("payment_success_rate", vuhive.Tags{}).Add(0, 1)
+				ctx.Metrics().Counter("api_errors_total", vuhive.Tags{"type": "payment_failure"}).Inc()
 				if respPay != nil {
 					_ = respPay.Body.Close()
 				}
 				return fmt.Errorf("payment auth failed: %v", err)
 			}
 			_ = respPay.Body.Close()
-			ctx.Metrics().Rate("payment_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("api_requests_total", gtest.Tags{"endpoint": "/api/payments"}).Inc()
+			ctx.Metrics().Rate("payment_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("api_requests_total", vuhive.Tags{"endpoint": "/api/payments"}).Inc()
 
 			// Check 2: Inline assertion on payment response
 			ctx.Check("payment status is 200", func() string {
@@ -140,7 +140,7 @@ func main() {
 			return nil
 		},
 
-		AfterTest: func(ctx gtest.VUContext) error {
+		AfterTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed SLA evaluation iteration")
 			return nil
 		},

@@ -1,5 +1,5 @@
 // Package config provides YAML configuration loading, parsing, and validation
-// for gtest load test scenarios.
+// for vuhive load test scenarios.
 package config
 
 import "time"
@@ -18,7 +18,7 @@ const (
 	ScenarioTypeRampingVUs ScenarioType = "ramping_vus"
 )
 
-// Config is the top-level configuration loaded from gtest.yaml.
+// Config is the top-level configuration loaded from vuhive.yaml.
 type Config struct {
 	// Version must be "1.0".
 	Version string

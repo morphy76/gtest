@@ -1,4 +1,4 @@
-module github.com/morphy76/gtest
+module github.com/morphy76/vuhive
 
 go 1.26.6
 

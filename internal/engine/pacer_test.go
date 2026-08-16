@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,5 +89,5 @@ func TestExecutor_UnsupportedScenarioTypeReturnsError(t *testing.T) {
 	exec := engine.NewExecutor("unsupported_scenario", scenario, cfg, logger, metrics)
 	err := exec.Execute(context.Background())
 	require.Error(t, err)
-	assert.Equal(t, `gtest: unsupported scenario type "completely_unsupported"`, err.Error())
+	assert.Equal(t, `vuhive: unsupported scenario type "completely_unsupported"`, err.Error())
 }

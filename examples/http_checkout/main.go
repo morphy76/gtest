@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // startMockCheckoutServer launches an in-process HTTP test server simulating a checkout backend API.
@@ -29,15 +29,15 @@ func main() {
 	ts := startMockCheckoutServer()
 	defer ts.Close()
 
-	// 2. Initialize the gtest test suite
-	suite := gtest.NewSuite("HTTP Checkout Flow Suite")
+	// 2. Initialize the vuhive test suite
+	suite := vuhive.NewSuite("HTTP Checkout Flow Suite")
 
 	// 3. Register the scenario with lifecycle hooks
-	suite.RegisterScenario("http_checkout_flow", gtest.Scenario{
+	suite.RegisterScenario("http_checkout_flow", vuhive.Scenario{
 		// Setup runs ONCE per scenario execution before any Virtual Users (VUs) are spawned.
 		// Best practice: Initialize shared reusable resources (HTTP clients with connection pooling,
 		// auth tokens, datasets) here and return them in the state map.
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			// Configure an HTTP client with connection pooling for high-throughput load generation
 			client := &http.Client{
 				Timeout: 2 * time.Second,
@@ -50,13 +50,13 @@ func main() {
 
 		// PreTest runs ONCE per VU before its iteration loop begins.
 		// Useful for per-VU initializations, user session logins, or logging VU start events.
-		PreTest: func(ctx gtest.VUContext) error {
+		PreTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("preparing checkout iteration loop")
 			return nil
 		},
 
 		// RunVU is invoked repeatedly by each Virtual User for every load iteration during run_period.
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			// Step 1: Retrieve shared client and configuration from GlobalState and YAML params
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
@@ -70,7 +70,7 @@ func main() {
 			start := time.Now()
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL+checkoutPath, nil)
 			if err != nil {
-				ctx.Metrics().Rate("checkout_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("checkout_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("failed to create request: %w", err)
 			}
 
@@ -78,11 +78,11 @@ func main() {
 			resp, err := client.Do(req)
 			elapsed := time.Since(start)
 
-			ctx.Metrics().Duration("http_request_duration", gtest.Tags{"path": checkoutPath}).Observe(elapsed)
+			ctx.Metrics().Duration("http_request_duration", vuhive.Tags{"path": checkoutPath}).Observe(elapsed)
 
 			// Step 4: Validate HTTP response and record custom rate and counter metrics
 			if err != nil || resp.StatusCode != http.StatusOK {
-				ctx.Metrics().Rate("checkout_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("checkout_success_rate", vuhive.Tags{}).Add(0, 1)
 				if resp != nil {
 					_ = resp.Body.Close()
 				}
@@ -90,20 +90,20 @@ func main() {
 			}
 			_ = resp.Body.Close()
 
-			ctx.Metrics().Rate("checkout_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("http_requests_total", gtest.Tags{"status": "200"}).Inc()
+			ctx.Metrics().Rate("checkout_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("http_requests_total", vuhive.Tags{"status": "200"}).Inc()
 			return nil
 		},
 
 		// AfterTest runs ONCE per VU when the iteration loop finishes (guaranteed via defer).
-		AfterTest: func(ctx gtest.VUContext) error {
+		AfterTest: func(ctx vuhive.VUContext) error {
 			ctx.Log().Debug().Int64("vu", ctx.VUID()).Msg("completed checkout iteration loop")
 			return nil
 		},
 
 		// Teardown runs ONCE after ALL Virtual Users have finished and exited.
 		// Use it to clean up global test fixtures, close persistent database connections, or flush logs.
-		Teardown: func(ctx gtest.TeardownContext, state map[string]any) error {
+		Teardown: func(ctx vuhive.TeardownContext, state map[string]any) error {
 			ctx.Log().Info().Msg("cleaning up checkout test fixtures")
 			return nil
 		},

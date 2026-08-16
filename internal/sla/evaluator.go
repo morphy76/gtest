@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/metric"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/metric"
 )
 
 // MetricReader defines the read-only metric capabilities required by the SLA evaluator.

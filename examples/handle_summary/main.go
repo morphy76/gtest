@@ -1,4 +1,4 @@
-//go:build gtest_example
+//go:build vuhive_example
 
 package main
 
@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/morphy76/gtest/pkg/gtest"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 // startMockServiceAndWebhookServer starts an in-process mock server serving both the target API and a webhook endpoint.
@@ -46,12 +46,12 @@ func main() {
 	ts := startMockServiceAndWebhookServer()
 	defer ts.Close()
 
-	// 2. Initialize gtest suite
-	suite := gtest.NewSuite("Execution Summary Hook Demo Suite")
+	// 2. Initialize vuhive suite
+	suite := vuhive.NewSuite("Execution Summary Hook Demo Suite")
 
 	// 3. Register scenario with HandleSummary hook
-	suite.RegisterScenario("summary_hook_demo", gtest.Scenario{
-		Setup: func(ctx gtest.SetupContext) (map[string]any, error) {
+	suite.RegisterScenario("summary_hook_demo", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
 			client := &http.Client{Timeout: 2 * time.Second}
 			return map[string]any{
 				"client":      client,
@@ -60,7 +60,7 @@ func main() {
 			}, nil
 		},
 
-		RunVU: func(ctx gtest.VUContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			client := ctx.GlobalState("client").(*http.Client)
 			serverURL := ctx.GlobalState("server_url").(string)
 
@@ -68,17 +68,17 @@ func main() {
 			start := time.Now()
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL+"/api/task", nil)
 			if err != nil {
-				ctx.Metrics().Rate("task_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("task_success_rate", vuhive.Tags{}).Add(0, 1)
 				return fmt.Errorf("failed to create task request: %w", err)
 			}
 
 			resp, err := client.Do(req)
 			latency := time.Since(start)
-			ctx.Metrics().Duration("task_latency", gtest.Tags{}).Observe(latency)
+			ctx.Metrics().Duration("task_latency", vuhive.Tags{}).Observe(latency)
 
 			// Step 2: Validate response and record metrics
 			if err != nil || resp.StatusCode != http.StatusOK {
-				ctx.Metrics().Rate("task_success_rate", gtest.Tags{}).Add(0, 1)
+				ctx.Metrics().Rate("task_success_rate", vuhive.Tags{}).Add(0, 1)
 				if resp != nil {
 					_ = resp.Body.Close()
 				}
@@ -86,8 +86,8 @@ func main() {
 			}
 			_ = resp.Body.Close()
 
-			ctx.Metrics().Rate("task_success_rate", gtest.Tags{}).Add(1, 1)
-			ctx.Metrics().Counter("tasks_completed_total", gtest.Tags{}).Inc()
+			ctx.Metrics().Rate("task_success_rate", vuhive.Tags{}).Add(1, 1)
+			ctx.Metrics().Counter("tasks_completed_total", vuhive.Tags{}).Inc()
 			return nil
 		},
 
@@ -97,7 +97,7 @@ func main() {
 		// - Posting results or alerts to Slack, Discord, MS Teams, or Datadog
 		// - Generating custom CSV, Markdown, or HTML test summary artifacts
 		// - Triggering downstream CI/CD pipelines
-		HandleSummary: func(ctx gtest.SummaryContext, summary gtest.SummaryData) error {
+		HandleSummary: func(ctx vuhive.SummaryContext, summary vuhive.SummaryData) error {
 			fmt.Println("\n--- [HandleSummary Hook Invoked] ---")
 			fmt.Printf("Suite:       %s\n", summary.SuiteName)
 			fmt.Printf("Scenario:    %s\n", summary.Scenario)

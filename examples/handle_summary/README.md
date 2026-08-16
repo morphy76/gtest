@@ -6,9 +6,9 @@ A reference example demonstrating how to consume test execution results programm
 
 ## Concept Overview
 
-While `gtest` automatically formats terminal summaries and JSON report files, many workflows require programmatic processing:
+While `vuhive` automatically formats terminal summaries and JSON report files, many workflows require programmatic processing:
 - **`HandleSummary` lifecycle hook**: Executes **once** after all VUs exit and report generation completes.
-- **`gtest.SummaryData` model**: Provides full metadata (`SuiteName`, `Scenario`, `Duration`, `Passed`), metric aggregates (`Counter`, `Rate`, `Metric`), and evaluated `Thresholds`.
+- **`vuhive.SummaryData` model**: Provides full metadata (`SuiteName`, `Scenario`, `Duration`, `Passed`), metric aggregates (`Counter`, `Rate`, `Metric`), and evaluated `Thresholds`.
 - **Use Cases**:
   - Sending notifications to Slack, Discord, MS Teams, or PagerDuty.
   - Exporting custom telemetry to Datadog, Prometheus, or CloudWatch.
@@ -23,7 +23,7 @@ While `gtest` automatically formats terminal summaries and JSON report files, ma
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario definition with `RunVU` and `HandleSummary` hook inspecting `SummaryData` and posting to an in-process mock webhook endpoint. |
-| [`gtest.yaml`](gtest.yaml) | Scenario configuration and SLA threshold rules. |
+| [`vuhive.yaml`](vuhive.yaml) | Scenario configuration and SLA threshold rules. |
 
 ---
 
@@ -32,19 +32,19 @@ While `gtest` automatically formats terminal summaries and JSON report files, ma
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/handle_summary --config ./examples/handle_summary/gtest.yaml
+go run -tags=vuhive_example ./examples/handle_summary --config ./examples/handle_summary/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/handle_summary
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -76,7 +76,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     summary_hook_demo               Version: dev
 Mode:         constant_vus (3 VUs)            Commit:  none
@@ -85,13 +85,13 @@ Iterations:   2821 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    2821
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    0
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    2821
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    0
+vuhive.checks.failed            Counter    0
 
 CUSTOM METRICS
 ────────────────────────────────────────────────────────────────

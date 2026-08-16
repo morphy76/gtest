@@ -9,7 +9,7 @@ A reference example demonstrating how to configure declarative Service Level Agr
 Load tests must enforce measurable performance and reliability criteria:
 - **Declarative Quality Gates (`thresholds`)**: Specify pass/fail assertions over metric statistics (`p50`, `p90`, `p95`, `p99`, `mean`, `max`, `count`, `rate`, `value`).
 - **Operators**: `<`, `<=`, `>`, `>=`.
-- **Early Stop / Graceful Abort (`abort_on_fail`)**: When configured on a threshold, `gtest` continuously evaluates the condition in real-time during execution. If breached, the test is immediately aborted (`OVERALL: ABORTED (exit 1)`), preventing wasted test duration or cascading backend failures.
+- **Early Stop / Graceful Abort (`abort_on_fail`)**: When configured on a threshold, `vuhive` continuously evaluates the condition in real-time during execution. If breached, the test is immediately aborted (`OVERALL: ABORTED (exit 1)`), preventing wasted test duration or cascading backend failures.
 - **Grace Period (`delay_abort_eval`)**: Delays early abort evaluation to allow initial warm-up and ramp-up phases to stabilize before enforcing strict gates.
 - **CI/CD Integration**: The process returns exit code `0` if all thresholds pass, or `1` if any threshold fails or is aborted.
 
@@ -20,7 +20,7 @@ Load tests must enforce measurable performance and reliability criteria:
 | File | Description |
 |---|---|
 | [`main.go`](main.go) | Scenario with multi-stage API calls (`/api/orders` -> `/api/payments`), duration metrics with endpoint tagging, gauge metrics, and error counters. Includes an in-process mock server with latency jitter. |
-| [`gtest.yaml`](gtest.yaml) | Configuration with latency percentile gates (p95, p99), rate thresholds, check assertions, and `abort_on_fail: true`. |
+| [`vuhive.yaml`](vuhive.yaml) | Configuration with latency percentile gates (p95, p99), rate thresholds, check assertions, and `abort_on_fail: true`. |
 
 ---
 
@@ -29,19 +29,19 @@ Load tests must enforce measurable performance and reliability criteria:
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/sla_thresholds --config ./examples/sla_thresholds/gtest.yaml
+go run -tags=vuhive_example ./examples/sla_thresholds --config ./examples/sla_thresholds/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/sla_thresholds
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -88,7 +88,7 @@ scenarios:
         target: "0"
         abort_on_fail: true       # Stop test instantly if errors occur
         delay_abort_eval: 100ms   # Allow 100ms warm-up before monitoring
-      - metric: gtest.checks.failed
+      - metric: vuhive.checks.failed
         stat: count
         operator: "<="
         target: "0"
@@ -100,7 +100,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     sla_quality_gates               Version: dev
 Mode:         constant_vus (5 VUs)            Commit:  none
@@ -109,13 +109,13 @@ Iterations:   62 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    62
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    124
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    62
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    124
+vuhive.checks.failed            Counter    0
 
 CHECKS
 ────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ SLA THRESHOLD EVALUATION
   [PASS]  order_success_rate      rate >= 0.95    → actual: 1
   [PASS]  payment_success_rate    rate >= 0.95    → actual: 1
   [PASS]  api_errors_total        count <= 0      → actual: 0
-  [PASS]  gtest.checks.failed     count <= 0      → actual: 0
+  [PASS]  vuhive.checks.failed     count <= 0      → actual: 0
 ────────────────────────────────────────────────────────────────
 OVERALL: PASSED                                         (exit 0)
 ================================================================================

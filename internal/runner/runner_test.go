@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/cli"
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/report"
-	"github.com/morphy76/gtest/internal/runner"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/cli"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/report"
+	"github.com/morphy76/vuhive/internal/runner"
+	"github.com/morphy76/vuhive/internal/sla"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +51,7 @@ func (m *mockRegistry) Register(name string, s engine.Scenario) {
 func createTempConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "gtest.yaml")
+	path := filepath.Join(dir, "vuhive.yaml")
 	err := os.WriteFile(path, []byte(content), 0644)
 	require.NoError(t, err)
 	return path
@@ -62,13 +62,13 @@ func TestScenarioNotFoundError_ErrorFormatting(t *testing.T) {
 		Name:    "checkout",
 		Message: "not found in config",
 	}
-	assert.Equal(t, `gtest: scenario "checkout" not found: not found in config`, errWithName.Error())
+	assert.Equal(t, `vuhive: scenario "checkout" not found: not found in config`, errWithName.Error())
 
 	errWithoutName := &runner.ScenarioNotFoundError{
 		Name:    "",
 		Message: "no scenario specified",
 	}
-	assert.Equal(t, "gtest: scenario not found: no scenario specified", errWithoutName.Error())
+	assert.Equal(t, "vuhive: scenario not found: no scenario specified", errWithoutName.Error())
 }
 
 func TestScenarioResolver_ShowVersion(t *testing.T) {
@@ -80,7 +80,7 @@ func TestScenarioResolver_ShowVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.True(t, res.ShowVersion)
-	assert.Contains(t, stdout.String(), "gtest version")
+	assert.Contains(t, stdout.String(), "vuhive version")
 }
 
 func TestScenarioResolver_FlagParseError(t *testing.T) {
@@ -101,13 +101,13 @@ func TestScenarioResolver_ConfigNotFound(t *testing.T) {
 	resolver := runner.NewScenarioResolver(reg)
 
 	var stdout bytes.Buffer
-	res, err := resolver.Resolve([]string{"--config=/nonexistent/path/gtest.yaml"}, &stdout)
+	res, err := resolver.Resolve([]string{"--config=/nonexistent/path/vuhive.yaml"}, &stdout)
 	require.Error(t, err)
 	assert.Nil(t, res)
 
 	var cfgErr *config.ConfigError
 	require.True(t, errors.As(err, &cfgErr))
-	assert.Equal(t, "/nonexistent/path/gtest.yaml", cfgErr.Path)
+	assert.Equal(t, "/nonexistent/path/vuhive.yaml", cfgErr.Path)
 }
 
 func TestScenarioResolver_ConfigValidationError(t *testing.T) {
@@ -314,7 +314,7 @@ func TestBuildSummaryData_ComprehensiveAndAlphabeticalSorting(t *testing.T) {
 	assert.False(t, summary.Aborted)
 	assert.Empty(t, summary.AbortReason)
 
-	// Verify metrics are strictly sorted alphabetically: a_counter, b_rate, gtest.checks.failed, gtest.checks.passed, m_gauge, z_duration
+	// Verify metrics are strictly sorted alphabetically: a_counter, b_rate, m_gauge, vuhive.checks.failed, vuhive.checks.passed, z_duration
 	require.Len(t, summary.Metrics, 6)
 	assert.Equal(t, "a_counter", summary.Metrics[0].Name)
 	assert.Equal(t, "counter", summary.Metrics[0].Type)
@@ -324,12 +324,12 @@ func TestBuildSummaryData_ComprehensiveAndAlphabeticalSorting(t *testing.T) {
 	assert.Equal(t, "rate", summary.Metrics[1].Type)
 	assert.InDelta(t, 0.5, summary.Metrics[1].Rate, 0.0001)
 
-	assert.Equal(t, metric.MetricChecksFailed, summary.Metrics[2].Name)
-	assert.Equal(t, metric.MetricChecksPassed, summary.Metrics[3].Name)
+	assert.Equal(t, "m_gauge", summary.Metrics[2].Name)
+	assert.Equal(t, "gauge", summary.Metrics[2].Type)
+	assert.InDelta(t, 3.14, summary.Metrics[2].Value, 0.0001)
 
-	assert.Equal(t, "m_gauge", summary.Metrics[4].Name)
-	assert.Equal(t, "gauge", summary.Metrics[4].Type)
-	assert.InDelta(t, 3.14, summary.Metrics[4].Value, 0.0001)
+	assert.Equal(t, metric.MetricChecksFailed, summary.Metrics[3].Name)
+	assert.Equal(t, metric.MetricChecksPassed, summary.Metrics[4].Name)
 
 	assert.Equal(t, "z_duration", summary.Metrics[5].Name)
 	assert.Equal(t, "duration", summary.Metrics[5].Type)

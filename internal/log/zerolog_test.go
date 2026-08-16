@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morphy76/gtest/internal/log"
+	"github.com/morphy76/vuhive/internal/log"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

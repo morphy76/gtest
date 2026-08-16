@@ -5,10 +5,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/morphy76/gtest/internal/config"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/report"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/config"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/report"
+	"github.com/morphy76/vuhive/internal/sla"
 )
 
 // SummaryParams encapsulates parameters required to build execution summary data.

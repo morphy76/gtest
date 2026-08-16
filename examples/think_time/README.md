@@ -7,8 +7,8 @@ A reference example demonstrating how to model realistic human reading, browsing
 ## Concept Overview
 
 Realistic load tests simulate human delays (think time) between user journey actions:
-- **Declarative Think Time (`interaction_delay`)**: Configured in `gtest.yaml` and invoked cleanly via `ctx.Sleep()` with no arguments.
-- **Programmatic Generators**: Statistical distribution generators (`gtest.FixedDelay`, `gtest.RangeDelay`, `gtest.ExpoDelay`, `gtest.GaussianDelay`) initialized in `Setup` and invoked via `ctx.Sleep(d)`.
+- **Declarative Think Time (`interaction_delay`)**: Configured in `vuhive.yaml` and invoked cleanly via `ctx.Sleep()` with no arguments.
+- **Programmatic Generators**: Statistical distribution generators (`vuhive.FixedDelay`, `vuhive.RangeDelay`, `vuhive.ExpoDelay`, `vuhive.GaussianDelay`) initialized in `Setup` and invoked via `ctx.Sleep(d)`.
 - **Responsive Cancellation**: `ctx.Sleep()` actively monitors `ctx.Done()`. If the scenario duration expires or an early abort occurs, sleeping VUs wake up immediately without hanging or delaying teardown.
 - **Multi-Step Workflows**: Measuring individual step latencies (e.g. `catalog_view_duration`, `add_to_cart_duration`, `checkout_duration`) alongside overall flow success rates.
 
@@ -18,8 +18,8 @@ Realistic load tests simulate human delays (think time) between user journey act
 
 | File | Description |
 |---|---|
-| [`main.go`](main.go) | 3-step e-commerce journey (`catalog` -> `cart/add` -> `checkout`) utilizing declarative `ctx.Sleep()` and programmatic `gtest.ExpoDelay()`. Includes an in-process mock server. |
-| [`gtest.yaml`](gtest.yaml) | Configuration specifying `interaction_delay` range strategy (`20ms` to `60ms`) and per-step latency thresholds. |
+| [`main.go`](main.go) | 3-step e-commerce journey (`catalog` -> `cart/add` -> `checkout`) utilizing declarative `ctx.Sleep()` and programmatic `vuhive.ExpoDelay()`. Includes an in-process mock server. |
+| [`vuhive.yaml`](vuhive.yaml) | Configuration specifying `interaction_delay` range strategy (`20ms` to `60ms`) and per-step latency thresholds. |
 
 ---
 
@@ -28,19 +28,19 @@ Realistic load tests simulate human delays (think time) between user journey act
 From the repository root:
 
 ```bash
-go run -tags=gtest_example ./examples/think_time --config ./examples/think_time/gtest.yaml
+go run -tags=vuhive_example ./examples/think_time --config ./examples/think_time/vuhive.yaml
 ```
 
 Or from within the example directory:
 
 ```bash
 cd examples/think_time
-go run -tags=gtest_example .
+go run -tags=vuhive_example .
 ```
 
 ---
 
-## Configuration Breakdown (`gtest.yaml`)
+## Configuration Breakdown (`vuhive.yaml`)
 
 ```yaml
 version: "1.0"
@@ -86,7 +86,7 @@ scenarios:
 
 ```text
 ================================================================================
-                        GTEST LOAD TEST SUMMARY
+                        VUHIVE LOAD TEST SUMMARY
 ================================================================================
 Scenario:     user_journey_with_think_time    Version: dev
 Mode:         constant_vus (3 VUs)            Commit:  none
@@ -95,13 +95,13 @@ Iterations:   16 total  |  0 failed (0.00%)  |  0 timeout
 
 BUILT-IN METRICS
 ────────────────────────────────────────────────────────────────
-gtest.vu.iterations_total      Counter    16
-gtest.vu.iterations_failed     Counter    0
-gtest.vu.iterations_timeout    Counter    0
-gtest.vu.panics                Counter    0
-gtest.vu.pretest_errors        Counter    0
-gtest.checks.passed            Counter    0
-gtest.checks.failed            Counter    0
+vuhive.vu.iterations_total      Counter    16
+vuhive.vu.iterations_failed     Counter    0
+vuhive.vu.iterations_timeout    Counter    0
+vuhive.vu.panics                Counter    0
+vuhive.vu.pretest_errors        Counter    0
+vuhive.checks.passed            Counter    0
+vuhive.checks.failed            Counter    0
 
 CUSTOM METRICS
 ────────────────────────────────────────────────────────────────

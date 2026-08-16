@@ -1,6 +1,6 @@
 package sla
 
-import "github.com/morphy76/gtest/internal/config"
+import "github.com/morphy76/vuhive/internal/config"
 
 // ThresholdResult represents the evaluation outcome for a single SLA threshold.
 type ThresholdResult struct {

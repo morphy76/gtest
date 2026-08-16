@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+default_scenario: checks_demo
+
+scenarios:
+  checks_demo:
+    type: constant_vus
+    vus: 4
+    ramp_up: 50ms
+    run_period: 300ms
+    ramp_down: 50ms
+    vu_timeout: 1s
+
+    # Quality gates targeting built-in inline check metrics
+    thresholds:
+      - metric: vuhive.checks.failed
+        stat: count
+        operator: "<="
+        target: "0"      # Zero check failures allowed
+      - metric: vuhive.checks.passed
+        stat: count
+        operator: ">="
+        target: "10"     # At least 10 checks must pass

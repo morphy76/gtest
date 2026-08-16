@@ -6,10 +6,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/morphy76/gtest/internal/engine"
-	"github.com/morphy76/gtest/internal/log"
-	"github.com/morphy76/gtest/internal/metric"
-	"github.com/morphy76/gtest/internal/sla"
+	"github.com/morphy76/vuhive/internal/engine"
+	"github.com/morphy76/vuhive/internal/log"
+	"github.com/morphy76/vuhive/internal/metric"
+	"github.com/morphy76/vuhive/internal/sla"
 	"github.com/rs/zerolog"
 )
 
