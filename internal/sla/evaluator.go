@@ -29,8 +29,59 @@ func Evaluate(thresholds []config.ThresholdConfig, reader MetricReader) []Thresh
 	return results
 }
 
+// ResolveOnNoData returns the effective on_no_data strategy for a threshold.
+func ResolveOnNoData(th config.ThresholdConfig) string {
+	if th.OnNoData != "" {
+		return th.OnNoData
+	}
+	if th.Stat == "count" || th.Stat == "value" {
+		return "zero"
+	}
+	return "fail"
+}
+
+func evaluateNoData(th config.ThresholdConfig, strategy string) ThresholdResult {
+	res := ThresholdResult{
+		Threshold: th,
+		Metric:    th.Metric,
+		Stat:      th.Stat,
+		Operator:  th.Operator,
+		Target:    th.Target,
+	}
+
+	switch strategy {
+	case "pass", "ignore", "skip":
+		res.Passed = true
+		res.Actual = "no data"
+		return res
+	case "zero":
+		if config.IsDurationStat(th.Stat) {
+			res.Actual = "0s"
+			res.Passed = compareDuration(0, th.TargetDuration, th.Operator)
+			if !res.Passed {
+				res.Reason = fmt.Sprintf("actual %s (%s) does not satisfy %s %s",
+					th.Stat, res.Actual, th.Operator, th.Target)
+			}
+			return res
+		}
+		res.Actual = "0"
+		res.Passed = compareFloat(0, th.TargetFloat, th.Operator)
+		if !res.Passed {
+			res.Reason = fmt.Sprintf("actual %s (%s) does not satisfy %s %s",
+				th.Stat, res.Actual, th.Operator, th.Target)
+		}
+		return res
+	default: // "fail" or any unrecognized
+		res.Passed = false
+		res.Actual = "no data"
+		res.Reason = "no data"
+		return res
+	}
+}
+
 // EvaluateThreshold evaluates a single threshold configuration against the metrics reader.
 func EvaluateThreshold(th config.ThresholdConfig, reader MetricReader) ThresholdResult {
+	strategy := ResolveOnNoData(th)
 	res := ThresholdResult{
 		Threshold: th,
 		Metric:    th.Metric,
@@ -41,19 +92,13 @@ func EvaluateThreshold(th config.ThresholdConfig, reader MetricReader) Threshold
 
 	_, exists := reader.MetricType(th.Metric)
 	if !exists {
-		res.Passed = false
-		res.Actual = "no data"
-		res.Reason = "no data"
-		return res
+		return evaluateNoData(th, strategy)
 	}
 
 	if config.IsDurationStat(th.Stat) {
 		snap := reader.MergedHistogramSnapshot(th.Metric)
 		if snap.Count == 0 {
-			res.Passed = false
-			res.Actual = "no data"
-			res.Reason = "no data"
-			return res
+			return evaluateNoData(th, strategy)
 		}
 
 		var actualDuration time.Duration
@@ -90,10 +135,7 @@ func EvaluateThreshold(th config.ThresholdConfig, reader MetricReader) Threshold
 	case "rate":
 		rateVal, hasData := reader.RateData(th.Metric)
 		if !hasData {
-			res.Passed = false
-			res.Actual = "no data"
-			res.Reason = "no data"
-			return res
+			return evaluateNoData(th, strategy)
 		}
 		actualFloat = rateVal
 		res.Actual = strconv.FormatFloat(actualFloat, 'f', -1, 64)

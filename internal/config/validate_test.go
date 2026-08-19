@@ -359,4 +359,97 @@ func TestValidate_ScenarioEdgeCases(t *testing.T) {
 		require.True(t, errors.As(err, &valErr))
 		assert.Equal(t, "scenarios.s1.thresholds[0].delay_abort_eval", valErr.Field)
 	})
+
+	t.Run("threshold on_no_data valid strategies", func(t *testing.T) {
+		for _, strategy := range []string{"zero", "fail", "pass", "ignore", "skip"} {
+			cfg := &config.Config{
+				Version: "1.0",
+				Scenarios: map[string]config.ScenarioConfig{
+					"s1": {
+						Type:      config.ScenarioTypeConstantVUs,
+						VUs:       1,
+						RunPeriod: 10 * time.Second,
+						VUTimeout: 1 * time.Second,
+						Thresholds: []config.ThresholdConfig{
+							{Metric: "m", Stat: "count", Operator: "<=", Target: "0", OnNoData: strategy},
+						},
+					},
+				},
+			}
+			err := config.Validate(cfg)
+			require.NoError(t, err, "strategy %q should be valid", strategy)
+			assert.Equal(t, strategy, cfg.Scenarios["s1"].Thresholds[0].OnNoData)
+		}
+	})
+
+	t.Run("threshold on_no_data invalid strategy", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					Thresholds: []config.ThresholdConfig{
+						{Metric: "m", Stat: "count", Operator: "<=", Target: "0", OnNoData: "invalid_strategy"},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.thresholds[0].on_no_data", valErr.Field)
+	})
+
+	t.Run("threshold on_no_data defaults populated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					Thresholds: []config.ThresholdConfig{
+						{Metric: "c", Stat: "count", Operator: "<=", Target: "0"},
+						{Metric: "g", Stat: "value", Operator: "<=", Target: "10"},
+						{Metric: "d", Stat: "p95", Operator: "<", Target: "100ms"},
+						{Metric: "r", Stat: "rate", Operator: ">=", Target: "0.99"},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.NoError(t, err)
+		assert.Equal(t, "zero", cfg.Scenarios["s1"].Thresholds[0].OnNoData)
+		assert.Equal(t, "zero", cfg.Scenarios["s1"].Thresholds[1].OnNoData)
+		assert.Equal(t, "fail", cfg.Scenarios["s1"].Thresholds[2].OnNoData)
+		assert.Equal(t, "fail", cfg.Scenarios["s1"].Thresholds[3].OnNoData)
+	})
+
+	t.Run("threshold conflicting metric types", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					Thresholds: []config.ThresholdConfig{
+						{Metric: "m", Stat: "p95", Operator: "<", Target: "100ms"},
+						{Metric: "m", Stat: "count", Operator: "<=", Target: "0"},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.thresholds[1].metric", valErr.Field)
+	})
 }
