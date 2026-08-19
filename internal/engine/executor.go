@@ -37,6 +37,7 @@ func NewExecutor(
 	logger log.Logger,
 	metrics MetricsStore,
 ) *Executor {
+	preRegisterThresholdMetrics(metrics, cfg.Thresholds)
 	pacer, _ := DefaultPacingRegistry.Get(cfg.Type)
 	return &Executor{
 		ScenarioName: scenarioName,
@@ -57,6 +58,7 @@ func NewExecutorWithPacer(
 	metrics MetricsStore,
 	pacer PacingEngine,
 ) *Executor {
+	preRegisterThresholdMetrics(metrics, cfg.Thresholds)
 	return &Executor{
 		ScenarioName: scenarioName,
 		Scenario:     scenario,
@@ -64,6 +66,28 @@ func NewExecutorWithPacer(
 		Logger:       logger,
 		Metrics:      metrics,
 		Pacer:        pacer,
+	}
+}
+
+func preRegisterThresholdMetrics(metrics MetricsStore, thresholds []config.ThresholdConfig) {
+	if reg, ok := metrics.(metric.Registry); ok && reg != nil {
+		for _, th := range thresholds {
+			if th.Metric == "" {
+				continue
+			}
+			if config.IsDurationStat(th.Stat) {
+				_ = reg.Register(th.Metric, metric.MetricTypeDuration)
+			} else {
+				switch th.Stat {
+				case "count":
+					_ = reg.Register(th.Metric, metric.MetricTypeCounter)
+				case "rate":
+					_ = reg.Register(th.Metric, metric.MetricTypeRate)
+				case "value":
+					_ = reg.Register(th.Metric, metric.MetricTypeGauge)
+				}
+			}
+		}
 	}
 }
 

@@ -170,6 +170,14 @@ func TestJSONSchema_ThresholdStatsAndOperators(t *testing.T) {
 	for _, op := range expectedOps {
 		assert.Contains(t, opEnums, op)
 	}
+
+	onNoDataProp, ok := thresholdProps["on_no_data"].(map[string]any)
+	require.True(t, ok, "threshold should have on_no_data property")
+	onNoDataEnums := onNoDataProp["enum"].([]any)
+	expectedStrategies := []string{"zero", "fail", "pass", "ignore", "skip"}
+	for _, strat := range expectedStrategies {
+		assert.Contains(t, onNoDataEnums, strat)
+	}
 }
 
 func TestJSONSchema_ThinkTimeStrategies(t *testing.T) {

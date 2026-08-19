@@ -190,6 +190,17 @@
             "100"
           ]
         },
+        "on_no_data": {
+          "type": "string",
+          "enum": [
+            "zero",
+            "fail",
+            "pass",
+            "ignore",
+            "skip"
+          ],
+          "description": "Evaluation strategy when no metric data is recorded during the test run: 'zero' (evaluates unrecorded metrics with value 0; default for count/value), 'fail' (fails threshold evaluation with 'no data'; default for duration/rate), 'pass' (marks threshold as passed if no data is present), 'ignore'/'skip' (ignores threshold when no data is present)."
+        },
         "abort_on_fail": {
           "type": "boolean",
           "default": false,

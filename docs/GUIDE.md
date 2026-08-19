@@ -515,9 +515,50 @@ thresholds:
     stat: count
     operator: ">="
     target: "1000"
+
+  - metric: authentication_errors
+    stat: count
+    operator: "<="
+    target: "0"
+    on_no_data: zero  # Default for count/value; passes when 0 errors occur
 ```
 
-### 8.1 Early Stop / Graceful Abort (`abort_on_fail`)
+### 8.1 Missing Data Handling (`on_no_data`)
+
+When a load test executes cleanly and zero events are recorded for custom error counters (e.g. `ctx.Counter("auth_errors").Inc()` is never invoked), vuhive evaluates missing metric data according to configurable `on_no_data` policies:
+
+| Strategy | Applicable Defaults | Behavior on Missing / Unrecorded Metric Data |
+|---|---|---|
+| `zero` | Default for `count` & `value` | Evaluates missing metrics with numerical value `0` (or `0s` for durations). Zero-tolerance checks such as `count <= 0` evaluate to `0 <= 0` and pass. |
+| `fail` | Default for duration & `rate` | Treats absence of data as an automatic SLA failure (`actual: no data`). |
+| `pass` | Optional | Marks the threshold as passed if no events/metrics were recorded (`actual: no data`). |
+| `ignore` / `skip` | Optional | Excludes/ignores the threshold from causing SLA failure when no data was emitted (`actual: no data`). |
+
+```yaml
+thresholds:
+  # Option A: Zero-tolerance error counter (passes when no errors occur)
+  - metric: database_deadlocks
+    stat: count
+    operator: "<="
+    target: "0"
+    on_no_data: zero
+
+  # Option B: Duration metric requiring completed requests
+  - metric: http_request_duration
+    stat: p95
+    operator: "<"
+    target: "200ms"
+    on_no_data: fail
+
+  # Option C: Optional branch metric
+  - metric: cache_rebuild_duration
+    stat: p95
+    operator: "<"
+    target: "1s"
+    on_no_data: pass
+```
+
+### 8.2 Early Stop / Graceful Abort (`abort_on_fail`)
 
 Configure `abort_on_fail: true` on any threshold entry to immediately terminate test execution if that threshold is breached during execution, preventing wasted test execution or runaway system degradation.
 

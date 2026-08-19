@@ -54,6 +54,7 @@ type thresholdConfigDTO struct {
 	Stat           string        `mapstructure:"stat"`
 	Operator       string        `mapstructure:"operator"`
 	Target         string        `mapstructure:"target"`
+	OnNoData       string        `mapstructure:"on_no_data"`
 	AbortOnFail    bool          `mapstructure:"abort_on_fail"`
 	DelayAbortEval time.Duration `mapstructure:"delay_abort_eval"`
 }
@@ -145,6 +146,7 @@ func (d *thresholdConfigDTO) toModel() ThresholdConfig {
 		Stat:           d.Stat,
 		Operator:       d.Operator,
 		Target:         d.Target,
+		OnNoData:       d.OnNoData,
 		AbortOnFail:    d.AbortOnFail,
 		DelayAbortEval: d.DelayAbortEval,
 	}

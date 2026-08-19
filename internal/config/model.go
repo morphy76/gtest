@@ -122,6 +122,11 @@ type ThresholdConfig struct {
 	// or as float64 for non-duration stats (count, rate, value).
 	Target string
 
+	// OnNoData specifies the evaluation policy when no metric data is recorded during the test run.
+	// Supported values: "zero", "fail", "pass", "ignore", "skip".
+	// Defaults to "zero" for count and value stats, and "fail" for duration and rate stats.
+	OnNoData string
+
 	// AbortOnFail triggers early test termination if breached during execution.
 	AbortOnFail bool
 

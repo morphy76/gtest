@@ -397,3 +397,219 @@ func TestComparisonOperators(t *testing.T) {
 	}
 }
 
+func TestEvaluateThreshold_Counter_NoData_ZeroTarget_Passes(t *testing.T) {
+	store := metric.NewStore()
+
+	th := config.ThresholdConfig{
+		Metric:      "authentication_errors",
+		Stat:        "count",
+		Operator:    "<=",
+		Target:      "0",
+		TargetFloat: 0,
+	}
+
+	res := sla.EvaluateThreshold(th, store)
+	assert.True(t, res.Passed, "zero-target counter threshold should pass when no data recorded")
+	assert.Equal(t, "0", res.Actual)
+	assert.Empty(t, res.Reason)
+}
+
+func TestEvaluateThreshold_Counter_NoData_PositiveTarget_Fails(t *testing.T) {
+	store := metric.NewStore()
+
+	th := config.ThresholdConfig{
+		Metric:      "authentication_errors",
+		Stat:        "count",
+		Operator:    ">",
+		Target:      "0",
+		TargetFloat: 0,
+	}
+
+	res := sla.EvaluateThreshold(th, store)
+	assert.False(t, res.Passed, "counter > 0 threshold should fail when count is 0")
+	assert.Equal(t, "0", res.Actual)
+	assert.NotEmpty(t, res.Reason)
+}
+
+func TestEvaluateThreshold_Duration_NoData_FailsByDefault(t *testing.T) {
+	store := metric.NewStore()
+
+	th := config.ThresholdConfig{
+		Metric:         "http_req_duration",
+		Stat:           "p95",
+		Operator:       "<",
+		Target:         "200ms",
+		TargetDuration: 200 * time.Millisecond,
+	}
+
+	res := sla.EvaluateThreshold(th, store)
+	assert.False(t, res.Passed, "duration threshold with no data should fail by default")
+	assert.Equal(t, "no data", res.Actual)
+	assert.Equal(t, "no data", res.Reason)
+}
+
+func TestEvaluateThreshold_OnNoData_Strategies(t *testing.T) {
+	store := metric.NewStore()
+
+	t.Run("on_no_data: zero for missing duration passes < target", func(t *testing.T) {
+		th := config.ThresholdConfig{
+			Metric:         "unrecorded_latency",
+			Stat:           "p95",
+			Operator:       "<",
+			Target:         "200ms",
+			TargetDuration: 200 * time.Millisecond,
+			OnNoData:       "zero",
+		}
+		res := sla.EvaluateThreshold(th, store)
+		assert.True(t, res.Passed)
+		assert.Equal(t, "0s", res.Actual)
+		assert.Empty(t, res.Reason)
+	})
+
+	t.Run("on_no_data: zero for missing rate evaluates 0", func(t *testing.T) {
+		th := config.ThresholdConfig{
+			Metric:      "unrecorded_rate",
+			Stat:        "rate",
+			Operator:    "<=",
+			Target:      "0",
+			TargetFloat: 0,
+			OnNoData:    "zero",
+		}
+		res := sla.EvaluateThreshold(th, store)
+		assert.True(t, res.Passed)
+		assert.Equal(t, "0", res.Actual)
+	})
+
+	t.Run("on_no_data: fail for missing counter fails with no data", func(t *testing.T) {
+		th := config.ThresholdConfig{
+			Metric:      "unrecorded_errors",
+			Stat:        "count",
+			Operator:    "<=",
+			Target:      "0",
+			TargetFloat: 0,
+			OnNoData:    "fail",
+		}
+		res := sla.EvaluateThreshold(th, store)
+		assert.False(t, res.Passed)
+		assert.Equal(t, "no data", res.Actual)
+		assert.Equal(t, "no data", res.Reason)
+	})
+
+	t.Run("on_no_data: pass for missing duration passes", func(t *testing.T) {
+		th := config.ThresholdConfig{
+			Metric:         "optional_duration",
+			Stat:           "p95",
+			Operator:       "<",
+			Target:         "100ms",
+			TargetDuration: 100 * time.Millisecond,
+			OnNoData:       "pass",
+		}
+		res := sla.EvaluateThreshold(th, store)
+		assert.True(t, res.Passed)
+		assert.Equal(t, "no data", res.Actual)
+		assert.Empty(t, res.Reason)
+	})
+
+	t.Run("on_no_data: ignore for missing metric passes", func(t *testing.T) {
+		th := config.ThresholdConfig{
+			Metric:         "skipped_metric",
+			Stat:           "p99",
+			Operator:       "<",
+			Target:         "50ms",
+			TargetDuration: 50 * time.Millisecond,
+			OnNoData:       "ignore",
+		}
+		res := sla.EvaluateThreshold(th, store)
+		assert.True(t, res.Passed)
+		assert.Equal(t, "no data", res.Actual)
+		assert.Empty(t, res.Reason)
+	})
+
+	t.Run("on_no_data: skip alias for missing metric passes", func(t *testing.T) {
+		th := config.ThresholdConfig{
+			Metric:         "skipped_metric",
+			Stat:           "p99",
+			Operator:       "<",
+			Target:         "50ms",
+			TargetDuration: 50 * time.Millisecond,
+			OnNoData:       "skip",
+		}
+		res := sla.EvaluateThreshold(th, store)
+		assert.True(t, res.Passed)
+		assert.Equal(t, "no data", res.Actual)
+		assert.Empty(t, res.Reason)
+	})
+}
+
+func TestEvaluateThreshold_Duration_EmptySnapshot_HonorsOnNoData(t *testing.T) {
+	store := metric.NewStore()
+	_ = store.Duration("empty_duration", metric.Tags{}) // registered but 0 observations
+
+	thZero := config.ThresholdConfig{
+		Metric:         "empty_duration",
+		Stat:           "p95",
+		Operator:       "<",
+		Target:         "200ms",
+		TargetDuration: 200 * time.Millisecond,
+		OnNoData:       "zero",
+	}
+	resZero := sla.EvaluateThreshold(thZero, store)
+	assert.True(t, resZero.Passed)
+	assert.Equal(t, "0s", resZero.Actual)
+
+	thFail := config.ThresholdConfig{
+		Metric:         "empty_duration",
+		Stat:           "p95",
+		Operator:       "<",
+		Target:         "200ms",
+		TargetDuration: 200 * time.Millisecond,
+		OnNoData:       "fail",
+	}
+	resFail := sla.EvaluateThreshold(thFail, store)
+	assert.False(t, resFail.Passed)
+	assert.Equal(t, "no data", resFail.Actual)
+	assert.Equal(t, "no data", resFail.Reason)
+
+	thPass := config.ThresholdConfig{
+		Metric:         "empty_duration",
+		Stat:           "p95",
+		Operator:       "<",
+		Target:         "200ms",
+		TargetDuration: 200 * time.Millisecond,
+		OnNoData:       "pass",
+	}
+	resPass := sla.EvaluateThreshold(thPass, store)
+	assert.True(t, resPass.Passed)
+	assert.Equal(t, "no data", resPass.Actual)
+}
+
+func TestEvaluateThreshold_Rate_NoData_HonorsOnNoData(t *testing.T) {
+	store := metric.NewStore()
+	_ = store.Rate("empty_rate", metric.Tags{}) // registered but 0 observations
+
+	thZero := config.ThresholdConfig{
+		Metric:      "empty_rate",
+		Stat:        "rate",
+		Operator:    "<=",
+		Target:      "0",
+		TargetFloat: 0,
+		OnNoData:    "zero",
+	}
+	resZero := sla.EvaluateThreshold(thZero, store)
+	assert.True(t, resZero.Passed)
+	assert.Equal(t, "0", resZero.Actual)
+
+	thPass := config.ThresholdConfig{
+		Metric:      "empty_rate",
+		Stat:        "rate",
+		Operator:    ">",
+		Target:      "0.9",
+		TargetFloat: 0.9,
+		OnNoData:    "pass",
+	}
+	resPass := sla.EvaluateThreshold(thPass, store)
+	assert.True(t, resPass.Passed)
+	assert.Equal(t, "no data", resPass.Actual)
+}
+
+

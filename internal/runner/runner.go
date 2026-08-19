@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/morphy76/vuhive/internal/config"
 	"github.com/morphy76/vuhive/internal/engine"
 	"github.com/morphy76/vuhive/internal/log"
 	"github.com/morphy76/vuhive/internal/metric"
@@ -43,6 +44,7 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 	}
 	logger := log.NewWithFormat(stdout, logLevel, resolved.Flags.LogFormat)
 	metricsStore := metric.NewStore()
+	preRegisterThresholdMetrics(metricsStore, resolved.ScenarioCfg.Thresholds)
 
 	startedAt := time.Now()
 	executor := engine.NewExecutor(resolved.TargetScenario, resolved.Scenario, resolved.ScenarioCfg, logger, metricsStore)
@@ -87,5 +89,28 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 		Aborted:     executor.Aborted,
 		AbortReason: executor.AbortReason,
 		Error:       nil,
+	}
+}
+
+func preRegisterThresholdMetrics(reg metric.Registry, thresholds []config.ThresholdConfig) {
+	if reg == nil {
+		return
+	}
+	for _, th := range thresholds {
+		if th.Metric == "" {
+			continue
+		}
+		if config.IsDurationStat(th.Stat) {
+			_ = reg.Register(th.Metric, metric.MetricTypeDuration)
+		} else {
+			switch th.Stat {
+			case "count":
+				_ = reg.Register(th.Metric, metric.MetricTypeCounter)
+			case "rate":
+				_ = reg.Register(th.Metric, metric.MetricTypeRate)
+			case "value":
+				_ = reg.Register(th.Metric, metric.MetricTypeGauge)
+			}
+		}
 	}
 }

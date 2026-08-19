@@ -580,12 +580,15 @@ Duration strings follow Go's `time.ParseDuration` format (e.g., `"15s"`, `"2m30s
 
 Each threshold entry has these fields:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `metric` | string | yes | Exact metric name as recorded by the test developer |
-| `stat` | string | yes | Statistic to evaluate (see table below) |
-| `operator` | string | yes | Comparison operator: `<`, `<=`, `>`, `>=` |
-| `target` | string | yes | Threshold value; parsed as duration if stat is a percentile, as float64 otherwise |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `metric` | string | yes | — | Exact metric name as recorded by the test developer |
+| `stat` | string | yes | — | Statistic to evaluate (see table below) |
+| `operator` | string | yes | — | Comparison operator: `<`, `<=`, `>`, `>=` |
+| `target` | string | yes | — | Threshold value; parsed as duration if stat is a percentile/mean/max, as float64 otherwise |
+| `on_no_data` | string | no | `zero` (for `count`/`value`), `fail` (for duration/`rate`) | Missing data handling strategy (`zero`, `fail`, `pass`, `ignore`, `skip`) |
+| `abort_on_fail` | bool | no | `false` | Early test termination on threshold breach |
+| `delay_abort_eval` | duration | no | `0s` | Warm-up grace period before abort evaluation begins |
 
 **Supported `stat` values:**
 
@@ -600,6 +603,15 @@ Each threshold entry has these fields:
 | `count` | Counter | Total accumulated value |
 | `rate` | Rate | `sum(numerator) / sum(denominator)` across all `Rate.Add()` calls |
 | `value` | Gauge | Last recorded gauge value |
+
+**Missing Data (`on_no_data`) Strategies:**
+
+| Strategy | Behavior on Missing / Unrecorded Metric Data |
+|---|---|
+| `zero` | Treats missing or unrecorded metric data as `0` (or `0s` for durations). Evaluates the comparison operator against target (e.g. `count <= 0` passes with actual `0` when no errors or events are recorded). |
+| `fail` | Treats missing data as an SLA failure with `actual: no data` and `reason: no data` (natural default for duration percentiles and rate metrics). |
+| `pass` | Treats missing data as passing with `actual: no data`. |
+| `ignore` / `skip` | Excludes/ignores the threshold when no data is recorded with `actual: no data`. |
 
 **Disambiguation Rule:** If `stat` is one of `{p50, p90, p95, p99, mean, max}`, `target` is parsed as
 `time.Duration`. Otherwise `target` is parsed as `float64`. Configuration loading fails with a

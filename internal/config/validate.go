@@ -43,6 +43,33 @@ var validOperators = map[string]bool{
 	">=": true,
 }
 
+// validOnNoData is the set of supported on_no_data strategy values.
+var validOnNoData = map[string]bool{
+	"":       true,
+	"zero":   true,
+	"fail":   true,
+	"pass":   true,
+	"ignore": true,
+	"skip":   true,
+}
+
+// InferredMetricKind returns the metric kind string ("duration", "counter", "rate", "gauge") for a stat.
+func InferredMetricKind(stat string) string {
+	if IsDurationStat(stat) {
+		return "duration"
+	}
+	switch stat {
+	case "count":
+		return "counter"
+	case "rate":
+		return "rate"
+	case "value":
+		return "gauge"
+	default:
+		return "unknown"
+	}
+}
+
 // DelayValidatorFunc validates a delay configuration against strategy bounds.
 type DelayValidatorFunc func(prefix string, delay *ThinkTimeConfig) error
 
@@ -338,11 +365,20 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 		}
 	}
 
-	// Validate thresholds.
+	// Validate thresholds and detect conflicting inferred metric kinds.
+	metricKinds := make(map[string]string)
 	for i := range sc.Thresholds {
 		if err := validateThreshold(prefix, i, &sc.Thresholds[i]); err != nil {
 			return err
 		}
+		kind := InferredMetricKind(sc.Thresholds[i].Stat)
+		if existingKind, ok := metricKinds[sc.Thresholds[i].Metric]; ok && existingKind != kind {
+			return &ValidationError{
+				Field:   fmt.Sprintf("%s.thresholds[%d].metric", prefix, i),
+				Message: fmt.Sprintf("conflicting metric kind for metric %q: inferred %s, previously inferred %s", sc.Thresholds[i].Metric, kind, existingKind),
+			}
+		}
+		metricKinds[sc.Thresholds[i].Metric] = kind
 	}
 
 	return nil
@@ -357,8 +393,6 @@ func validateInteractionDelay(prefix string, delay *InteractionDelayConfig) erro
 func validateThinkTime(prefix string, tt *ThinkTimeConfig) error {
 	return validateDelayConfig(fmt.Sprintf("%s.think_time", prefix), tt)
 }
-
-
 
 // validateThreshold checks a single threshold configuration and parses its target value.
 func validateThreshold(prefix string, idx int, th *ThresholdConfig) error {
@@ -393,6 +427,23 @@ func validateThreshold(prefix string, idx int, th *ThresholdConfig) error {
 		return &ValidationError{
 			Field:   thPrefix + ".target",
 			Message: "must not be empty",
+		}
+	}
+
+	// on_no_data must be one of the known strategies if specified.
+	if !validOnNoData[th.OnNoData] {
+		return &ValidationError{
+			Field:   thPrefix + ".on_no_data",
+			Message: fmt.Sprintf("must be one of {zero, fail, pass, ignore, skip}, got %q", th.OnNoData),
+		}
+	}
+
+	// Populate default on_no_data if not specified.
+	if th.OnNoData == "" {
+		if th.Stat == "count" || th.Stat == "value" {
+			th.OnNoData = "zero"
+		} else {
+			th.OnNoData = "fail"
 		}
 	}
 

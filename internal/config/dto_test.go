@@ -76,6 +76,7 @@ func TestDTO_ToModel(t *testing.T) {
 						Stat:           "p95",
 						Operator:       "<",
 						Target:         "200ms",
+						OnNoData:       "fail",
 						AbortOnFail:    true,
 						DelayAbortEval: 5 * time.Second,
 					},
@@ -127,6 +128,7 @@ func TestDTO_ToModel(t *testing.T) {
 	assert.Equal(t, "p95", th.Stat)
 	assert.Equal(t, "<", th.Operator)
 	assert.Equal(t, "200ms", th.Target)
+	assert.Equal(t, "fail", th.OnNoData)
 	assert.True(t, th.AbortOnFail)
 	assert.Equal(t, 5*time.Second, th.DelayAbortEval)
 }
