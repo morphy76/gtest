@@ -839,4 +839,43 @@ scenarios:
 	})
 }
 
+func TestLoad_DrainAndDrainPeriod(t *testing.T) {
+	t.Run("valid drain duration in YAML", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 5
+    run_period: "10s"
+    ramp_down: "5s"
+    drain: "3s"
+    vu_timeout: "1s"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Equal(t, 3*time.Second, cfg.Scenarios["s1"].Drain)
+	})
+
+	t.Run("valid drain_period alias duration in YAML", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 5
+    run_period: "10s"
+    ramp_down: "5s"
+    drain_period: "4s"
+    vu_timeout: "1s"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Equal(t, 4*time.Second, cfg.Scenarios["s1"].Drain)
+	})
+}
+
+
 

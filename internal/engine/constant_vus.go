@@ -23,23 +23,23 @@ func RunConstantVUs(
 	logger log.Logger,
 	metrics metric.Collector,
 ) {
-	// Total context includes ramp_down as a grace period for in-flight iterations.
-	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
+	start := time.Now()
+	if logger != nil {
+		logger.Debug().
+			Str("op", "RunConstantVUs").
+			Str("scenario", scenarioName).
+			Int("vus", cfg.VUs).
+			Msg("starting constant_vus pacing execution")
+	}
+
+	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown + cfg.Drain
 	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
 	defer cancel()
 
-	// stopNewIterations fires at ramp_up + run_period — VUs stop starting new iterations
-	// but in-flight iterations continue until ramp_down expires or they complete.
-	stopTimer := time.NewTimer(cfg.RampUp + cfg.RunPeriod)
+	activeDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
+	stopTimer := time.NewTimer(activeDuration)
 	defer stopTimer.Stop()
 	stopCh := make(chan struct{})
-	go func() {
-		select {
-		case <-stopTimer.C:
-			close(stopCh)
-		case <-runCtx.Done():
-		}
-	}()
 
 	var wg sync.WaitGroup
 	var interval time.Duration
@@ -51,6 +51,8 @@ func RunConstantVUs(
 		if i > 1 && interval > 0 {
 			select {
 			case <-runCtx.Done():
+				close(stopCh)
+				drainWorkers(runCtx, cancel, &wg, cfg.Drain, logger, metrics)
 				return
 			case <-time.After(interval):
 			}
@@ -61,8 +63,26 @@ func RunConstantVUs(
 		go runVUGoroutine(runCtx, stopCh, scenario, cfg, scenarioName, vuid, globalState, logger, metrics, &wg)
 	}
 
-	wg.Wait()
+	// Active execution phase: wait until active duration completes or context is cancelled
+	select {
+	case <-stopTimer.C:
+		close(stopCh)
+	case <-runCtx.Done():
+		close(stopCh)
+	}
+
+	// Drain execution phase: wait up to cfg.Drain for remaining in-flight VUs to finish
+	drainWorkers(runCtx, cancel, &wg, cfg.Drain, logger, metrics)
+
+	if logger != nil {
+		logger.Info().
+			Str("op", "RunConstantVUs").
+			Str("scenario", scenarioName).
+			Dur("duration_ms", time.Since(start)).
+			Msg("completed constant_vus pacing execution")
+	}
 }
+
 
 func runVUGoroutine(
 	ctx context.Context,

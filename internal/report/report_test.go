@@ -94,6 +94,19 @@ func TestConsoleReportContainsMetadataAndCounts(t *testing.T) {
 	assert.Contains(t, out, "1 timeout")
 }
 
+func TestConsoleReportContainsDrainDuration(t *testing.T) {
+	data := createTestReportData()
+	data.Config.Drain = 3 * time.Second
+	var buf bytes.Buffer
+
+	err := report.GenerateConsoleReport(&buf, data)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ramp-down: 1s | drain: 3s")
+}
+
+
 // AC-1.9.2: Console report shows [PASS]/[FAIL] for each threshold with actual vs target value
 func TestConsoleReportShowsThresholdPassFail(t *testing.T) {
 	data := createTestReportData()

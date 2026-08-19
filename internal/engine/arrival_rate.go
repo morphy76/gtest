@@ -23,11 +23,21 @@ func RunArrivalRate(
 	logger log.Logger,
 	metrics metric.Collector,
 ) {
-	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
+	start := time.Now()
+	if logger != nil {
+		logger.Debug().
+			Str("op", "RunArrivalRate").
+			Str("scenario", scenarioName).
+			Int("target_tps", cfg.TargetTPS).
+			Int("max_vus", cfg.MaxVUs).
+			Msg("starting arrival_rate pacing execution")
+	}
+
+	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown + cfg.Drain
 	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
 	defer cancel()
 
-	dispatchDuration := cfg.RampUp + cfg.RunPeriod
+	dispatchDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
 	dispatchCtx, dispatchCancel := context.WithTimeout(ctx, dispatchDuration)
 	defer dispatchCancel()
 
@@ -36,14 +46,13 @@ func RunArrivalRate(
 		maxVUs = 1
 	}
 
-	tokenCh := make(chan int64)
+	tokenCh := make(chan int64, maxVUs)
 	var wg sync.WaitGroup
 	var iterSeq int64
 
 	closeTokens := sync.OnceFunc(func() {
 		close(tokenCh)
 	})
-	defer closeTokens()
 
 	// Pre-spawn persistent worker pool of size MaxVUs
 	wg.Add(maxVUs)
@@ -69,7 +78,7 @@ func RunArrivalRate(
 		select {
 		case <-dispatchCtx.Done():
 			closeTokens()
-			wg.Wait()
+			drainWorkers(runCtx, cancel, &wg, cfg.Drain, logger, metrics)
 			return
 		case <-time.After(midpoint):
 			dispatchToken()
@@ -79,33 +88,44 @@ func RunArrivalRate(
 		select {
 		case <-dispatchCtx.Done():
 			closeTokens()
-			wg.Wait()
+			drainWorkers(runCtx, cancel, &wg, cfg.Drain, logger, metrics)
 			return
 		case <-time.After(remainingRamp):
 		}
 	}
 
-	// 2. Steady-state phase — token dispatch ends at ramp_up + run_period
+	// 2. Steady-state phase — token dispatch ends at ramp_up + run_period + ramp_down
 	limiter := rate.NewLimiter(rate.Limit(cfg.TargetTPS), 1)
 
+dispatchLoop:
 	for {
 		select {
 		case <-dispatchCtx.Done():
-			closeTokens()
-			wg.Wait()
-			return
+			break dispatchLoop
 		default:
 		}
 
 		if err := limiter.Wait(dispatchCtx); err != nil {
-			closeTokens()
-			wg.Wait()
-			return
+			break dispatchLoop
 		}
 
 		dispatchToken()
 	}
+
+	closeTokens()
+
+	// Drain execution phase: wait up to cfg.Drain for remaining in-flight workers to finish
+	drainWorkers(runCtx, cancel, &wg, cfg.Drain, logger, metrics)
+
+	if logger != nil {
+		logger.Info().
+			Str("op", "RunArrivalRate").
+			Str("scenario", scenarioName).
+			Dur("duration_ms", time.Since(start)).
+			Msg("completed arrival_rate pacing execution")
+	}
 }
+
 
 func runArrivalRateWorkerPool(
 	ctx context.Context,

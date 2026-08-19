@@ -66,6 +66,9 @@ type ScenarioConfig struct {
 	// RampDown is the duration for graceful ramp-down.
 	RampDown time.Duration
 
+	// Drain is the dedicated grace period allowing in-flight VUs to terminate cleanly.
+	Drain time.Duration
+
 	// VUTimeout is the per-iteration context timeout (required).
 	VUTimeout time.Duration
 

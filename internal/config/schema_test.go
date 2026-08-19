@@ -74,7 +74,15 @@ func TestJSONSchema_StructuralValidity(t *testing.T) {
 	assert.Contains(t, defs, "think_time")
 	assert.Contains(t, defs, "threshold")
 	assert.Contains(t, defs, "duration")
+
+	scenarioDef, ok := defs["scenario"].(map[string]any)
+	require.True(t, ok)
+	scenarioProps, ok := scenarioDef["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, scenarioProps, "drain")
+	assert.Contains(t, scenarioProps, "drain_period")
 }
+
 
 func TestJSONSchema_DurationRegex(t *testing.T) {
 	schema := loadSchema(t)
