@@ -290,7 +290,25 @@
         "ramp_down": {
           "$ref": "#/$defs/duration",
           "default": "0s",
-          "description": "Grace period for in-flight iterations to complete when the test ends.",
+          "description": "Duration for graceful ramp-down / active scaling down of load.",
+          "examples": [
+            "5s",
+            "10s"
+          ]
+        },
+        "drain": {
+          "$ref": "#/$defs/duration",
+          "default": "0s",
+          "description": "Dedicated grace period allowing in-flight VUs to terminate cleanly before teardown.",
+          "examples": [
+            "5s",
+            "10s"
+          ]
+        },
+        "drain_period": {
+          "$ref": "#/$defs/duration",
+          "default": "0s",
+          "description": "Alias for drain: dedicated grace period allowing in-flight VUs to terminate cleanly before teardown.",
           "examples": [
             "5s",
             "10s"

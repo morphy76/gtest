@@ -25,6 +25,8 @@ type scenarioConfigDTO struct {
 	RampUp           time.Duration        `mapstructure:"ramp_up"`
 	RunPeriod        time.Duration        `mapstructure:"run_period"`
 	RampDown         time.Duration        `mapstructure:"ramp_down"`
+	Drain            time.Duration        `mapstructure:"drain"`
+	DrainPeriod      time.Duration        `mapstructure:"drain_period"`
 	VUTimeout        time.Duration        `mapstructure:"vu_timeout"`
 	Params           map[string]string    `mapstructure:"params"`
 	InteractionDelay *thinkTimeConfigDTO  `mapstructure:"interaction_delay"`
@@ -87,6 +89,10 @@ func (d *stageConfigDTO) toModel() StageConfig {
 
 // toModel converts a scenarioConfigDTO to a pure domain ScenarioConfig model.
 func (d *scenarioConfigDTO) toModel() ScenarioConfig {
+	drain := d.Drain
+	if drain == 0 && d.DrainPeriod != 0 {
+		drain = d.DrainPeriod
+	}
 	sc := ScenarioConfig{
 		Type:      d.Type,
 		VUs:       d.VUs,
@@ -95,8 +101,10 @@ func (d *scenarioConfigDTO) toModel() ScenarioConfig {
 		RampUp:    d.RampUp,
 		RunPeriod: d.RunPeriod,
 		RampDown:  d.RampDown,
+		Drain:     drain,
 		VUTimeout: d.VUTimeout,
 	}
+
 	if d.Stages != nil {
 		sc.Stages = make([]StageConfig, len(d.Stages))
 		for i, st := range d.Stages {

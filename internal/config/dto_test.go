@@ -150,3 +150,49 @@ func TestDTO_ToModel_NilFields(t *testing.T) {
 	assert.Nil(t, sc.Thresholds)
 	assert.Nil(t, sc.Params)
 }
+
+func TestDTO_ToModel_DrainAndDrainPeriod(t *testing.T) {
+	t.Run("drain field mapped", func(t *testing.T) {
+		dto := configDTO{
+			Scenarios: map[string]scenarioConfigDTO{
+				"s1": {
+					Type:  ScenarioTypeConstantVUs,
+					Drain: 5 * time.Second,
+				},
+			},
+		}
+		cfg := dto.toModel()
+		require.NotNil(t, cfg)
+		assert.Equal(t, 5*time.Second, cfg.Scenarios["s1"].Drain)
+	})
+
+	t.Run("drain_period alias mapped when drain is 0", func(t *testing.T) {
+		dto := configDTO{
+			Scenarios: map[string]scenarioConfigDTO{
+				"s1": {
+					Type:        ScenarioTypeConstantVUs,
+					DrainPeriod: 3 * time.Second,
+				},
+			},
+		}
+		cfg := dto.toModel()
+		require.NotNil(t, cfg)
+		assert.Equal(t, 3*time.Second, cfg.Scenarios["s1"].Drain)
+	})
+
+	t.Run("drain takes precedence over drain_period", func(t *testing.T) {
+		dto := configDTO{
+			Scenarios: map[string]scenarioConfigDTO{
+				"s1": {
+					Type:        ScenarioTypeConstantVUs,
+					Drain:       10 * time.Second,
+					DrainPeriod: 2 * time.Second,
+				},
+			},
+		}
+		cfg := dto.toModel()
+		require.NotNil(t, cfg)
+		assert.Equal(t, 10*time.Second, cfg.Scenarios["s1"].Drain)
+	})
+}
+

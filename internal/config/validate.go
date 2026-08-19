@@ -335,6 +335,15 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 		}
 	}
 
+	// drain must be >= 0 (it defaults to 0).
+	if sc.Drain < 0 {
+		return &ValidationError{
+			Field:   prefix + ".drain",
+			Message: "must be >= 0",
+		}
+	}
+
+
 	// Validate params: keys and values must be non-empty strings.
 	for k, v := range sc.Params {
 		if k == "" {

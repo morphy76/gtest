@@ -40,7 +40,7 @@ func RunRampingVUs(
 		totalStagesDuration += st.Duration
 	}
 
-	totalDuration := totalStagesDuration + cfg.RampDown
+	totalDuration := totalStagesDuration + cfg.RampDown + cfg.Drain
 	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
 	defer cancel()
 
@@ -95,8 +95,8 @@ stagesLoop:
 		stageStart := time.Now()
 
 		tickInterval := 50 * time.Millisecond
-		if stageDuration < tickInterval {
-			tickInterval = stageDuration / 2
+		if stageDuration <= tickInterval {
+			tickInterval = stageDuration / 4
 			if tickInterval <= 0 {
 				tickInterval = time.Millisecond
 			}
@@ -133,7 +133,7 @@ stagesLoop:
 		startVU = targetVU
 	}
 
-	// RampDown grace period (if configured and context not cancelled)
+	// RampDown period (if configured and context not cancelled)
 	if cfg.RampDown > 0 {
 		select {
 		case <-runCtx.Done():
@@ -141,7 +141,7 @@ stagesLoop:
 		}
 	}
 
-	// Signal any remaining active workers to stop
+	// Signal any remaining active workers to stop starting new iterations
 	activeMu.Lock()
 	for _, w := range workers {
 		close(w.stopCh)
@@ -149,7 +149,8 @@ stagesLoop:
 	workers = nil
 	activeMu.Unlock()
 
-	wg.Wait()
+	// Drain execution phase: wait up to cfg.Drain for remaining in-flight VUs to finish
+	drainWorkers(runCtx, cancel, &wg, cfg.Drain, logger, metrics)
 
 	if logger != nil {
 		logger.Info().
@@ -159,6 +160,7 @@ stagesLoop:
 			Msg("completed ramping_vus pacing execution")
 	}
 }
+
 
 func runRampingVUGoroutine(
 	ctx context.Context,

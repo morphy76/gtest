@@ -565,11 +565,13 @@ Built-in metric names are defined as exported package-level constants directly i
 | `scenarios.<name>.ramp_up` | duration string | no | `"0s"` | ≥ 0 |
 | `scenarios.<name>.run_period` | duration string | if `constant_vus`/`arrival_rate` | — | > 0 |
 | `scenarios.<name>.ramp_down` | duration string | no | `"0s"` | ≥ 0 |
+| `scenarios.<name>.drain` | duration string | no | `"0s"` | Grace period for in-flight VUs to complete after active dispatch (alias: `drain_period`); ≥ 0 |
 | `scenarios.<name>.vu_timeout` | duration string | yes | — | > 0 |
 | `scenarios.<name>.params` | map[string]string | no | `{}` | Keys and values must be non-empty strings |
 | `scenarios.<name>.interaction_delay` | object | no | — | Thinking time strategy explicitly invoked via `ctx.Sleep()` (see §11, Increment 1.12) |
 | `scenarios.<name>.think_time` | object | no | — | Inter-iteration pacing delay executed by engine loop |
 | `scenarios.<name>.thresholds` | list | no | `[]` | See §7.2 |
+
 
 
 
@@ -695,17 +697,29 @@ Ramp-up uses **linear interpolation** of the target level over `ramp_up` duratio
 
 ### 8.2 Ramp-Down Algorithm
 
-- **`constant_vus`:** When `ramp_up + run_period` elapses, VUs stop starting new iterations. In-flight iterations are allowed up to `ramp_down` duration to complete gracefully. When `ramp_down` expires (or immediately if `ramp_down` is `0s`), remaining in-flight iterations are interrupted via context cancellation and discarded (not reported as timeouts or failures). Ramp-down completes when all goroutines return from their deferred `AfterTest`.
+- **`constant_vus`:** When `ramp_up + run_period` elapses, VUs stop starting new iterations. In-flight iterations are allowed up to `ramp_down` duration to complete gracefully. When `ramp_down` expires (or immediately if `ramp_down` is `0s`), active dispatch ends and the engine enters the `drain` phase.
 
-- **`arrival_rate`:** Token dispatch ends at `ramp_up + run_period`. In-flight worker goroutines are allowed up to `ramp_down` duration to complete. When `ramp_down` expires (or immediately if `ramp_down` is `0s`), remaining in-flight workers are interrupted via context cancellation and discarded (not reported as timeouts or failures). The engine waits for all goroutines to return before declaring ramp-down complete.
+- **`arrival_rate`:** Token dispatch ends at `ramp_up + run_period + ramp_down`. The engine enters the `drain` phase to allow active worker pool iterations to finish.
 
-### 8.3 Arrival Rate — Pool Saturation
+- **`ramping_vus`:** When all configured stages complete and `ramp_down` elapses, workers stop starting new iterations and the engine enters the `drain` phase.
+
+### 8.3 Drain Execution Phase (`drain` / `drain_period`)
+
+The `drain` phase coordinates graceful termination of in-flight worker goroutines before scenario teardown:
+
+- **Sequencing:** `Setup` → `ramp_up` → `run_period` → `ramp_down` → `drain` → `Teardown`.
+- **Fast / Early Exit:** The engine waits on active workers up to `drain` duration. If all workers complete before `drain` expires, the engine returns immediately without unnecessary delay.
+- **Safety Timeout & Diagnostic Warning:** If workers exceed `drain` duration, the engine cancels worker contexts to interrupt hung executions, waits for them to exit, and logs a structured warning (`phase=drain`, `Msg: "drain phase timed out with active workers remaining"`).
+- **Discarded Interrupted Iterations:** Incomplete iterations interrupted by safety timeout cancellation are discarded without being recorded as timeouts or iteration failures.
+
+### 8.4 Arrival Rate — Pool Saturation
 
 If the worker pool has reached `max_vus` and a new token is available, the framework increments
 `vuhive.pacing.dropped_iterations` and discards the token (does not block or back-pressure). This is
 intentional: arrival rate is an open model and cannot block the arrival clock.
 
-### 8.4 Pacing Goroutine Safety & Worker Pooling
+### 8.5 Pacing Goroutine Safety & Worker Pooling
+
 
 - All VU goroutines are tracked in a `sync.WaitGroup`. `Execute()` blocks on `wg.Wait()` before proceeding
   to Teardown.

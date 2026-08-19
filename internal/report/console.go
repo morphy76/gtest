@@ -45,8 +45,14 @@ func writeHeader(sb *strings.Builder, data ReportData) {
 
 	duration := data.EndedAt.Sub(data.StartedAt)
 	durStr := fmt.Sprintf("%02d:%02d:%02d", int(duration.Hours()), int(duration.Minutes())%60, int(duration.Seconds())%60)
-	fmt.Fprintf(sb, "Duration:     %s  (ramp-up: %v | run: %v | ramp-down: %v)\n",
-		durStr, data.Config.RampUp, data.Config.RunPeriod, data.Config.RampDown)
+	if data.Config.Drain > 0 {
+		fmt.Fprintf(sb, "Duration:     %s  (ramp-up: %v | run: %v | ramp-down: %v | drain: %v)\n",
+			durStr, data.Config.RampUp, data.Config.RunPeriod, data.Config.RampDown, data.Config.Drain)
+	} else {
+		fmt.Fprintf(sb, "Duration:     %s  (ramp-up: %v | run: %v | ramp-down: %v)\n",
+			durStr, data.Config.RampUp, data.Config.RunPeriod, data.Config.RampDown)
+	}
+
 
 	var totalIters, failedIters, timeoutIters int64
 	if data.Metrics != nil {

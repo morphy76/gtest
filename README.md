@@ -201,20 +201,24 @@ scenarios:
    - `vus`: Number of concurrent VUs (`int > 0`).
    - `ramp_up`: Staggered linear VU spawn duration (`time.Duration`).
    - `run_period`: Steady-state load duration (`time.Duration`).
-   - `ramp_down`: Graceful exit duration for in-flight iterations (`time.Duration`, default `0s`).
+   - `ramp_down`: Graceful exit duration for active iteration dispatch (`time.Duration`, default `0s`).
+   - `drain`: Grace period for in-flight VUs to complete before cancellation (`time.Duration`, default `0s`). Alias: `drain_period`.
 
 2. **`arrival_rate`**:
    - `target_tps`: Desired transactions/iterations per second (`int > 0`).
    - `max_vus`: Maximum size of the worker pool (`int > 0`). If the pool saturates, unhandled tokens increment `vuhive.pacing.dropped_iterations`.
    - `ramp_up`: Linear rate ramp-up duration (`time.Duration`).
    - `run_period`: Steady-state arrival duration (`time.Duration`).
-   - `ramp_down`: Graceful exit duration for in-flight workers (`time.Duration`, default `0s`).
+   - `ramp_down`: Duration for active token dispatch ramp-down (`time.Duration`, default `0s`).
+   - `drain`: Grace period for in-flight workers to complete before cancellation (`time.Duration`, default `0s`). Alias: `drain_period`.
 
 3. **`ramping_vus`**:
    - `stages`: List of stage definitions (`target: int`, `duration: time.Duration`).
-   - `ramp_down`: Graceful exit duration for remaining workers (`time.Duration`, default `0s`).
+   - `ramp_down`: Duration for stage ramp-down (`time.Duration`, default `0s`).
+   - `drain`: Grace period for in-flight workers to complete before cancellation (`time.Duration`, default `0s`). Alias: `drain_period`.
    - `vu_timeout`: Per-iteration timeout (`time.Duration`).
    - *Details and patterns in [Developer Guide](docs/GUIDE.md#ramping_vus-multi-stage-pacing).*
+
 
 ---
 

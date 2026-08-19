@@ -211,8 +211,10 @@ scenarios:
     vus: 10                      # number of concurrent VUs (required for constant_vus)
     ramp_up: 5s                  # linear stagger VU spawn (optional, default 0)
     run_period: 30s              # steady-state duration (required)
-    ramp_down: 5s                # grace period for in-flight iterations (optional, default 0)
+    ramp_down: 5s                # active iteration dispatch ramp-down (optional, default 0)
+    drain: 10s                   # grace period for in-flight VUs to complete before termination (optional, default 0)
     vu_timeout: 2s               # per-iteration context deadline (required)
+
 
     # --- arrival_rate fields ---
     # target_tps: 100            # target transactions/sec (required for arrival_rate)
@@ -601,21 +603,22 @@ This makes vuhive suitable for CI/CD pipelines where exit code drives the build 
 Maintains a **fixed pool** of VU goroutines. Each VU runs RunVU in a loop until `run_period` expires.
 
 ```text
-Time ────────────────────────────────────────►
-     │← ramp_up →│← run_period ────────→│← ramp_down →│
+Time ──────────────────────────────────────────────────────────►
+     │← ramp_up →│← run_period ────────→│← ramp_down →│← drain →│
 
-VU 1 ·············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░
-VU 2 ··············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░
-VU 3 ···············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░
+VU 1 ·············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░
+VU 2 ··············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░
+VU 3 ···············▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░
 
 · = waiting during ramp_up stagger
 ▓ = actively running iterations
-░ = ramp_down grace period (in-flight iterations complete)
+▒ = ramp_down dispatch phase
+░ = drain phase (grace period for in-flight iterations to complete)
 ```
 
 **Best for**: simulating a fixed number of concurrent users.
 
-> **Graceful Completion:** When `run_period` ends, VUs stop starting new iterations. In-flight iterations are allowed up to `ramp_down` duration to finish. Any iterations still in-flight after `ramp_down` expires (or immediately if `ramp_down: 0s`) are interrupted and discarded without incrementing timeout or failure metrics.
+> **Graceful Completion & Drain:** When active execution ends (`ramp_up + run_period + ramp_down`), VUs stop starting new iterations. The engine enters the `drain` phase: in-flight iterations are allowed up to `drain` duration to finish cleanly. If all VUs finish early, the engine returns immediately. Any iterations still in-flight after `drain` expires (or immediately if `drain: 0s`) are cleanly cancelled and discarded without false timeout or error reporting.
 
 ### arrival_rate (Open System)
 
@@ -627,11 +630,12 @@ target_tps: 100       # 100 iterations/second
 max_vus: 50           # max concurrent workers
 ramp_up: 10s
 run_period: 1m
-ramp_down: 5s         # optional grace period for in-flight workers
+ramp_down: 5s         # optional dispatch ramp-down
+drain: 10s            # optional grace period for in-flight workers
 vu_timeout: 2s
 ```
 
-If all `max_vus` workers are busy when a token arrives, the iteration is **dropped** and `vuhive.pacing.dropped_iterations` is incremented. In-flight workers interrupted when the scenario finishes are discarded without false timeout or error reporting.
+If all `max_vus` workers are busy when a token arrives, the iteration is **dropped** and `vuhive.pacing.dropped_iterations` is incremented. In-flight workers completing during the `drain` phase are recorded normally; remaining active workers after drain timeout are discarded without false timeout or error reporting.
 
 **Best for**: testing at a specific throughput regardless of response time.
 
@@ -652,13 +656,15 @@ stages:
     duration: 2m       # hold spike for 2 minutes
   - target: 0
     duration: 30s      # ramp down to 0 VUs
-ramp_down: 5s          # optional grace period for remaining workers
+ramp_down: 5s          # optional stage ramp-down
+drain: 10s             # optional grace period for remaining workers
 vu_timeout: 2s         # per-iteration timeout (required)
 ```
 
-The engine continuously tracks stage progress and dynamically scales the active virtual user pool up or down to match the calculated target. In-flight iterations completing gracefully during ramp-down are recorded normally; remaining active workers are cleanly terminated upon test completion.
+The engine continuously tracks stage progress and dynamically scales the active virtual user pool up or down to match the calculated target. In-flight iterations completing gracefully during the `drain` phase are recorded normally; remaining active workers exceeding `drain` timeout are cleanly terminated upon test completion.
 
 **Best for**: simulating realistic traffic spikes, stress testing breaking points, and observing system recovery.
+
 
 ---
 

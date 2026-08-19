@@ -254,6 +254,27 @@ func TestValidate_ScenarioEdgeCases(t *testing.T) {
 		assert.Equal(t, "scenarios.s1.ramp_down", valErr.Field)
 	})
 
+	t.Run("negative drain", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					Drain:     -1 * time.Second,
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.drain", valErr.Field)
+	})
+
+
 	t.Run("empty param key", func(t *testing.T) {
 		cfg := &config.Config{
 			Version: "1.0",
