@@ -25,6 +25,7 @@ func BenchmarkEngine_ConstantVUs_NoopIteration(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		logger, metrics := newTestDeps()
 		exec := engine.NewExecutor("bench_constant_vus", scenario, cfg, logger, metrics)
@@ -47,6 +48,7 @@ func BenchmarkEngine_ConstantVUs_NoopIteration_NoTimeout(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		logger, metrics := newTestDeps()
 		exec := engine.NewExecutor("bench_constant_vus_notimeout", scenario, cfg, logger, metrics)
@@ -70,6 +72,7 @@ func BenchmarkEngine_ArrivalRate_NoopIteration(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		logger, metrics := newTestDeps()
 		exec := engine.NewExecutor("bench_arrival_rate", scenario, cfg, logger, metrics)
@@ -94,6 +97,7 @@ func BenchmarkEngine_RampingVUs_NoopIteration(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		logger, metrics := newTestDeps()
 		exec := engine.NewExecutor("bench_ramping_vus", scenario, cfg, logger, metrics)
@@ -114,6 +118,46 @@ func BenchmarkScenarioContext_Check(b *testing.B) {
 	}
 }
 
+func BenchmarkScenarioContext_Check_Passing(b *testing.B) {
+	metrics := metric.NewStore()
+	sCtx := engine.NewScenarioContext(context.Background(), 1, 0, config.ScenarioConfig{}, "test", nil, nil, metrics)
+
+	checkFn := func() string { return "" }
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		sCtx.Check("status_is_200", checkFn)
+	}
+}
+
+func BenchmarkScenarioContext_Check_Failing(b *testing.B) {
+	metrics := metric.NewStore()
+	sCtx := engine.NewScenarioContext(context.Background(), 1, 0, config.ScenarioConfig{}, "test", nil, nil, metrics)
+
+	checkFn := func() string { return "status is not 200" }
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		sCtx.Check("status_is_200", checkFn)
+	}
+}
+
+func BenchmarkScenarioContext_Check_Parallel(b *testing.B) {
+	metrics := metric.NewStore()
+	checkFn := func() string { return "" }
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		sCtx := engine.NewScenarioContext(context.Background(), 1, 0, config.ScenarioConfig{}, "test", nil, nil, metrics)
+		for pb.Next() {
+			sCtx.Check("status_is_200", checkFn)
+		}
+	})
+}
+
 func BenchmarkScenarioContext_ParamAccess(b *testing.B) {
 	cfg := config.ScenarioConfig{
 		Params: map[string]string{
@@ -131,4 +175,25 @@ func BenchmarkScenarioContext_ParamAccess(b *testing.B) {
 		_ = sCtx.ParamInt("retries", 1)
 		_ = sCtx.ParamDuration("timeout", time.Second)
 	}
+}
+
+func BenchmarkScenarioContext_ParamAccess_Parallel(b *testing.B) {
+	cfg := config.ScenarioConfig{
+		Params: map[string]string{
+			"url":     "http://localhost:8080",
+			"retries": "3",
+			"timeout": "500ms",
+		},
+	}
+	sCtx := engine.NewScenarioContext(context.Background(), 1, 0, cfg, "test", nil, nil, nil)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			_ = sCtx.Param("url")
+			_ = sCtx.ParamInt("retries", 1)
+			_ = sCtx.ParamDuration("timeout", time.Second)
+		}
+	})
 }

@@ -95,7 +95,8 @@ The approved technology stack is strictly locked:
 #### 2. Monorepo Build System (`Makefile`)
 - All Makefile targets must be explicitly declared `.PHONY`.
 - Versioning is injected at compile time via `ldflags` reading `VERSION.vuhive` and Git metadata into package variables in `internal/version/`.
-- Required targets: `test`, `test-integration`, `test-bench`, `test-race`, `test-examples`, `lint`, `generate`, and `help`.
+- Required targets: `test`, `test-integration`, `test-bench`, `test-perf`, `verify-performance`, `test-race`, `test-examples`, `lint`, `generate`, and `help`.
+- For the performance verification matrix, zero-allocation budgets, and profiling procedures, refer to [BENCHMARKS.md](BENCHMARKS.md).
 
 #### 3. Structured Logging Strategy (`zerolog`)
 - Use `github.com/rs/zerolog` for JSON structured logging.

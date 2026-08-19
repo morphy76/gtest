@@ -35,6 +35,16 @@ test-race:
 test-bench:
 	go test -count=1 -bench=. -benchmem -run=^$$ ./...
 
+## test-perf: Run performance verification suite, zero-allocation checks, and hot-path benchmarks
+.PHONY: test-perf
+test-perf:
+	go test -count=1 -run=TestAlloc_ ./...
+	go test -count=1 -bench='Benchmark(ScenarioContext_Check|ScenarioContext_ParamAccess|Collector_|Strategy|PublicVUContext|Suite_RunVU)' -benchmem -run=^$$ ./...
+
+## verify-performance: Run full performance verification suite (alias for test-perf)
+.PHONY: verify-performance
+verify-performance: test-perf
+
 ## lint: Run static analysis
 .PHONY: lint
 lint:

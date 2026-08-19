@@ -290,6 +290,7 @@ func BenchmarkStrategyRandom(b *testing.B) {
 	ds := data.NewDataSet(records, data.Random)
 
 	b.ResetTimer()
+	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := mockContext{vuid: 1, iteration: 1}
 		for pb.Next() {
@@ -306,6 +307,7 @@ func BenchmarkStrategySequential(b *testing.B) {
 	ds := data.NewDataSet(records, data.Sequential)
 
 	b.ResetTimer()
+	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := mockContext{vuid: 1, iteration: 1}
 		for pb.Next() {
@@ -313,5 +315,41 @@ func BenchmarkStrategySequential(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkStrategyUniquePerVU(b *testing.B) {
+	records := make([]data.Record, 100)
+	for i := range 100 {
+		records[i] = data.Record{"id": fmt.Sprintf("%d", i)}
+	}
+	ds := data.NewDataSet(records, data.UniquePerVU)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		ctx := mockContext{vuid: 1, iteration: 1}
+		for pb.Next() {
+			_, _ = ds.Next(ctx)
+		}
+	})
+}
+
+func BenchmarkStrategySharedQueue(b *testing.B) {
+	const n = 10_000_000
+	records := make([]data.Record, n)
+	for i := range n {
+		records[i] = data.Record{"id": "item"}
+	}
+	ds := data.NewDataSet(records, data.SharedQueue)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		ctx := mockContext{vuid: 1, iteration: 1}
+		for pb.Next() {
+			_, _ = ds.Next(ctx)
+		}
+	})
+}
+
 
 

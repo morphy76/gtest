@@ -502,13 +502,17 @@ The framework is optimized to ensure maximum load generation throughput with zer
 - **100% Lock-Free** metric queries leveraging copy-on-write atomic pointer maps and 16-stripe sharded HDR Histograms.
 - **Sub-10ns Inline Checks**: `ctx.Check()` evaluates in ~6.4ns with cached metric handles and zero allocations.
 
-Run the microbenchmark suite:
+Run the microbenchmark and performance verification suite:
 
 ```bash
+# Run in-tree microbenchmarks:
 make test-bench
+
+# Run deterministic zero-allocation regression checks and hot-path benchmarks:
+make test-perf
 ```
 
-For complete architectural details, Go runtime tuning (`GOMEMLIMIT`, `GOGC`, `GOMAXPROCS`), and memory allocation budgets, see the [Developer Guide](docs/GUIDE.md#14-performance--framework-overhead-optimization).
+For complete architectural details, performance verification targets, `pprof` profiling guides, Go runtime tuning (`GOMEMLIMIT`, `GOGC`, `GOMAXPROCS`), and multi-engine comparisons, see the [Performance & Verification Suite Guide](docs/BENCHMARKS.md).
 
 ---
 

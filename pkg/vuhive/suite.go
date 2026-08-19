@@ -199,28 +199,44 @@ func (m *publicMetricsAdapter) Rate(name string, tags Tags) Rate {
 	return m.collector.Rate(name, metric.Tags(tags))
 }
 
+var vuContextAdapterPool = sync.Pool{
+	New: func() any {
+		return &publicVUContextAdapter{}
+	},
+}
+
 type publicSetupContextAdapter struct {
 	engine.SetupContext
+	loggerAdapter  publicLoggerAdapter
+	metricsAdapter publicMetricsAdapter
 }
 
 func (a *publicSetupContextAdapter) Log() Logger {
-	return &publicLoggerAdapter{logger: a.SetupContext.Log()}
+	return &a.loggerAdapter
 }
 
 func (a *publicSetupContextAdapter) Metrics() MetricsCollector {
-	return &publicMetricsAdapter{collector: a.SetupContext.Metrics()}
+	return &a.metricsAdapter
 }
 
 type publicVUContextAdapter struct {
 	engine.VUContext
+	loggerAdapter  publicLoggerAdapter
+	metricsAdapter publicMetricsAdapter
+}
+
+func (a *publicVUContextAdapter) init(ctx engine.VUContext) {
+	a.VUContext = ctx
+	a.loggerAdapter.logger = ctx.Log()
+	a.metricsAdapter.collector = ctx.Metrics()
 }
 
 func (a *publicVUContextAdapter) Log() Logger {
-	return &publicLoggerAdapter{logger: a.VUContext.Log()}
+	return &a.loggerAdapter
 }
 
 func (a *publicVUContextAdapter) Metrics() MetricsCollector {
-	return &publicMetricsAdapter{collector: a.VUContext.Metrics()}
+	return &a.metricsAdapter
 }
 
 func (a *publicVUContextAdapter) Check(name string, fn CheckFunc) bool {
@@ -232,26 +248,30 @@ func (a *publicVUContextAdapter) Check(name string, fn CheckFunc) bool {
 
 type publicTeardownContextAdapter struct {
 	engine.TeardownContext
+	loggerAdapter  publicLoggerAdapter
+	metricsAdapter publicMetricsAdapter
 }
 
 func (a *publicTeardownContextAdapter) Log() Logger {
-	return &publicLoggerAdapter{logger: a.TeardownContext.Log()}
+	return &a.loggerAdapter
 }
 
 func (a *publicTeardownContextAdapter) Metrics() MetricsCollector {
-	return &publicMetricsAdapter{collector: a.TeardownContext.Metrics()}
+	return &a.metricsAdapter
 }
 
 type publicSummaryContextAdapter struct {
 	engine.SummaryContext
+	loggerAdapter  publicLoggerAdapter
+	metricsAdapter publicMetricsAdapter
 }
 
 func (a *publicSummaryContextAdapter) Log() Logger {
-	return &publicLoggerAdapter{logger: a.SummaryContext.Log()}
+	return &a.loggerAdapter
 }
 
 func (a *publicSummaryContextAdapter) Metrics() MetricsCollector {
-	return &publicMetricsAdapter{collector: a.SummaryContext.Metrics()}
+	return &a.metricsAdapter
 }
 
 type runnerSuiteAdapter struct {
@@ -271,42 +291,69 @@ func (a *runnerSuiteAdapter) GetScenario(name string) (engine.Scenario, bool) {
 	var setup engine.SetupHook
 	if sc.Setup != nil {
 		setup = func(ctx engine.SetupContext) (map[string]any, error) {
-			return sc.Setup(&publicSetupContextAdapter{SetupContext: ctx})
+			adapter := &publicSetupContextAdapter{
+				SetupContext:   ctx,
+				loggerAdapter:  publicLoggerAdapter{logger: ctx.Log()},
+				metricsAdapter: publicMetricsAdapter{collector: ctx.Metrics()},
+			}
+			return sc.Setup(adapter)
 		}
 	}
 
 	var preTest engine.PreTestHook
 	if sc.PreTest != nil {
 		preTest = func(ctx engine.VUContext) error {
-			return sc.PreTest(&publicVUContextAdapter{VUContext: ctx})
+			adapter := vuContextAdapterPool.Get().(*publicVUContextAdapter)
+			adapter.init(ctx)
+			err := sc.PreTest(adapter)
+			vuContextAdapterPool.Put(adapter)
+			return err
 		}
 	}
 
 	var runVU engine.VURunnerHook
 	if sc.RunVU != nil {
 		runVU = func(ctx engine.VUContext) error {
-			return sc.RunVU(&publicVUContextAdapter{VUContext: ctx})
+			adapter := vuContextAdapterPool.Get().(*publicVUContextAdapter)
+			adapter.init(ctx)
+			err := sc.RunVU(adapter)
+			vuContextAdapterPool.Put(adapter)
+			return err
 		}
 	}
 
 	var afterTest engine.AfterTestHook
 	if sc.AfterTest != nil {
 		afterTest = func(ctx engine.VUContext) error {
-			return sc.AfterTest(&publicVUContextAdapter{VUContext: ctx})
+			adapter := vuContextAdapterPool.Get().(*publicVUContextAdapter)
+			adapter.init(ctx)
+			err := sc.AfterTest(adapter)
+			vuContextAdapterPool.Put(adapter)
+			return err
 		}
 	}
 
 	var teardown engine.TeardownHook
 	if sc.Teardown != nil {
 		teardown = func(ctx engine.TeardownContext, state map[string]any) error {
-			return sc.Teardown(&publicTeardownContextAdapter{TeardownContext: ctx}, state)
+			adapter := &publicTeardownContextAdapter{
+				TeardownContext: ctx,
+				loggerAdapter:   publicLoggerAdapter{logger: ctx.Log()},
+				metricsAdapter:  publicMetricsAdapter{collector: ctx.Metrics()},
+			}
+			return sc.Teardown(adapter, state)
 		}
 	}
 
 	var handleSummary engine.SummaryHook
 	if sc.HandleSummary != nil {
 		handleSummary = func(ctx engine.SummaryContext, summary report.SummaryData) error {
-			return sc.HandleSummary(&publicSummaryContextAdapter{SummaryContext: ctx}, convertReportSummaryToPublic(summary))
+			adapter := &publicSummaryContextAdapter{
+				SummaryContext: ctx,
+				loggerAdapter:  publicLoggerAdapter{logger: ctx.Log()},
+				metricsAdapter: publicMetricsAdapter{collector: ctx.Metrics()},
+			}
+			return sc.HandleSummary(adapter, convertReportSummaryToPublic(summary))
 		}
 	}
 
