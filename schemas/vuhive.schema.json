@@ -146,11 +146,22 @@
         "metric": {
           "type": "string",
           "minLength": 1,
-          "description": "Exact metric identifier as recorded during test execution (e.g. 'http_req_duration', 'vuhive.vu.iterations_failed').",
+          "description": "Exact metric identifier as recorded during test execution (e.g. 'vuhive.http.req_duration', 'vuhive.kafka.pub_duration', 'vuhive.vu.iterations_failed').",
           "examples": [
-            "http_req_duration",
-            "api_success_rate",
-            "vuhive.pacing.dropped_iterations"
+            "vuhive.http.req_duration",
+            "vuhive.http.reqs",
+            "vuhive.http.req_failed",
+            "vuhive.kafka.pub_duration",
+            "vuhive.kafka.pub_total",
+            "vuhive.kafka.pub_failed",
+            "vuhive.kafka.sub_duration",
+            "vuhive.kafka.sub_total",
+            "vuhive.kafka.sub_failed",
+            "vuhive.vu.iteration_duration",
+            "vuhive.vu.iterations_failed",
+            "vuhive.pacing.dropped_iterations",
+            "vuhive.checks.passed",
+            "vuhive.checks.failed"
           ]
         },
         "stat": {
