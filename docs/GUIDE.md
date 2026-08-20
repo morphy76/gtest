@@ -329,6 +329,8 @@ To adhere strictly to the **Interface Segregation Principle (ISP)** and prevent 
 | `Metrics()` | `ObservabilityProvider` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
 | `Sleep(d ...time.Duration)` | `WorkflowController` | `error` | Pause for explicit duration or scenario `interaction_delay` strategy (respects `ctx.Done()`) |
 | `Check(name, fn)` | `WorkflowController` | `bool` | Evaluate inline pass/fail assertion (`CheckFunc`) without stopping VU iteration |
+| `Group(name, fn)` | `WorkflowController` | `error` | Execute `fn` within a named transaction boundary with automatic latency measurement |
+
 
 ### Interface Segregation & Modular Helpers
 
@@ -491,12 +493,75 @@ All built-in metrics are exported as typed constants in `pkg/vuhive` (e.g. `vuhi
 | `vuhive.MetricKafkaSubTotal` | `vuhive.kafka.sub_total` | Counter | Total Kafka messages consumed |
 | `vuhive.MetricKafkaSubBytes` | `vuhive.kafka.sub_bytes` | Counter | Total Kafka payload bytes consumed |
 | `vuhive.MetricKafkaSubFailed` | `vuhive.kafka.sub_failed` | Rate | Failed Kafka consume attempts ratio |
+| `vuhive.MetricGroupPrefix` | `vuhive.group.<path>.duration` | Duration | Per-step transaction group latency (nested with `::`) |
 
 > **In-Flight Iterations on Shutdown:** `vuhive.vu.iterations_timeout` tracks only genuine per-iteration timeouts where `RunVU` exceeded `vu_timeout` during active execution. In-flight iterations that are interrupted when the overall scenario completes (`run_period` / `ramp_down` expiration or early abort) are cleanly cancelled and discarded without being counted as timeouts or failures.
+
+### Transaction Boundaries (Groups)
+
+When testing multi-step workflows (e.g. login, catalog search, checkout, payment), measuring overall iteration duration alone does not pinpoint which individual step degraded under load.
+
+`ctx.Group(name, fn)` wraps an operation inside a named transaction boundary with automatic latency recording:
+
+```go
+suite.RegisterScenario("user_journey", vuhive.Scenario{
+    RunVU: func(ctx vuhive.VUContext) error {
+        // Step 1: Login
+        err := ctx.Group("01_Login", func(ctx vuhive.VUContext) error {
+            return performLogin(ctx)
+        })
+        if err != nil {
+            return err
+        }
+
+        _ = ctx.Sleep() // Think time between steps
+
+        // Step 2: Browse
+        err = ctx.Group("02_Browse", func(ctx vuhive.VUContext) error {
+            return browseCatalog(ctx)
+        })
+        if err != nil {
+            return err
+        }
+
+        // Step 3: Checkout with nested sub-steps
+        return ctx.Group("03_Checkout", func(ctx vuhive.VUContext) error {
+            if err := ctx.Group("Cart", func(ctx vuhive.VUContext) error {
+                return addToCart(ctx)
+            }); err != nil {
+                return err
+            }
+
+            return ctx.Group("Payment", func(ctx vuhive.VUContext) error {
+                return submitPayment(ctx)
+            })
+        })
+    },
+})
+```
+
+#### Key Characteristics
+
+1. **Metric Naming**: Generates HDR duration histograms named `vuhive.group.<path>.duration`. Nested groups concatenate paths using `::` (e.g. `vuhive.group.03_Checkout::Payment.duration`).
+2. **Error & Panic Resilience**: If `fn` returns an error or panics, the duration up to that point is observed and recorded before propagating the error or recovering the panic.
+3. **Dedicated Reporting**: Console summary outputs a `GROUPS` table with counts, min, mean, p95, p99, and max latencies. JSON reports include a structured `groups` array.
+4. **SLA Thresholds**: Set latency SLA quality gates per transaction step directly in `vuhive.yaml`:
+   ```yaml
+   thresholds:
+     - metric: "vuhive.group.01_Login.duration"
+       stat: p95
+       operator: "<"
+       target: "200ms"
+     - metric: "vuhive.group.03_Checkout::Payment.duration"
+       stat: p95
+       operator: "<"
+       target: "300ms"
+   ```
 
 ---
 
 ## 8. SLA Thresholds (Quality Gates)
+
 
 Thresholds are declarative pass/fail assertions evaluated after the test run.
 

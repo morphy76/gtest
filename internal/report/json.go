@@ -43,6 +43,18 @@ type jsonCheckEntry struct {
 	PassPct float64 `json:"pass_pct"`
 }
 
+type jsonGroupEntry struct {
+	Name   string `json:"name"`
+	Count  int64  `json:"count"`
+	MinMS  int64  `json:"min_ms"`
+	MeanMS int64  `json:"mean_ms"`
+	P50MS  int64  `json:"p50_ms"`
+	P90MS  int64  `json:"p90_ms"`
+	P95MS  int64  `json:"p95_ms"`
+	P99MS  int64  `json:"p99_ms"`
+	MaxMS  int64  `json:"max_ms"`
+}
+
 type jsonReportDocument struct {
 	SuiteName   string                `json:"suite_name"`
 	Scenario    string                `json:"scenario"`
@@ -53,6 +65,7 @@ type jsonReportDocument struct {
 	Config      config.ScenarioConfig `json:"config"`
 	Metrics     []jsonMetricEntry     `json:"metrics"`
 	Checks      []jsonCheckEntry      `json:"checks,omitempty"`
+	Groups      []jsonGroupEntry      `json:"groups,omitempty"`
 	Thresholds  []jsonThresholdEntry  `json:"thresholds"`
 	Passed      bool                  `json:"passed"`
 	Aborted     bool                  `json:"aborted"`
@@ -74,6 +87,23 @@ func GenerateJSONReport(w io.Writer, data ReportData) error {
 		}
 	}
 
+	var groups []jsonGroupEntry
+	if data.Metrics != nil {
+		for _, grp := range data.Metrics.GroupSummaries() {
+			groups = append(groups, jsonGroupEntry{
+				Name:   grp.Name,
+				Count:  grp.Count,
+				MinMS:  grp.Min.Milliseconds(),
+				MeanMS: grp.Mean.Milliseconds(),
+				P50MS:  grp.P50.Milliseconds(),
+				P90MS:  grp.P90.Milliseconds(),
+				P95MS:  grp.P95.Milliseconds(),
+				P99MS:  grp.P99.Milliseconds(),
+				MaxMS:  grp.Max.Milliseconds(),
+			})
+		}
+	}
+
 	doc := jsonReportDocument{
 		SuiteName:   sOrDefault(data.SuiteName, "vuhive"),
 		Scenario:    data.Scenario,
@@ -83,10 +113,12 @@ func GenerateJSONReport(w io.Writer, data ReportData) error {
 		EndedAt:     data.EndedAt.UTC(),
 		Config:      data.Config,
 		Checks:      checks,
+		Groups:      groups,
 		Passed:      data.Passed,
 		Aborted:     data.Aborted,
 		AbortReason: data.AbortReason,
 	}
+
 
 	// Format threshold entries
 	for _, th := range data.Thresholds {

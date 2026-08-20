@@ -56,6 +56,13 @@ func (m *mockScenarioContext) Check(name string, fn vuhive.CheckFunc) bool {
 	}
 	return false
 }
+func (m *mockScenarioContext) Group(name string, fn func(ctx vuhive.VUContext) error) error {
+	if fn != nil {
+		return fn(m)
+	}
+	return nil
+}
+
 
 
 type noopLogger struct{}

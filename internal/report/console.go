@@ -17,6 +17,7 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 	writeHeader(&sb, data)
 	writeBuiltInMetrics(&sb, data)
 	writeChecks(&sb, data)
+	writeGroups(&sb, data)
 	writeCustomMetrics(&sb, data)
 	writeSLAResults(&sb, data)
 	writeVerdict(&sb, data)
@@ -24,6 +25,7 @@ func GenerateConsoleReport(w io.Writer, data ReportData) error {
 	_, err := w.Write([]byte(sb.String()))
 	return err
 }
+
 
 func writeHeader(sb *strings.Builder, data ReportData) {
 	sb.WriteString("================================================================================\n")
@@ -109,6 +111,27 @@ func writeChecks(sb *strings.Builder, data ReportData) {
 	}
 	sb.WriteString("\n")
 }
+
+func writeGroups(sb *strings.Builder, data ReportData) {
+	if data.Metrics == nil {
+		return
+	}
+	groups := data.Metrics.GroupSummaries()
+	if len(groups) == 0 {
+		return
+	}
+
+	sb.WriteString("GROUPS\n")
+	sb.WriteString("────────────────────────────────────────────────────────────────\n")
+	fmt.Fprintf(sb, "%-30s %-10s %-8s %-7s %-7s %-7s %-7s %-7s\n",
+		"Group Name", "Type", "Count", "Min", "Mean", "p95", "p99", "Max")
+	for _, grp := range groups {
+		fmt.Fprintf(sb, "%-30s %-10s %-8d %-7v %-7v %-7v %-7v %-7v\n",
+			grp.Name, "Duration", grp.Count, grp.Min, grp.Mean, grp.P95, grp.P99, grp.Max)
+	}
+	sb.WriteString("\n")
+}
+
 
 type customMetricEntry struct {
 	name string

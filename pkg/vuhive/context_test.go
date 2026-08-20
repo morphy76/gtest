@@ -87,7 +87,15 @@ func (m *mockWorkflow) Check(name string, fn vuhive.CheckFunc) bool {
 	return false
 }
 
+func (m *mockWorkflow) Group(name string, fn func(ctx vuhive.VUContext) error) error {
+	if fn != nil {
+		return fn(nil)
+	}
+	return nil
+}
+
 func TestInterfaceSegregation_ExecutionIdentity(t *testing.T) {
+
 	var identity vuhive.ExecutionIdentity = mockIdentity{}
 	assert.Equal(t, int64(42), identity.VUID())
 	assert.Equal(t, int64(7), identity.Iteration())

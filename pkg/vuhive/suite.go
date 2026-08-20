@@ -201,7 +201,9 @@ func (m *publicMetricsAdapter) Rate(name string, tags Tags) Rate {
 
 var vuContextAdapterPool = sync.Pool{
 	New: func() any {
-		return &publicVUContextAdapter{}
+		a := &publicVUContextAdapter{}
+		a.groupCallback = a.invokeGroup
+		return a
 	},
 }
 
@@ -223,6 +225,9 @@ type publicVUContextAdapter struct {
 	engine.VUContext
 	loggerAdapter  publicLoggerAdapter
 	metricsAdapter publicMetricsAdapter
+	groupCallback  func(engCtx engine.VUContext) error
+	groupFn        func(ctx VUContext) error
+	childAdapter   *publicVUContextAdapter
 }
 
 func (a *publicVUContextAdapter) init(ctx engine.VUContext) {
@@ -245,6 +250,28 @@ func (a *publicVUContextAdapter) Check(name string, fn CheckFunc) bool {
 	}
 	return a.VUContext.Check(name, engine.CheckFunc(fn))
 }
+
+func (a *publicVUContextAdapter) invokeGroup(engCtx engine.VUContext) error {
+	if a.childAdapter == nil {
+		a.childAdapter = &publicVUContextAdapter{}
+		a.childAdapter.groupCallback = a.childAdapter.invokeGroup
+	}
+	a.childAdapter.init(engCtx)
+	return a.groupFn(a.childAdapter)
+}
+
+func (a *publicVUContextAdapter) Group(name string, fn func(ctx VUContext) error) error {
+	if fn == nil {
+		return a.VUContext.Group(name, nil)
+	}
+	oldFn := a.groupFn
+	a.groupFn = fn
+	err := a.VUContext.Group(name, a.groupCallback)
+	a.groupFn = oldFn
+	return err
+}
+
+
 
 type publicTeardownContextAdapter struct {
 	engine.TeardownContext
@@ -410,6 +437,21 @@ func convertReportSummaryToPublic(s report.SummaryData) SummaryData {
 		}
 	}
 
+	groups := make([]GroupSummary, len(s.Groups))
+	for i, g := range s.Groups {
+		groups[i] = GroupSummary{
+			Name:  g.Name,
+			Count: g.Count,
+			Min:   g.Min,
+			Mean:  g.Mean,
+			P50:   g.P50,
+			P90:   g.P90,
+			P95:   g.P95,
+			P99:   g.P99,
+			Max:   g.Max,
+		}
+	}
+
 	return SummaryData{
 		SuiteName:   s.SuiteName,
 		Scenario:    s.Scenario,
@@ -421,12 +463,14 @@ func convertReportSummaryToPublic(s report.SummaryData) SummaryData {
 		Config:      s.Config,
 		Metrics:     metrics,
 		Checks:      checks,
+		Groups:      groups,
 		Thresholds:  thresholds,
 		Passed:      s.Passed,
 		Aborted:     s.Aborted,
 		AbortReason: s.AbortReason,
 	}
 }
+
 
 func translateError(err error) error {
 	if err == nil {

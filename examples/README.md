@@ -32,13 +32,14 @@ make test-examples
 We recommend exploring the examples in the following progression:
 
 ### Level 1: Fundamentals
-Start here to understand test suite registration, lifecycle hooks, and basic assertion workflows.
+Start here to understand test suite registration, lifecycle hooks, transaction boundaries, and basic assertion workflows.
 
 | Example Directory | Pacing Engine | What You Will Learn |
 |---|---|---|
 | [`http_checkout/`](http_checkout/) | `constant_vus` | **Getting Started**: Initializing HTTP clients in `SetupContext`, passing state via `GlobalState`, reading scenario parameters with `ctx.Param()`, and recording HDR duration histograms and success rates. |
 | [`http_module/`](http_module/) | `constant_vus` | **Instrumented HTTP Client**: Using `pkg/vuhive/http` for zero-boilerplate HTTP testing with auto-recorded latency, counter, and rate metrics, plus JSON decoding. |
 | [`checks/`](checks/) | `constant_vus` | **Inline Assertions**: Validating HTTP status codes, headers, and JSON body fields with `ctx.Check()` without prematurely stopping VU iterations. Auto-instrumented check counters and report tables. |
+| [`groups/`](groups/) | `constant_vus` | **Transaction Boundaries (Groups)**: Organizing multi-step user journeys with `ctx.Group()` and nested sub-groups. Auto-recorded per-step latencies (`vuhive.group.<path>.duration`), dedicated `GROUPS` report tables, and per-step SLA thresholds. |
 
 ---
 
@@ -68,25 +69,26 @@ Master production-grade quality gates, custom summary export, real-time streamin
 
 ## Feature Matrix
 
-| Capability / API | `http_checkout` | `http_module` | `checks` | `think_time` | `data_parameterization` | `ramping_vus` | `sla_thresholds` | `handle_summary` | `conversation_flow` | `grpc_user_service` | `kafka` |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Pacing: `constant_vus`** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: |
-| **Pacing: `ramping_vus`** | | | | | | :white_check_mark: | | | | | |
-| **Pacing: `arrival_rate`** | | | | | | | | | | :white_check_mark: | |
-| **Hook: `SetupContext`** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| **Hook: `PreTest` / `AfterTest`** | :white_check_mark: | | | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | |
-| **Hook: `TeardownContext`** | :white_check_mark: | :white_check_mark: | | | | | | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| **Hook: `HandleSummary`** | | | | | | | :white_check_mark: | :white_check_mark: | | | |
-| **Inline Checks (`ctx.Check`)** | | :white_check_mark: | :white_check_mark: | | :white_check_mark: | | :white_check_mark: | | | | :white_check_mark: |
-| **Thinking Time (`ctx.Sleep`)** | | | | :white_check_mark: | | | | | :white_check_mark: | | |
-| **Data Feeds (`pkg/vuhive/data`)** | | | | | :white_check_mark: | | | | :white_check_mark: | | |
-| **Built-in HTTP (`pkg/vuhive/http`)** | | :white_check_mark: | | | | | | | | | |
-| **Built-in Kafka (`pkg/vuhive/kafka`)** | | | | | | | | | | | :white_check_mark: |
-| **HDR Duration Histograms** | :white_check_mark: | :white_check_mark: | | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| **Counters, Rates, Gauges** | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| **SLA Quality Gates** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| **Early Stop (`abort_on_fail`)** | | | | | | | :white_check_mark: | | | | |
-| **Streaming / Protocol DSL** | | | | | | | | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Capability / API | `http_checkout` | `http_module` | `checks` | `groups` | `think_time` | `data_parameterization` | `ramping_vus` | `sla_thresholds` | `handle_summary` | `conversation_flow` | `grpc_user_service` | `kafka` |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Pacing: `constant_vus`** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: |
+| **Pacing: `ramping_vus`** | | | | | | | :white_check_mark: | | | | | |
+| **Pacing: `arrival_rate`** | | | | | | | | | | | :white_check_mark: | |
+| **Hook: `SetupContext`** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| **Hook: `PreTest` / `AfterTest`** | :white_check_mark: | | | | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | |
+| **Hook: `TeardownContext`** | :white_check_mark: | :white_check_mark: | | | | | | | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| **Hook: `HandleSummary`** | | | | | | | | :white_check_mark: | :white_check_mark: | | | |
+| **Inline Checks (`ctx.Check`)** | | :white_check_mark: | :white_check_mark: | :white_check_mark: | | :white_check_mark: | | :white_check_mark: | | | | :white_check_mark: |
+| **Transaction Groups (`ctx.Group`)** | | | | :white_check_mark: | | | | | | | | |
+| **Thinking Time (`ctx.Sleep`)** | | | | :white_check_mark: | :white_check_mark: | | | | | :white_check_mark: | | |
+| **Data Feeds (`pkg/vuhive/data`)** | | | | | | :white_check_mark: | | | | :white_check_mark: | | |
+| **Built-in HTTP (`pkg/vuhive/http`)** | | :white_check_mark: | | | | | | | | | | |
+| **Built-in Kafka (`pkg/vuhive/kafka`)** | | | | | | | | | | | | :white_check_mark: |
+| **HDR Duration Histograms** | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| **Counters, Rates, Gauges** | :white_check_mark: | :white_check_mark: | | | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| **SLA Quality Gates** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| **Early Stop (`abort_on_fail`)** | | | | | | | | :white_check_mark: | | | | |
+| **Streaming / Protocol DSL** | | | | | | | | | | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 
 ---
 
@@ -95,6 +97,7 @@ Master production-grade quality gates, custom summary export, real-time streamin
 - [`examples/http_checkout/`](http_checkout/) — [Documentation](http_checkout/README.md) | [Source Code](http_checkout/main.go) | [Config](http_checkout/vuhive.yaml)
 - [`examples/http_module/`](http_module/) — [Documentation](http_module/README.md) | [Source Code](http_module/main.go) | [Config](http_module/vuhive.yaml)
 - [`examples/checks/`](checks/) — [Documentation](checks/README.md) | [Source Code](checks/main.go) | [Config](checks/vuhive.yaml)
+- [`examples/groups/`](groups/) — [Documentation](groups/README.md) | [Source Code](groups/main.go) | [Config](groups/vuhive.yaml)
 - [`examples/think_time/`](think_time/) — [Documentation](think_time/README.md) | [Source Code](think_time/main.go) | [Config](think_time/vuhive.yaml)
 - [`examples/data_parameterization/`](data_parameterization/) — [Documentation](data_parameterization/README.md) | [Source Code](data_parameterization/main.go) | [Config](data_parameterization/vuhive.yaml)
 - [`examples/ramping_vus/`](ramping_vus/) — [Documentation](ramping_vus/README.md) | [Source Code](ramping_vus/main.go) | [Config](ramping_vus/vuhive.yaml)
@@ -103,3 +106,4 @@ Master production-grade quality gates, custom summary export, real-time streamin
 - [`examples/conversation_flow/`](conversation_flow/) — [Documentation](conversation_flow/README.md) | [Source Code](conversation_flow/scenario.go) | [Config](conversation_flow/vuhive.yaml)
 - [`examples/grpc_user_service/`](grpc_user_service/) — [Documentation](grpc_user_service/README.md) | [Source Code](grpc_user_service/main.go) | [Config](grpc_user_service/vuhive.yaml)
 - [`examples/kafka/`](kafka/) — [Documentation](kafka/README.md) | [Source Code](kafka/main.go) | [Config](kafka/vuhive.yaml)
+
