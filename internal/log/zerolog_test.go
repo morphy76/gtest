@@ -140,9 +140,9 @@ func TestErrorLogLevel(t *testing.T) {
 	assert.Equal(t, "failed to process", result["message"])
 }
 
-func TestConcurrentLogging(t *testing.T) {
+func TestConcurrentLogging_Async(t *testing.T) {
 	var buf bytes.Buffer
-	logger := log.New(&buf, zerolog.DebugLevel)
+	logger := log.NewAsync(&buf, zerolog.DebugLevel)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
@@ -153,12 +153,13 @@ func TestConcurrentLogging(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	require.NoError(t, logger.Close())
 	assert.NotEmpty(t, buf.String())
 }
 
-func TestConcurrentLoggingWithFormat_Pretty(t *testing.T) {
+func TestConcurrentLogging_AsyncWithFormat_Pretty(t *testing.T) {
 	var buf bytes.Buffer
-	logger := log.NewWithFormat(&buf, zerolog.DebugLevel, "pretty")
+	logger := log.NewAsyncWithFormat(&buf, zerolog.DebugLevel, "pretty")
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
@@ -169,5 +170,6 @@ func TestConcurrentLoggingWithFormat_Pretty(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	require.NoError(t, logger.Close())
 	assert.NotEmpty(t, buf.String())
 }

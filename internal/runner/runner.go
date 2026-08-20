@@ -42,7 +42,9 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 	if parseErr != nil {
 		logLevel = zerolog.InfoLevel
 	}
-	logger := log.NewWithFormat(stdout, logLevel, resolved.Flags.LogFormat)
+	// Setup logger with lock-free non-blocking asynchronous diode buffer
+	logger := log.NewAsyncWithFormat(stdout, logLevel, resolved.Flags.LogFormat)
+	defer func() { _ = logger.Close() }()
 	metricsStore := metric.NewStore()
 	preRegisterThresholdMetrics(metricsStore, resolved.ScenarioCfg.Thresholds)
 
@@ -51,6 +53,7 @@ func RunSuite(s ScenarioRegistry, args []string, stdout io.Writer) Result {
 
 	execErr := executor.Execute(context.Background())
 	endedAt := time.Now()
+	_ = logger.Close()
 
 	if execErr != nil {
 		var setupErr *engine.SetupError
