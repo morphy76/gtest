@@ -483,6 +483,14 @@ All built-in metrics are exported as typed constants in `pkg/vuhive` (e.g. `vuhi
 | `vuhive.MetricHTTPReqTLSHandshaking` | `vuhive.http.req_tls_handshaking` | Duration | TLS handshake time *(opt-in)* |
 | `vuhive.MetricHTTPReqSending` | `vuhive.http.req_sending` | Duration | HTTP request write time *(opt-in)* |
 | `vuhive.MetricHTTPReqReceiving` | `vuhive.http.req_receiving` | Duration | HTTP response read time *(opt-in)* |
+| `vuhive.MetricKafkaPubDuration` | `vuhive.kafka.pub_duration` | Duration | Kafka publish round-trip latency |
+| `vuhive.MetricKafkaPubTotal` | `vuhive.kafka.pub_total` | Counter | Total Kafka messages published |
+| `vuhive.MetricKafkaPubBytes` | `vuhive.kafka.pub_bytes` | Counter | Total Kafka payload bytes published |
+| `vuhive.MetricKafkaPubFailed` | `vuhive.kafka.pub_failed` | Rate | Failed Kafka publish attempts ratio |
+| `vuhive.MetricKafkaSubDuration` | `vuhive.kafka.sub_duration` | Duration | Kafka message fetch/wait duration |
+| `vuhive.MetricKafkaSubTotal` | `vuhive.kafka.sub_total` | Counter | Total Kafka messages consumed |
+| `vuhive.MetricKafkaSubBytes` | `vuhive.kafka.sub_bytes` | Counter | Total Kafka payload bytes consumed |
+| `vuhive.MetricKafkaSubFailed` | `vuhive.kafka.sub_failed` | Rate | Failed Kafka consume attempts ratio |
 
 > **In-Flight Iterations on Shutdown:** `vuhive.vu.iterations_timeout` tracks only genuine per-iteration timeouts where `RunVU` exceeded `vu_timeout` during active execution. In-flight iterations that are interrupted when the overall scenario completes (`run_period` / `ramp_down` expiration or early abort) are cleanly cancelled and discarded without being counted as timeouts or failures.
 
@@ -805,7 +813,88 @@ func main() {
 }
 ```
 
-### 11.3 Data Parameterization (`pkg/vuhive/data`)
+### 11.3 Kafka Event Streaming (`pkg/vuhive/kafka`)
+
+For event-driven load tests, use `pkg/vuhive/kafka` (compiled with `-tags kafka`) to produce and consume messages with automatic latency, message count, payload byte, and failure rate tracking.
+
+#### Why Use `pkg/vuhive/kafka`?
+- **Zero Standard Dependencies**: Default builds (`!kafka`) link 0 Kafka client code and return `ErrKafkaDisabled`. Compiling with `-tags kafka` activates the high-performance pure-Go driver (`franz-go`).
+- **Auto-Recorded Metrics**: Automatically tracks `vuhive.kafka.pub_duration`, `vuhive.kafka.pub_total`, `vuhive.kafka.pub_bytes`, `vuhive.kafka.pub_failed`, `vuhive.kafka.sub_duration`, `vuhive.kafka.sub_total`, `vuhive.kafka.sub_bytes`, and `vuhive.kafka.sub_failed`.
+- **Publisher & Consumer Helpers**: `Publish`, `PublishBatch`, `Consume`, `ConsumeBatch`, and `Commit` methods.
+- **Enterprise Configuration**: SASL (Plain, SCRAM-256, SCRAM-512), TLS, custom batching, compression (Gzip, Snappy, LZ4, Zstd), and acks.
+
+#### Example Usage
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/morphy76/vuhive/pkg/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive/kafka"
+)
+
+func main() {
+	suite := vuhive.NewSuite("Kafka Event Streaming")
+
+	suite.RegisterScenario("order_stream", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
+			// Initialize Kafka client with broker seeds and consumer group
+			client, err := kafka.NewClient(ctx,
+				kafka.WithBrokers("localhost:9092"),
+				kafka.WithTopic("orders_stream"),
+				kafka.WithGroupID("order_validators"),
+				kafka.WithTimeout(5*time.Second),
+			)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"kafka": client}, nil
+		},
+
+		RunVU: func(ctx vuhive.VUContext) error {
+			client := ctx.GlobalState("kafka").(kafka.Client)
+
+			// 1. Publish message record — auto-records pub_duration, pub_total, pub_bytes, pub_failed
+			msg := &kafka.Message{
+				Topic: "orders_stream",
+				Key:   []byte(fmt.Sprintf("user-%d", ctx.VUID())),
+				Value: []byte(`{"event":"order_placed","total":120.00}`),
+				Headers: map[string][]byte{"origin": []byte("vuhive")},
+			}
+			if err := client.Publish(ctx, msg); err != nil {
+				return err
+			}
+
+			// 2. Consume next message from stream
+			record, err := client.Consume(ctx)
+			if err != nil {
+				return err
+			}
+
+			if record != nil {
+				// 3. Commit consumed offset
+				_ = client.Commit(ctx, record)
+			}
+
+			return nil
+		},
+
+		Teardown: func(ctx vuhive.TeardownContext, state map[string]any) error {
+			if client, ok := state["kafka"].(kafka.Client); ok && client != nil {
+				return client.Close()
+			}
+			return nil
+		},
+	})
+
+	suite.Execute()
+}
+```
+
+### 11.4 Data Parameterization (`pkg/vuhive/data`)
 
 Use the dedicated `github.com/morphy76/vuhive/pkg/vuhive/data` package to load CSV, JSON, or JSON Lines datasets with thread-safe record distribution strategies:
 
@@ -839,7 +928,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 },
 ```
 
-### 11.4 Thinking Time & Interaction Delay
+### 11.5 Thinking Time & Interaction Delay
 
 Thinking time simulates human reading, processing, or decision delays between user actions, conversation turns, or multi-step requests. Thinking time is **explicitly invoked by the test developer** using `ctx.Sleep()`, which actively respects `ctx.Done()` for immediate cancellation during ramp-down or teardown.
 
@@ -912,7 +1001,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 
 
 
-### 11.5 Multi-Step User Journey
+### 11.6 Multi-Step User Journey
 
 ```go
 RunVU: func(ctx vuhive.ScenarioContext) error {
@@ -942,7 +1031,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 },
 ```
 
-### 11.6 Conditional Metric Recording with Tags
+### 11.7 Conditional Metric Recording with Tags
 
 ```go
 if resp.StatusCode == http.StatusOK {
@@ -952,7 +1041,7 @@ if resp.StatusCode == http.StatusOK {
 }
 ```
 
-### 11.7 Execution Summary Hook (Slack Webhooks & Custom Metrics)
+### 11.8 Execution Summary Hook (Slack Webhooks & Custom Metrics)
 
 Use `HandleSummary` to receive the full structured summary after report generation for notifications, metrics export, or CI artifact generation:
 
@@ -983,7 +1072,7 @@ HandleSummary: func(ctx context.Context, summary vuhive.SummaryData) error {
 },
 ```
 
-### 11.8 Inline Assertions (Checks)
+### 11.9 Inline Assertions (Checks)
 
 ```go
 RunVU: func(ctx vuhive.ScenarioContext) error {
@@ -1056,6 +1145,7 @@ See the [**Examples Reference Suite Index**](../examples/README.md) for a struct
 | **Execution Summary Hook** | [`examples/handle_summary/`](../examples/handle_summary/) | `HandleSummary` lifecycle hook, summary data inspection, programmatic webhook dispatch and artifact generation. | [Read Guide](../examples/handle_summary/README.md) |
 | **Conversational AI Flow** | [`examples/conversation_flow/`](../examples/conversation_flow/) | Real-time Server-Sent Events (SSE) streaming, multi-turn state machine, DSL client architecture. | [Read Guide](../examples/conversation_flow/README.md) |
 | **gRPC RPC Service** | [`examples/grpc_user_service/`](../examples/grpc_user_service/) | Open-system arrival rate pacing (`arrival_rate`), target TPS, bounded worker pool (`max_vus`). | [Read Guide](../examples/grpc_user_service/README.md) |
+| **Kafka Event Streaming** | [`examples/kafka/`](../examples/kafka/) | High-throughput Kafka Publisher & Consumer (`pkg/vuhive/kafka`), conditional compilation with `-tags kafka`. | [Read Guide](../examples/kafka/README.md) |
 
 ### Running Examples
 

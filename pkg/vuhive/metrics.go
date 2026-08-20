@@ -109,4 +109,31 @@ const (
 
 	// MetricHTTPReqReceiving records response read time (Duration, opt-in).
 	MetricHTTPReqReceiving = "vuhive.http.req_receiving"
+
+	// MetricKafkaPrefix is the prefix for all built-in Kafka module metrics.
+	MetricKafkaPrefix = "vuhive.kafka."
+
+	// MetricKafkaPubDuration records Kafka publish round-trip latency (Duration histogram).
+	MetricKafkaPubDuration = "vuhive.kafka.pub_duration"
+
+	// MetricKafkaPubTotal tracks total Kafka messages published (Counter).
+	MetricKafkaPubTotal = "vuhive.kafka.pub_total"
+
+	// MetricKafkaPubBytes tracks total Kafka payload bytes published (Counter).
+	MetricKafkaPubBytes = "vuhive.kafka.pub_bytes"
+
+	// MetricKafkaPubFailed tracks Kafka publish failure rate (Rate).
+	MetricKafkaPubFailed = "vuhive.kafka.pub_failed"
+
+	// MetricKafkaSubDuration records Kafka consumer fetch/wait duration (Duration histogram).
+	MetricKafkaSubDuration = "vuhive.kafka.sub_duration"
+
+	// MetricKafkaSubTotal tracks total Kafka messages consumed (Counter).
+	MetricKafkaSubTotal = "vuhive.kafka.sub_total"
+
+	// MetricKafkaSubBytes tracks total Kafka payload bytes consumed (Counter).
+	MetricKafkaSubBytes = "vuhive.kafka.sub_bytes"
+
+	// MetricKafkaSubFailed tracks Kafka consumer failure rate (Rate).
+	MetricKafkaSubFailed = "vuhive.kafka.sub_failed"
 )

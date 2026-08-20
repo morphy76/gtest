@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+default_scenario: kafka_event_stream
+
+scenarios:
+  kafka_event_stream:
+    type: constant_vus
+    vus: 5
+    ramp_up: 1s
+    run_period: 5s
+    ramp_down: 1s
+    vu_timeout: 3s
+
+    params:
+      topic: "orders_stream"
+
+    thresholds:
+      - metric: vuhive.kafka.pub_duration
+        stat: p95
+        operator: "<"
+        target: "50ms"
+
+      - metric: vuhive.kafka.pub_failed
+        stat: rate
+        operator: "<="
+        target: "0.01"
+
+      - metric: vuhive.kafka.sub_failed
+        stat: rate
+        operator: "<="
+        target: "0.01"
