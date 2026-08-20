@@ -85,4 +85,28 @@ const (
 
 	// MetricChecksFailed tracks the count of failed inline checks.
 	MetricChecksFailed = "vuhive.checks.failed"
+
+	// MetricHTTPPrefix is the prefix for all built-in HTTP module metrics.
+	MetricHTTPPrefix = "vuhive.http."
+
+	// MetricHTTPReqDuration records total HTTP request latency (Duration histogram).
+	MetricHTTPReqDuration = "vuhive.http.req_duration"
+
+	// MetricHTTPReqFailed tracks the HTTP request failure rate (Rate).
+	MetricHTTPReqFailed = "vuhive.http.req_failed"
+
+	// MetricHTTPReqs tracks the total HTTP request count (Counter).
+	MetricHTTPReqs = "vuhive.http.reqs"
+
+	// MetricHTTPReqConnecting records TCP connection establishment time (Duration, opt-in).
+	MetricHTTPReqConnecting = "vuhive.http.req_connecting"
+
+	// MetricHTTPReqTLSHandshaking records TLS handshake time (Duration, opt-in).
+	MetricHTTPReqTLSHandshaking = "vuhive.http.req_tls_handshaking"
+
+	// MetricHTTPReqSending records request write time (Duration, opt-in).
+	MetricHTTPReqSending = "vuhive.http.req_sending"
+
+	// MetricHTTPReqReceiving records response read time (Duration, opt-in).
+	MetricHTTPReqReceiving = "vuhive.http.req_receiving"
 )

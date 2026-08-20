@@ -1,0 +1,25 @@
+version: "1.0"
+
+default_scenario: http_module_demo
+
+scenarios:
+  http_module_demo:
+    type: constant_vus
+    vus: 10
+    ramp_up: 2s
+    run_period: 10s
+    ramp_down: 2s
+    vu_timeout: 5s
+
+    params:
+      checkout_path: "/checkout"
+
+    thresholds:
+      - metric: vuhive.http.req_duration
+        stat: p95
+        operator: "<"
+        target: "200ms"
+      - metric: vuhive.http.req_failed
+        stat: rate
+        operator: "<="
+        target: "0.01"

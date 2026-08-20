@@ -15,6 +15,7 @@
   - **`ramping_vus`**: Dynamic multi-stage pacing engine allowing stage-based VU target ramps, holds, and spikes over time.
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
+- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.NewClient`) with automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
 - **Data Parameterization Module (`pkg/vuhive/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
 - **SLA Threshold Evaluator & Graceful Abort**: Declarative quality gates evaluated post-execution, with optional real-time early termination (`abort_on_fail: true`, `delay_abort_eval: 5s`) to stop runaway failures instantly. Returns exit code `0` on success or `1` on SLA breach/abort.
 - **Deterministic Reporting**: Terminal summary and JSON reports (§10 schema) with alphabetically sorted metrics.
@@ -324,9 +325,95 @@ RunVU: func(ctx vuhive.VUContext) error {
 
 ---
 
+## Instrumented HTTP Module (`pkg/vuhive/http`)
 
+Eliminate repetitive boilerplate metric instrumentation from your `RunVU` loops by using the built-in `pkg/vuhive/http` package. It wraps standard HTTP request execution with automatic latency tracking, status code tagging, failure rate calculation, and convenient response decoding helpers.
 
+### Advantages Over Raw `http.Client`
 
+- **Zero-Boilerplate Metrics**: Latency duration histograms (`vuhive.http.req_duration`), request counts (`vuhive.http.reqs`), and failure rates (`vuhive.http.req_failed`) are recorded automatically for every request with method, path, and status code tags.
+- **Convenient Response Parsing**: `Response.JSON(target)` unmarshals directly into Go structs, and `Response.Text()` extracts raw body strings while eagerly closing the underlying response body.
+- **Configurable Connection Pooling & Defaults**: Easily configure timeouts, default authorization headers, connection pool bounds, and TLS skip verification using fluent functional options.
+- **Opt-in Phase-Breakdown Timing**: Trace TCP connection time, TLS handshake duration, request write time, and response read time via `httptrace` using `vuhivehttp.WithDetailedTiming()`.
+
+### Basic Usage
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/morphy76/vuhive/pkg/vuhive"
+	vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
+)
+
+type CheckoutResult struct {
+	OrderID string `json:"order_id"`
+	Status  string `json:"status"`
+}
+
+func main() {
+	suite := vuhive.NewSuite("Checkout API Load Test")
+
+	suite.RegisterScenario("http_checkout", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
+			// Initialize a shared, instrumented HTTP client
+			client := vuhivehttp.NewClient(ctx,
+				vuhivehttp.WithTimeout(5*time.Second),
+				vuhivehttp.WithHeader("Accept", "application/json"),
+				vuhivehttp.WithMaxIdleConnsPerHost(50),
+			)
+			return map[string]any{"client": client}, nil
+		},
+
+		RunVU: func(ctx vuhive.VUContext) error {
+			client := ctx.GlobalState("client").(*vuhivehttp.Client)
+			baseURL := ctx.Param("base_url")
+
+			// Execute request — metrics (duration, rate, counter) are auto-recorded
+			resp, err := client.Get(ctx, baseURL+"/api/checkout")
+			if err != nil {
+				return err
+			}
+
+			// Validate with inline checks
+			ctx.Check("status is 200", func() string {
+				if resp.StatusCode != http.StatusOK {
+					return fmt.Sprintf("unexpected status: %d", resp.StatusCode)
+				}
+				return ""
+			})
+
+			// Decode JSON response directly
+			var result CheckoutResult
+			if err := resp.JSON(&result); err != nil {
+				return fmt.Errorf("failed to parse JSON: %w", err)
+			}
+
+			return nil
+		},
+	})
+
+	suite.Execute()
+}
+```
+
+### Auto-Recorded HTTP Metrics
+
+| Metric Identifier | Type | Tags | Description |
+|---|---|---|---|
+| `vuhive.http.req_duration` | Duration (HDR) | `method`, `url`, `status` | Total request latency histogram |
+| `vuhive.http.reqs` | Counter | `method`, `url`, `status` | Total HTTP requests count |
+| `vuhive.http.req_failed` | Rate | `method`, `url`, `status` | Ratio of failed requests (non-2xx or transport error) |
+| `vuhive.http.req_connecting` | Duration (HDR) | `method`, `url`, `status` | TCP connection latency *(opt-in via `WithDetailedTiming`)* |
+| `vuhive.http.req_tls_handshaking` | Duration (HDR) | `method`, `url`, `status` | TLS handshake latency *(opt-in via `WithDetailedTiming`)* |
+| `vuhive.http.req_sending` | Duration (HDR) | `method`, `url`, `status` | Request payload write latency *(opt-in via `WithDetailedTiming`)* |
+| `vuhive.http.req_receiving` | Duration (HDR) | `method`, `url`, `status` | Response body read latency *(opt-in via `WithDetailedTiming`)* |
+
+---
 
 ## Writing a Load Test (Code Example)
 
@@ -522,7 +609,8 @@ The [`examples/`](examples/README.md) directory contains self-contained, compila
 
 | Example Directory | Scenario Type | Features Demonstrated | Documentation |
 |---|---|---|---|
-| [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, custom duration/counter/rate metrics, linear ramp-up/down. | [Guide](examples/http_checkout/README.md) |
+| [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, manual duration/counter/rate metrics, linear ramp-up/down. | [Guide](examples/http_checkout/README.md) |
+| [`examples/http_module/`](examples/http_module/) | `constant_vus` | Built-in `pkg/vuhive/http` client, auto-recorded metrics, JSON decoding, inline checks. | [Guide](examples/http_module/README.md) |
 | [`examples/checks/`](examples/checks/) | `constant_vus` | Inline assertions (`ctx.Check`) for HTTP status, headers, JSON body validation, check metrics. | [Guide](examples/checks/README.md) |
 | [`examples/think_time/`](examples/think_time/) | `constant_vus` | Multi-step user journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. | [Guide](examples/think_time/README.md) |
 | [`examples/data_parameterization/`](examples/data_parameterization/) | `constant_vus` | CSV (`Sequential`), JSON (`Random`), and JSONL (`SharedQueue`) dataset parameterization. | [Guide](examples/data_parameterization/README.md) |
