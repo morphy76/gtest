@@ -16,6 +16,7 @@
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
 - **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.NewClient`) with automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
+- **Kafka Messaging Module (`pkg/vuhive/kafka`)**: Auto-instrumented Kafka Publisher and Consumer clients conditionally compiled via Go build tags (`-tags kafka`) for testing event-driven architectures with zero dependencies in standard builds.
 - **Data Parameterization Module (`pkg/vuhive/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
 - **SLA Threshold Evaluator & Graceful Abort**: Declarative quality gates evaluated post-execution, with optional real-time early termination (`abort_on_fail: true`, `delay_abort_eval: 5s`) to stop runaway failures instantly. Returns exit code `0` on success or `1` on SLA breach/abort.
 - **Deterministic Reporting**: Terminal summary and JSON reports (§10 schema) with alphabetically sorted metrics.
@@ -415,6 +416,101 @@ func main() {
 
 ---
 
+## Kafka Messaging Module (`pkg/vuhive/kafka`)
+
+Test event-driven architectures with high-throughput Kafka Publisher and Consumer clients. To avoid unnecessary dependency trees for non-Kafka workloads, the driver is conditionally compiled using Go build tags.
+
+### Conditional Compilation Architecture
+
+- **Default Builds (`go build .`)**: Compiles a zero-dependency no-op fallback. Operations return `ErrKafkaDisabled` with zero third-party Kafka drivers linked into your binary.
+- **Kafka Builds (`go build -tags kafka .`)**: Compiles the high-throughput, pure-Go Kafka driver (`franz-go`) with automatic telemetry.
+
+### Basic Usage (`-tags kafka`)
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/morphy76/vuhive/pkg/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive/kafka"
+)
+
+func main() {
+	suite := vuhive.NewSuite("Kafka Event Stream Load Test")
+
+	suite.RegisterScenario("order_events", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
+			// Initialize shared Kafka Client (Publisher + Consumer)
+			client, err := kafka.NewClient(ctx,
+				kafka.WithBrokers("localhost:9092"),
+				kafka.WithTopic("order_events"),
+				kafka.WithGroupID("order_processors"),
+				kafka.WithTimeout(5*time.Second),
+			)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"kafka": client}, nil
+		},
+
+		RunVU: func(ctx vuhive.VUContext) error {
+			client := ctx.GlobalState("kafka").(kafka.Client)
+
+			// 1. Publish event — latency, message count, bytes, and error rates are auto-recorded
+			msg := &kafka.Message{
+				Topic: "order_events",
+				Key:   []byte(fmt.Sprintf("user-%d", ctx.VUID())),
+				Value: []byte(`{"event":"order_created","amount":49.90}`),
+				Headers: map[string][]byte{"source": []byte("load-generator")},
+			}
+			if err := client.Publish(ctx, msg); err != nil {
+				return err
+			}
+
+			// 2. Consume from stream
+			recvMsg, err := client.Consume(ctx)
+			if err != nil {
+				return err
+			}
+
+			if recvMsg != nil {
+				// 3. Commit consumer offset
+				_ = client.Commit(ctx, recvMsg)
+			}
+
+			return nil
+		},
+
+		Teardown: func(ctx vuhive.TeardownContext, state map[string]any) error {
+			if client, ok := state["kafka"].(kafka.Client); ok && client != nil {
+				return client.Close()
+			}
+			return nil
+		},
+	})
+
+	suite.Execute()
+}
+```
+
+### Auto-Recorded Kafka Metrics
+
+| Metric Identifier | Type | Tags | Description |
+|---|---|---|---|
+| `vuhive.kafka.pub_duration` | Duration (HDR) | `topic`, `status` | Publish round-trip latency histogram |
+| `vuhive.kafka.pub_total` | Counter | `topic`, `status` | Total messages published |
+| `vuhive.kafka.pub_bytes` | Counter | `topic` | Total payload bytes published |
+| `vuhive.kafka.pub_failed` | Rate | `topic`, `status` | Ratio of failed publish operations |
+| `vuhive.kafka.sub_duration` | Duration (HDR) | `topic`, `group`, `status` | Message fetch/wait duration |
+| `vuhive.kafka.sub_total` | Counter | `topic`, `group`, `status` | Total messages consumed |
+| `vuhive.kafka.sub_bytes` | Counter | `topic` | Total payload bytes consumed |
+| `vuhive.kafka.sub_failed` | Rate | `topic`, `group`, `status` | Ratio of failed consume operations |
+
+---
+
 ## Writing a Load Test (Code Example)
 
 ```go
@@ -619,6 +715,7 @@ The [`examples/`](examples/README.md) directory contains self-contained, compila
 | [`examples/handle_summary/`](examples/handle_summary/) | `constant_vus` | Post-test execution hook (`HandleSummary`), summary metric inspection, webhook notification dispatch. | [Guide](examples/handle_summary/README.md) |
 | [`examples/conversation_flow/`](examples/conversation_flow/) | `constant_vus` | Real-time SSE streaming conversational AI load test, multi-turn state machine, DSL client. | [Guide](examples/conversation_flow/README.md) |
 | [`examples/grpc_user_service/`](examples/grpc_user_service/) | `arrival_rate` | High-throughput RPC simulation, token bucket TPS pacing, bounded worker pool. | [Guide](examples/grpc_user_service/README.md) |
+| [`examples/kafka/`](examples/kafka/) | `constant_vus` | Event streaming with `pkg/vuhive/kafka` publisher and consumer, build tag `-tags kafka`. | [Guide](examples/kafka/README.md) |
 
 ### Running Examples
 
