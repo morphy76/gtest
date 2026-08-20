@@ -476,6 +476,13 @@ All built-in metrics are exported as typed constants in `pkg/vuhive` (e.g. `vuhi
 | `vuhive.MetricPacingDroppedIterations` | `vuhive.pacing.dropped_iterations` | Counter | Arrival-rate tokens dropped due to pool saturation |
 | `vuhive.MetricChecksPassed` | `vuhive.checks.passed` | Counter | Total inline checks that passed |
 | `vuhive.MetricChecksFailed` | `vuhive.checks.failed` | Counter | Total inline checks that failed |
+| `vuhive.MetricHTTPReqDuration` | `vuhive.http.req_duration` | Duration | Total HTTP request latency |
+| `vuhive.MetricHTTPReqs` | `vuhive.http.reqs` | Counter | Total HTTP requests count |
+| `vuhive.MetricHTTPReqFailed` | `vuhive.http.req_failed` | Rate | Failed HTTP request ratio |
+| `vuhive.MetricHTTPReqConnecting` | `vuhive.http.req_connecting` | Duration | TCP connection establishment time *(opt-in)* |
+| `vuhive.MetricHTTPReqTLSHandshaking` | `vuhive.http.req_tls_handshaking` | Duration | TLS handshake time *(opt-in)* |
+| `vuhive.MetricHTTPReqSending` | `vuhive.http.req_sending` | Duration | HTTP request write time *(opt-in)* |
+| `vuhive.MetricHTTPReqReceiving` | `vuhive.http.req_receiving` | Duration | HTTP response read time *(opt-in)* |
 
 > **In-Flight Iterations on Shutdown:** `vuhive.vu.iterations_timeout` tracks only genuine per-iteration timeouts where `RunVU` exceeded `vu_timeout` during active execution. In-flight iterations that are interrupted when the overall scenario completes (`run_period` / `ramp_down` expiration or early abort) are cleanly cancelled and discarded without being counted as timeouts or failures.
 
@@ -716,7 +723,89 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 },
 ```
 
-### 11.2 Data Parameterization (`pkg/vuhive/data`)
+### 11.2 Built-in Instrumented HTTP Client (`pkg/vuhive/http`)
+
+For standard HTTP load testing, use the built-in `github.com/morphy76/vuhive/pkg/vuhive/http` package to eliminate manual metric timing and counting boilerplate.
+
+#### Why Use `pkg/vuhive/http`?
+- **Automatic Metrics**: Automatically records `vuhive.http.req_duration` (HDR latency histogram), `vuhive.http.reqs` (total counter), and `vuhive.http.req_failed` (failure rate) tagged with `method`, `url` (path only), and `status`.
+- **Response Decoding**: `resp.JSON(&target)` and `resp.Text()` methods with automatic response body cleanup.
+- **Declarative Client Options**: Configure timeouts, connection pool sizing (`WithMaxIdleConnsPerHost`), default headers (`WithHeader`), and TLS verification (`WithTLSInsecureSkipVerify`).
+- **Opt-in Detailed Timing**: Capture TCP connection, TLS handshake, request write, and response read latencies via `WithDetailedTiming()`.
+
+#### Example Usage
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/morphy76/vuhive/pkg/vuhive"
+	vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
+)
+
+type ItemResponse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+func main() {
+	suite := vuhive.NewSuite("HTTP Load Test")
+
+	suite.RegisterScenario("catalog_api", vuhive.Scenario{
+		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
+			// Create a shared instrumented HTTP client with customized options
+			client := vuhivehttp.NewClient(ctx,
+				vuhivehttp.WithTimeout(5*time.Second),
+				vuhivehttp.WithHeader("Accept", "application/json"),
+				vuhivehttp.WithMaxIdleConnsPerHost(100),
+			)
+			return map[string]any{"http_client": client}, nil
+		},
+
+		RunVU: func(ctx vuhive.VUContext) error {
+			client := ctx.GlobalState("http_client").(*vuhivehttp.Client)
+			baseURL := ctx.Param("base_url")
+
+			// 1. Execute GET request — latency, counters, and failure rates are recorded automatically
+			resp, err := client.Get(ctx, baseURL+"/api/items/item-123")
+			if err != nil {
+				return err
+			}
+
+			// 2. Perform inline check on status code
+			ctx.Check("status_200", func() string {
+				if resp.StatusCode != http.StatusOK {
+					return fmt.Sprintf("expected 200, got %d", resp.StatusCode)
+				}
+				return ""
+			})
+
+			// 3. Decode JSON body directly into struct
+			var item ItemResponse
+			if err := resp.JSON(&item); err != nil {
+				return fmt.Errorf("failed to decode response: %w", err)
+			}
+
+			ctx.Check("valid_item_id", func() string {
+				if item.ID != "item-123" {
+					return fmt.Sprintf("unexpected item ID: %s", item.ID)
+				}
+				return ""
+			})
+
+			return nil
+		},
+	})
+
+	suite.Execute()
+}
+```
+
+### 11.3 Data Parameterization (`pkg/vuhive/data`)
 
 Use the dedicated `github.com/morphy76/vuhive/pkg/vuhive/data` package to load CSV, JSON, or JSON Lines datasets with thread-safe record distribution strategies:
 
@@ -750,7 +839,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 },
 ```
 
-### 11.3 Thinking Time & Interaction Delay
+### 11.4 Thinking Time & Interaction Delay
 
 Thinking time simulates human reading, processing, or decision delays between user actions, conversation turns, or multi-step requests. Thinking time is **explicitly invoked by the test developer** using `ctx.Sleep()`, which actively respects `ctx.Done()` for immediate cancellation during ramp-down or teardown.
 
@@ -823,7 +912,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 
 
 
-### 11.4 Multi-Step User Journey
+### 11.5 Multi-Step User Journey
 
 ```go
 RunVU: func(ctx vuhive.ScenarioContext) error {
@@ -853,7 +942,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 },
 ```
 
-### 11.5 Conditional Metric Recording with Tags
+### 11.6 Conditional Metric Recording with Tags
 
 ```go
 if resp.StatusCode == http.StatusOK {
@@ -863,7 +952,7 @@ if resp.StatusCode == http.StatusOK {
 }
 ```
 
-### 11.6 Execution Summary Hook (Slack Webhooks & Custom Metrics)
+### 11.7 Execution Summary Hook (Slack Webhooks & Custom Metrics)
 
 Use `HandleSummary` to receive the full structured summary after report generation for notifications, metrics export, or CI artifact generation:
 
@@ -894,7 +983,7 @@ HandleSummary: func(ctx context.Context, summary vuhive.SummaryData) error {
 },
 ```
 
-### 11.7 Inline Assertions (Checks)
+### 11.8 Inline Assertions (Checks)
 
 ```go
 RunVU: func(ctx vuhive.ScenarioContext) error {
@@ -958,6 +1047,7 @@ See the [**Examples Reference Suite Index**](../examples/README.md) for a struct
 | Example | Directory | Core Concepts | Guide |
 |---|---|---|---|
 | **HTTP REST Checkout** | [`examples/http_checkout/`](../examples/http_checkout/) | Standard REST API load test, HDR duration histogram, success rate, constant VU concurrency. | [Read Guide](../examples/http_checkout/README.md) |
+| **HTTP Module (Auto-Metrics)** | [`examples/http_module/`](../examples/http_module/) | Built-in `pkg/vuhive/http` client, automatic metrics, JSON parsing, inline checks. | [Read Guide](../examples/http_module/README.md) |
 | **Inline Checks (Assertions)** | [`examples/checks/`](../examples/checks/) | Inline assertions (`ctx.Check`), non-aborting validations, auto-instrumented check counters and report tables. | [Read Guide](../examples/checks/README.md) |
 | **Thinking Time & Delays** | [`examples/think_time/`](../examples/think_time/) | Multi-step journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. | [Read Guide](../examples/think_time/README.md) |
 | **Data Parameterization** | [`examples/data_parameterization/`](../examples/data_parameterization/) | `pkg/vuhive/data` dataset ingestion (CSV, JSON, JSONL) with `Sequential`, `Random`, and `SharedQueue` strategies. | [Read Guide](../examples/data_parameterization/README.md) |
