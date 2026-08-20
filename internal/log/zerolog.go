@@ -15,17 +15,19 @@ type ZerologLogger struct {
 
 // New creates a new ZerologLogger writing JSON logs to w at the specified zerolog Level.
 func New(w io.Writer, level zerolog.Level) *ZerologLogger {
-	zlog := zerolog.New(w).Level(level).With().Timestamp().Logger()
+	writer := zerolog.SyncWriter(w)
+	zlog := zerolog.New(writer).Level(level).With().Timestamp().Logger()
 	return &ZerologLogger{zlog: zlog}
 }
 
 // NewWithFormat creates a ZerologLogger that uses either human-readable console output ("pretty")
 // or structured JSON output ("json"). Defaults to JSON for unrecognized formats.
 func NewWithFormat(w io.Writer, level zerolog.Level, format string) *ZerologLogger {
-	writer := w
+	var writer io.Writer = w
 	if format == "pretty" {
 		writer = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
+	writer = zerolog.SyncWriter(writer)
 	zlog := zerolog.New(writer).Level(level).With().Timestamp().Logger()
 
 	return &ZerologLogger{zlog: zlog}
