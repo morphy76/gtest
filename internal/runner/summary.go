@@ -136,6 +136,23 @@ func BuildSummaryData(p SummaryParams) report.SummaryData {
 		}
 	}
 
+	var groups []report.GroupSummary
+	if p.MetricsStore != nil {
+		for _, grp := range p.MetricsStore.GroupSummaries() {
+			groups = append(groups, report.GroupSummary{
+				Name:  grp.Name,
+				Count: grp.Count,
+				Min:   grp.Min,
+				Mean:  grp.Mean,
+				P50:   grp.P50,
+				P90:   grp.P90,
+				P95:   grp.P95,
+				P99:   grp.P99,
+				Max:   grp.Max,
+			})
+		}
+	}
+
 	return report.SummaryData{
 		SuiteName:   p.SuiteName,
 		Scenario:    p.ScenarioName,
@@ -147,9 +164,11 @@ func BuildSummaryData(p SummaryParams) report.SummaryData {
 		Config:      p.Config,
 		Metrics:     metrics,
 		Checks:      checks,
+		Groups:      groups,
 		Thresholds:  thresholds,
 		Passed:      p.AllPassed,
 		Aborted:     p.Aborted,
 		AbortReason: p.AbortReason,
 	}
 }
+

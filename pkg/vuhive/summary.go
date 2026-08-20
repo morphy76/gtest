@@ -86,6 +86,36 @@ type ThresholdSummary struct {
 	Passed bool `json:"passed"`
 }
 
+// GroupSummary represents aggregated latency statistics for a named transaction group.
+type GroupSummary struct {
+	// Name is the unique identifier/path of the group transaction.
+	Name string `json:"name"`
+
+	// Count is the total number of times this group was executed.
+	Count int64 `json:"count"`
+
+	// Min is the minimum observed duration.
+	Min time.Duration `json:"min"`
+
+	// Mean is the mean observed duration.
+	Mean time.Duration `json:"mean"`
+
+	// P50 is the 50th percentile (median) duration.
+	P50 time.Duration `json:"p50"`
+
+	// P90 is the 90th percentile duration.
+	P90 time.Duration `json:"p90"`
+
+	// P95 is the 95th percentile duration.
+	P95 time.Duration `json:"p95"`
+
+	// P99 is the 99th percentile duration.
+	P99 time.Duration `json:"p99"`
+
+	// Max is the maximum observed duration.
+	Max time.Duration `json:"max"`
+}
+
 // SummaryData contains the complete structured report information post-execution.
 type SummaryData struct {
 	// SuiteName is the display name of the executing test suite.
@@ -118,6 +148,9 @@ type SummaryData struct {
 	// Checks is the list of inline check assertion summaries.
 	Checks []CheckSummary `json:"checks,omitempty"`
 
+	// Groups is the list of transaction group duration summaries.
+	Groups []GroupSummary `json:"groups,omitempty"`
+
 	// Thresholds is the list of evaluated SLA threshold results.
 	Thresholds []ThresholdSummary `json:"thresholds"`
 
@@ -130,6 +163,7 @@ type SummaryData struct {
 	// AbortReason describes why early abortion occurred.
 	AbortReason string `json:"abort_reason,omitempty"`
 }
+
 
 // JSON marshals SummaryData to pretty-printed JSON bytes.
 func (s SummaryData) JSON() ([]byte, error) {
@@ -182,3 +216,14 @@ func (s SummaryData) Threshold(metric string) *ThresholdSummary {
 	}
 	return nil
 }
+
+// Group returns the GroupSummary for the given group name, or nil if not found.
+func (s SummaryData) Group(name string) *GroupSummary {
+	for i := range s.Groups {
+		if s.Groups[i].Name == name {
+			return &s.Groups[i]
+		}
+	}
+	return nil
+}
+

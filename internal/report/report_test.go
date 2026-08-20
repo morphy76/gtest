@@ -367,8 +367,12 @@ func (m *mockReportMetricReader) LastGaugeValue(name string) float64 {
 func (m *mockReportMetricReader) CheckSummaries() []metric.CheckSummary {
 	return m.checkSummaries
 }
+func (m *mockReportMetricReader) GroupSummaries() []metric.GroupSummary {
+	return nil
+}
 
 func TestReportWithMockMetricReader(t *testing.T) {
+
 	mockReader := &mockReportMetricReader{
 		counters: map[string]int64{
 			metric.MetricIterationsTotal: 10,

@@ -34,4 +34,16 @@ const (
 
 	// MetricChecksFailed tracks the count of failed inline checks.
 	MetricChecksFailed = "vuhive.checks.failed"
+
+	// MetricGroupPrefix is the reserved prefix for all transaction group duration metrics.
+	MetricGroupPrefix = "vuhive.group."
+
+	// MetricGroupSuffix is the reserved suffix for all transaction group duration metrics.
+	MetricGroupSuffix = ".duration"
 )
+
+// GroupMetricName formats the full metric name for a given transaction group path.
+func GroupMetricName(groupPath string) string {
+	return MetricGroupPrefix + groupPath + MetricGroupSuffix
+}
+

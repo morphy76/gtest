@@ -64,7 +64,13 @@ type WorkflowController interface {
 	// Increments vuhive.checks.passed if fn returns an empty string, or vuhive.checks.failed if fn
 	// returns a failure reason. Returns true if the check passed.
 	Check(name string, fn CheckFunc) bool
+
+	// Group executes fn within a named transaction boundary.
+	// Duration is automatically recorded to "vuhive.group.<name>.duration".
+	// Nested groups are allowed; names are concatenated with "::".
+	Group(name string, fn func(ctx VUContext) error) error
 }
+
 
 // SetupContext provides configuration access and structured observability during scenario setup.
 type SetupContext interface {

@@ -145,3 +145,40 @@ func TestAlloc_Suite_RunVU_AdapterReused(t *testing.T) {
 
 	assert.Equal(t, float64(0), allocs, "RunnerSuiteAdapter.RunVU must produce 0 steady-state heap allocations")
 }
+
+func TestAlloc_PublicVUContext_Group(t *testing.T) {
+	metrics := metric.NewStore()
+	logger := log.New(io.Discard, zerolog.Disabled)
+	engCtx := engine.NewScenarioContext(context.Background(), 1, 0, config.ScenarioConfig{}, "test_scenario", nil, logger, metrics)
+
+	suite := vuhive.NewSuite("Alloc Test Suite")
+	var capturedCtx vuhive.VUContext
+	suite.RegisterScenario("test_scenario", vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error {
+			capturedCtx = ctx
+			return nil
+		},
+	})
+
+	runnerAdapter := vuhive.SuiteAdapterForTest(suite)
+	engScenario, _ := runnerAdapter.GetScenario("test_scenario")
+	_ = engScenario.RunVU(engCtx)
+
+	assert.NotNil(t, capturedCtx)
+
+	// Warm-up group cache and adapter pool
+	_ = capturedCtx.Group("step1", func(ctx vuhive.VUContext) error {
+		return nil
+	})
+
+	fn := func(ctx vuhive.VUContext) error {
+		return nil
+	}
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		_ = capturedCtx.Group("step1", fn)
+	})
+
+	assert.Equal(t, float64(0), allocs, "Public VUContext.Group must produce 0 steady-state heap allocations")
+}
+

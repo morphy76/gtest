@@ -1,0 +1,39 @@
+version: "1.0"
+default_scenario: ecommerce_flow
+
+scenarios:
+  ecommerce_flow:
+    type: constant_vus
+    vus: 2
+    ramp_up: 50ms
+    run_period: 300ms
+    ramp_down: 50ms
+    vu_timeout: 2s
+
+    thresholds:
+      # Step-level latency SLA quality gates
+      - metric: "vuhive.group.01_Login.duration"
+        stat: p95
+        operator: "<"
+        target: "200ms"
+
+      - metric: "vuhive.group.02_Browse_Catalog.duration"
+        stat: p95
+        operator: "<"
+        target: "200ms"
+
+      - metric: "vuhive.group.03_Checkout.duration"
+        stat: p95
+        operator: "<"
+        target: "500ms"
+
+      - metric: "vuhive.group.03_Checkout::Submit_Payment.duration"
+        stat: p95
+        operator: "<"
+        target: "250ms"
+
+      # Check failure quality gate
+      - metric: "vuhive.checks.failed"
+        stat: count
+        operator: "<="
+        target: "0"

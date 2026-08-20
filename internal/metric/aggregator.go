@@ -3,6 +3,7 @@ package metric
 import (
 	"sort"
 	"strings"
+	"time"
 )
 
 // CheckSummary holds aggregated metrics for a named check.
@@ -12,6 +13,19 @@ type CheckSummary struct {
 	Failed  int64
 	Total   int64
 	PassPct float64
+}
+
+// GroupSummary holds aggregated latency metrics for a named transaction group.
+type GroupSummary struct {
+	Name   string
+	Count  int64
+	Min    time.Duration
+	Mean   time.Duration
+	P50    time.Duration
+	P90    time.Duration
+	P95    time.Duration
+	P99    time.Duration
+	Max    time.Duration
 }
 
 // MetricProvider provides read-only traversal over recorded metrics.
@@ -30,6 +44,7 @@ type Aggregator interface {
 	RateData(name string) (float64, bool)
 	LastGaugeValue(name string) float64
 	CheckSummaries() []CheckSummary
+	GroupSummaries() []GroupSummary
 }
 
 type aggregator struct {
@@ -179,5 +194,49 @@ func (a *aggregator) CheckSummaries() []CheckSummary {
 	return summaries
 }
 
+// GroupSummaries returns aggregated latency statistics for all transaction groups sorted alphabetically by group name.
+func (a *aggregator) GroupSummaries() []GroupSummary {
+	var groupNames []string
+	seen := make(map[string]struct{})
+
+	a.provider.ForEachHistogram(func(key metricKey, h *histogram) {
+		if strings.HasPrefix(key.name, MetricGroupPrefix) && strings.HasSuffix(key.name, MetricGroupSuffix) {
+			groupPath := strings.TrimSuffix(strings.TrimPrefix(key.name, MetricGroupPrefix), MetricGroupSuffix)
+			if groupPath != "" {
+				if _, ok := seen[groupPath]; !ok {
+					seen[groupPath] = struct{}{}
+					groupNames = append(groupNames, groupPath)
+				}
+			}
+		}
+	})
+
+	if len(groupNames) == 0 {
+		return nil
+	}
+
+	sort.Strings(groupNames)
+
+	summaries := make([]GroupSummary, 0, len(groupNames))
+	for _, name := range groupNames {
+		metricName := MetricGroupPrefix + name + MetricGroupSuffix
+		snap := a.MergedHistogramSnapshot(metricName)
+		summaries = append(summaries, GroupSummary{
+			Name:  name,
+			Count: snap.Count,
+			Min:   snap.Min,
+			Mean:  snap.Mean,
+			P50:   snap.P50,
+			P90:   snap.P90,
+			P95:   snap.P95,
+			P99:   snap.P99,
+			Max:   snap.Max,
+		})
+	}
+
+	return summaries
+}
+
 // Compile-time check
 var _ Aggregator = (*aggregator)(nil)
+

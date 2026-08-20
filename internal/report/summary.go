@@ -40,6 +40,19 @@ type ThresholdSummary struct {
 	Passed   bool
 }
 
+// GroupSummary represents aggregated latency statistics for a named transaction group.
+type GroupSummary struct {
+	Name  string
+	Count int64
+	Min   time.Duration
+	Mean  time.Duration
+	P50   time.Duration
+	P90   time.Duration
+	P95   time.Duration
+	P99   time.Duration
+	Max   time.Duration
+}
+
 // SummaryData contains the complete structured report information post-execution.
 type SummaryData struct {
 	SuiteName   string
@@ -52,11 +65,13 @@ type SummaryData struct {
 	Config      any
 	Metrics     []MetricSummary
 	Checks      []CheckSummary
+	Groups      []GroupSummary
 	Thresholds  []ThresholdSummary
 	Passed      bool
 	Aborted     bool
 	AbortReason string
 }
+
 
 // Metric returns the MetricSummary for the given metric name, or nil if not found.
 func (s SummaryData) Metric(name string) *MetricSummary {
@@ -104,3 +119,14 @@ func (s SummaryData) Threshold(metric string) *ThresholdSummary {
 	}
 	return nil
 }
+
+// Group returns the GroupSummary for the given group name, or nil if not found.
+func (s SummaryData) Group(name string) *GroupSummary {
+	for i := range s.Groups {
+		if s.Groups[i].Name == name {
+			return &s.Groups[i]
+		}
+	}
+	return nil
+}
+

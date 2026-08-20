@@ -15,6 +15,7 @@
   - **`ramping_vus`**: Dynamic multi-stage pacing engine allowing stage-based VU target ramps, holds, and spikes over time.
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
+- **Transaction Boundaries (Groups)**: Organize `RunVU` logic into named transaction steps and nested sub-groups with `ctx.Group(name, fn)`. Automatically measures per-step latency (`vuhive.group.<path>.duration`), formats dedicated `GROUPS` summary tables, and enables granular per-step SLA quality gates.
 - **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.NewClient`) with automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
 - **Kafka Messaging Module (`pkg/vuhive/kafka`)**: Auto-instrumented Kafka Publisher and Consumer clients conditionally compiled via Go build tags (`-tags kafka`) for testing event-driven architectures with zero dependencies in standard builds.
 - **Data Parameterization Module (`pkg/vuhive/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
@@ -103,6 +104,8 @@ Adhering to the **Interface Segregation Principle (ISP)**, vuhive provides role-
 | `ctx.Metrics()` | `ObservabilityProvider` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
 | `ctx.Sleep(d ...time.Duration)` | `WorkflowController` | Pauses for explicit duration or configured `interaction_delay` strategy (respects `ctx.Done()`). |
 | `ctx.Check(name, fn)` | `WorkflowController` | Evaluates inline pass/fail assertion (`CheckFunc`) without stopping VU iteration execution. |
+| `ctx.Group(name, fn)` | `WorkflowController` | Executes `fn` within a named transaction boundary with automatic latency recording (`vuhive.group.<path>.duration`). |
+
 
 
 ---
@@ -124,7 +127,62 @@ ctx.Check("status code is 200", func() string {
 - **Auto-Instrumentation**: Automatically increments built-in counters `vuhive.checks.passed` and `vuhive.checks.failed` tagged with `name`.
 - **Reporting & Thresholds**: Per-check pass/fail counts and percentages are displayed in console and JSON reports. SLA thresholds can target check metrics (e.g. `vuhive.checks.failed count == 0`).
 
+---
+
+## Groups (Transaction Boundaries)
+
+Groups organize multi-step Virtual User flows into named transaction boundaries with automatic latency measurement (inspired by k6 `group()` and Gatling `exec().group()`):
+
+```go
+err := ctx.Group("01_Login", func(ctx vuhive.VUContext) error {
+    resp, err := client.Post(baseURL+"/api/login", "application/json", body)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    return nil
+})
+```
+
+### Nested Groups
+
+Groups can be nested to model sub-transactions. Child group metric names are concatenated with the `::` delimiter:
+
+```go
+err := ctx.Group("03_Checkout", func(ctx vuhive.VUContext) error {
+    // Nested group 1: Add to cart
+    if err := ctx.Group("Add_To_Cart", func(ctx vuhive.VUContext) error {
+        return addItemToCart(ctx)
+    }); err != nil {
+        return err
+    }
+
+    // Nested group 2: Submit payment
+    return ctx.Group("Submit_Payment", func(ctx vuhive.VUContext) error {
+        return submitPayment(ctx)
+    })
+})
+```
+
+- **Automatic Metrics**: Each group records an HDR duration histogram named `vuhive.group.<path>.duration` (e.g. `vuhive.group.03_Checkout::Submit_Payment.duration`).
+- **Reporting**: Formatted in a dedicated `GROUPS` summary table in the terminal report and a `groups` array in JSON output.
+- **SLA Thresholds**: Set latency targets directly on group metrics in `vuhive.yaml`:
+  ```yaml
+  thresholds:
+    - metric: "vuhive.group.01_Login.duration"
+      stat: p95
+      operator: "<"
+      target: "200ms"
+    - metric: "vuhive.group.03_Checkout::Submit_Payment.duration"
+      stat: p95
+      operator: "<"
+      target: "250ms"
+  ```
+
+---
+
 ## Recording Metrics
+
 
 `vuhive` provides four metric types accessed via `ctx.Metrics()`:
 

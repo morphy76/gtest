@@ -136,4 +136,16 @@ const (
 
 	// MetricKafkaSubFailed tracks Kafka consumer failure rate (Rate).
 	MetricKafkaSubFailed = "vuhive.kafka.sub_failed"
+
+	// MetricGroupPrefix is the prefix for all built-in transaction group duration metrics.
+	MetricGroupPrefix = "vuhive.group."
+
+	// MetricGroupSuffix is the suffix for all built-in transaction group duration metrics.
+	MetricGroupSuffix = ".duration"
 )
+
+// GroupMetricName formats the full metric name for a given transaction group path.
+func GroupMetricName(groupPath string) string {
+	return MetricGroupPrefix + groupPath + MetricGroupSuffix
+}
+

@@ -47,11 +47,13 @@ type ObservabilityProvider interface {
 	Metrics() metric.Collector
 }
 
-// WorkflowController provides workflow execution controls such as delays and inline assertions.
+// WorkflowController provides workflow execution controls such as delays, inline assertions, and group transactions.
 type WorkflowController interface {
 	Sleep(d ...time.Duration) error
 	Check(name string, fn CheckFunc) bool
+	Group(name string, fn func(ctx VUContext) error) error
 }
+
 
 // SetupContext provides configuration access and structured observability during scenario setup.
 type SetupContext interface {
@@ -109,15 +111,18 @@ type checkCounterPair struct {
 
 type scenarioContext struct {
 	context.Context
-	vuid         int64
-	iteration    int64
-	scenarioName string
-	params       map[string]string
-	globalState  map[string]any
-	logger       log.Logger
-	metrics      metric.Collector
-	delayGen     delay.DelayGenerator
-	checkCache   map[string]checkCounterPair
+	vuid          int64
+	iteration     int64
+	scenarioName  string
+	groupPath     string
+	params        map[string]string
+	globalState   map[string]any
+	logger        log.Logger
+	metrics       metric.Collector
+	delayGen      delay.DelayGenerator
+	checkCache    map[string]checkCounterPair
+	groupCache    map[string]metric.Duration
+	childContexts map[string]*scenarioContext
 }
 
 // NewScenarioContext constructs a ScenarioContext.
@@ -166,16 +171,18 @@ func newScenarioContext(
 	}
 
 	return &scenarioContext{
-		Context:      ctx,
-		vuid:         vuid,
-		iteration:    iteration,
-		scenarioName: scenarioName,
-		params:       cfg.Params,
-		globalState:  globalState,
-		logger:       boundLogger,
-		metrics:      metrics,
-		delayGen:     delayGen,
-		checkCache:   make(map[string]checkCounterPair, 4),
+		Context:       ctx,
+		vuid:          vuid,
+		iteration:     iteration,
+		scenarioName:  scenarioName,
+		params:        cfg.Params,
+		globalState:   globalState,
+		logger:        boundLogger,
+		metrics:       metrics,
+		delayGen:      delayGen,
+		checkCache:    make(map[string]checkCounterPair, 4),
+		groupCache:    make(map[string]metric.Duration, 4),
+		childContexts: make(map[string]*scenarioContext, 4),
 	}
 }
 
@@ -208,18 +215,22 @@ func newVUScenarioContext(
 	}
 
 	return &scenarioContext{
-		Context:      ctx,
-		vuid:         vuid,
-		iteration:    0,
-		scenarioName: scenarioName,
-		params:       cfg.Params,
-		globalState:  globalState,
-		logger:       boundLogger,
-		metrics:      metrics,
-		delayGen:     delayGen,
-		checkCache:   make(map[string]checkCounterPair, 4),
+		Context:       ctx,
+		vuid:          vuid,
+		iteration:     0,
+		scenarioName:  scenarioName,
+		params:        cfg.Params,
+		globalState:   globalState,
+		logger:        boundLogger,
+		metrics:       metrics,
+		delayGen:      delayGen,
+		checkCache:    make(map[string]checkCounterPair, 4),
+		groupCache:    make(map[string]metric.Duration, 4),
+		childContexts: make(map[string]*scenarioContext, 4),
 	}
 }
+
+
 
 func (c *scenarioContext) prepareIteration(ctx context.Context, iteration int64) {
 	c.Context = ctx
@@ -366,7 +377,69 @@ func (c *scenarioContext) Check(name string, fn CheckFunc) bool {
 	return false
 }
 
+func (c *scenarioContext) Group(name string, fn func(ctx VUContext) error) error {
+	if fn == nil {
+		return nil
+	}
+
+	groupPath := name
+	if c.groupPath != "" {
+		groupPath = c.groupPath + "::" + name
+	}
+
+	var hist metric.Duration
+	if c.metrics != nil {
+		if c.groupCache == nil {
+			c.groupCache = make(map[string]metric.Duration, 4)
+		}
+		var ok bool
+		hist, ok = c.groupCache[groupPath]
+		if !ok {
+			metricName := metric.GroupMetricName(groupPath)
+			hist = c.metrics.Duration(metricName, nil)
+			c.groupCache[groupPath] = hist
+		}
+	}
+
+	if c.childContexts == nil {
+		c.childContexts = make(map[string]*scenarioContext, 4)
+	}
+	child, ok := c.childContexts[groupPath]
+	if !ok {
+		child = &scenarioContext{
+			Context:       c.Context,
+			vuid:          c.vuid,
+			iteration:     c.iteration,
+			scenarioName:  c.scenarioName,
+			groupPath:     groupPath,
+			params:        c.params,
+			globalState:   c.globalState,
+			logger:        c.logger,
+			metrics:       c.metrics,
+			delayGen:      c.delayGen,
+			checkCache:    c.checkCache,
+			groupCache:    c.groupCache,
+			childContexts: c.childContexts,
+		}
+		c.childContexts[groupPath] = child
+	} else {
+		child.Context = c.Context
+		child.iteration = c.iteration
+	}
+
+	start := time.Now()
+	defer func() {
+		if hist != nil {
+			hist.Observe(time.Since(start))
+		}
+	}()
+
+	return fn(child)
+}
+
+
 // Compile-time interface satisfaction checks.
+
 var (
 	_ ScenarioContext       = (*scenarioContext)(nil)
 	_ SetupContext          = (*scenarioContext)(nil)
