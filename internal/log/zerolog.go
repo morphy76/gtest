@@ -24,7 +24,7 @@ func New(w io.Writer, level zerolog.Level) *ZerologLogger {
 // NewWithFormat creates a ZerologLogger that uses either human-readable console output ("pretty")
 // or structured JSON output ("json"). Defaults to JSON for unrecognized formats.
 func NewWithFormat(w io.Writer, level zerolog.Level, format string) *ZerologLogger {
-	var out io.Writer = w
+	out := w
 	if format == "pretty" {
 		out = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
@@ -50,7 +50,7 @@ func NewAsyncWithFormat(w io.Writer, level zerolog.Level, format string) *Zerolo
 	if w == io.Discard {
 		return NewWithFormat(w, level, format)
 	}
-	var out io.Writer = w
+	out := w
 	if format == "pretty" {
 		out = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
