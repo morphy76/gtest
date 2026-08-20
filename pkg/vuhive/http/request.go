@@ -70,6 +70,8 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*Response, error) {
 	if c.cfg.detailedTiming {
 		traceCtx := httptrace.WithClientTrace(ctx, newClientTrace(&timings))
 		req = req.WithContext(traceCtx)
+	} else if req.Context() != ctx {
+		req = req.WithContext(ctx)
 	}
 
 	start := time.Now()
@@ -80,7 +82,9 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*Response, error) {
 		c.recordFailedMetrics(method, metricURL, totalDuration)
 		return nil, fmt.Errorf("vuhive/http: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	bodyBytes, readErr := io.ReadAll(resp.Body)
 	readDone := time.Now()
