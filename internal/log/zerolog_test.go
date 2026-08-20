@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -137,4 +138,38 @@ func TestErrorLogLevel(t *testing.T) {
 	assert.Equal(t, "error", result["level"])
 	assert.Equal(t, "db crash", result["error"])
 	assert.Equal(t, "failed to process", result["message"])
+}
+
+func TestConcurrentLogging_Async(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.NewAsync(&buf, zerolog.DebugLevel)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			logger.WithVU(id).WithIteration(int64(id * 2)).Info().Str("key", "val").Msg("test concurrent message")
+		}(i)
+	}
+	wg.Wait()
+	require.NoError(t, logger.Close())
+	assert.NotEmpty(t, buf.String())
+}
+
+func TestConcurrentLogging_AsyncWithFormat_Pretty(t *testing.T) {
+	var buf bytes.Buffer
+	logger := log.NewAsyncWithFormat(&buf, zerolog.DebugLevel, "pretty")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			logger.WithVU(id).WithIteration(int64(id * 2)).Info().Str("key", "val").Msg("test concurrent pretty message")
+		}(i)
+	}
+	wg.Wait()
+	require.NoError(t, logger.Close())
+	assert.NotEmpty(t, buf.String())
 }

@@ -6,14 +6,16 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/diode"
 )
 
 // ZerologLogger is a zerolog-backed implementation of Logger.
 type ZerologLogger struct {
-	zlog zerolog.Logger
+	zlog   zerolog.Logger
+	closer io.Closer
 }
 
-// New creates a new ZerologLogger writing JSON logs to w at the specified zerolog Level.
+// New creates a new ZerologLogger writing JSON logs synchronously to w at the specified zerolog Level.
 func New(w io.Writer, level zerolog.Level) *ZerologLogger {
 	zlog := zerolog.New(w).Level(level).With().Timestamp().Logger()
 	return &ZerologLogger{zlog: zlog}
@@ -22,13 +24,48 @@ func New(w io.Writer, level zerolog.Level) *ZerologLogger {
 // NewWithFormat creates a ZerologLogger that uses either human-readable console output ("pretty")
 // or structured JSON output ("json"). Defaults to JSON for unrecognized formats.
 func NewWithFormat(w io.Writer, level zerolog.Level, format string) *ZerologLogger {
-	writer := w
+	out := w
 	if format == "pretty" {
-		writer = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
+		out = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
-	zlog := zerolog.New(writer).Level(level).With().Timestamp().Logger()
+	zlog := zerolog.New(out).Level(level).With().Timestamp().Logger()
 
 	return &ZerologLogger{zlog: zlog}
+}
+
+// NewAsync creates a ZerologLogger writing JSON logs asynchronously via a lock-free ring-buffer diode.
+// This prevents lock contention and I/O blocking during high-concurrency load tests.
+func NewAsync(w io.Writer, level zerolog.Level) *ZerologLogger {
+	if w == io.Discard {
+		return New(w, level)
+	}
+	dw := diode.NewWriter(w, 10000, 10*time.Millisecond, nil)
+	zlog := zerolog.New(dw).Level(level).With().Timestamp().Logger()
+	return &ZerologLogger{zlog: zlog, closer: dw}
+}
+
+// NewAsyncWithFormat creates an asynchronous ZerologLogger using either pretty console or JSON output,
+// backed by a lock-free diode ring-buffer.
+func NewAsyncWithFormat(w io.Writer, level zerolog.Level, format string) *ZerologLogger {
+	if w == io.Discard {
+		return NewWithFormat(w, level, format)
+	}
+	out := w
+	if format == "pretty" {
+		out = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
+	}
+	dw := diode.NewWriter(out, 10000, 10*time.Millisecond, nil)
+	zlog := zerolog.New(dw).Level(level).With().Timestamp().Logger()
+
+	return &ZerologLogger{zlog: zlog, closer: dw}
+}
+
+// Close flushes and cleans up the underlying diode writer if present.
+func (l *ZerologLogger) Close() error {
+	if l.closer != nil {
+		return l.closer.Close()
+	}
+	return nil
 }
 
 // NewWithZerolog wraps an existing zerolog.Logger into a ZerologLogger.
@@ -38,17 +75,17 @@ func NewWithZerolog(zlog zerolog.Logger) *ZerologLogger {
 
 // WithScenario returns a child ZerologLogger with the "scenario" field bound.
 func (l *ZerologLogger) WithScenario(scenario string) *ZerologLogger {
-	return &ZerologLogger{zlog: l.zlog.With().Str("scenario", scenario).Logger()}
+	return &ZerologLogger{zlog: l.zlog.With().Str("scenario", scenario).Logger(), closer: l.closer}
 }
 
 // WithVU returns a child ZerologLogger with the "vu_id" field bound.
 func (l *ZerologLogger) WithVU(vuID int) *ZerologLogger {
-	return &ZerologLogger{zlog: l.zlog.With().Int("vu_id", vuID).Logger()}
+	return &ZerologLogger{zlog: l.zlog.With().Int("vu_id", vuID).Logger(), closer: l.closer}
 }
 
 // WithIteration returns a child ZerologLogger with the "iteration" field bound.
 func (l *ZerologLogger) WithIteration(iter int64) *ZerologLogger {
-	return &ZerologLogger{zlog: l.zlog.With().Int64("iteration", iter).Logger()}
+	return &ZerologLogger{zlog: l.zlog.With().Int64("iteration", iter).Logger(), closer: l.closer}
 }
 
 // WithFields returns a child ZerologLogger with arbitrary key-value context fields.
@@ -57,7 +94,7 @@ func (l *ZerologLogger) WithFields(fields map[string]any) *ZerologLogger {
 	for k, v := range fields {
 		ctx = ctx.Interface(k, v)
 	}
-	return &ZerologLogger{zlog: ctx.Logger()}
+	return &ZerologLogger{zlog: ctx.Logger(), closer: l.closer}
 }
 
 // Zerolog returns the underlying zerolog.Logger instance.
