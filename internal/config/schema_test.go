@@ -319,3 +319,28 @@ func TestJSONSchema_HTTPConfig(t *testing.T) {
 	assert.Contains(t, tlsProps, "insecure_skip_verify")
 }
 
+
+
+func TestJSONSchema_HTTPClients(t *testing.T) {
+	schema := loadSchema(t)
+
+	defs, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		defs, ok = schema["definitions"].(map[string]any)
+	}
+	require.True(t, ok)
+
+	scenarioDef, ok := defs["scenario"].(map[string]any)
+	require.True(t, ok)
+	scenarioProps, ok := scenarioDef["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, scenarioProps, "http_clients")
+
+	httpClientsDef, ok := scenarioProps["http_clients"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "object", httpClientsDef["type"])
+	
+	additionalProps, ok := httpClientsDef["additionalProperties"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "#/$defs/http_config", additionalProps["$ref"])
+}

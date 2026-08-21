@@ -596,3 +596,97 @@ func TestValidate_HTTPConfig(t *testing.T) {
 	})
 }
 
+
+func TestValidate_HTTPClients(t *testing.T) {
+	t.Run("empty name", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTPClients: map[string]*config.HTTPConfig{
+						"": {
+							Timeout: 1 * time.Second,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http_clients", valErr.Field)
+	})
+
+	t.Run("nil config", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTPClients: map[string]*config.HTTPConfig{
+						"auth": nil,
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http_clients.auth", valErr.Field)
+	})
+
+	t.Run("negative timeout", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTPClients: map[string]*config.HTTPConfig{
+						"auth": {
+							Timeout: -1 * time.Second,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http_clients.auth.timeout", valErr.Field)
+	})
+
+	t.Run("valid http_clients", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTPClients: map[string]*config.HTTPConfig{
+						"auth": {
+							BaseURL: "https://auth.example.com",
+							Timeout: 2 * time.Second,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.NoError(t, err)
+	})
+}

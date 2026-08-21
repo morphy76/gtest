@@ -432,6 +432,14 @@
         "http": {
           "$ref": "#/$defs/http_config",
           "description": "Declarative HTTP client configuration (base_url, timeout, headers, TLS, connection pool, timing)."
+        },
+        "http_clients": {
+          "type": "object",
+          "description": "Map of named HTTP client configurations allowing Virtual Users to target multiple distinct base URLs and services.",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/http_config"
+          }
         }
       },
       "allOf": [

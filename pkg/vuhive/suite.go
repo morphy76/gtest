@@ -225,6 +225,10 @@ func (a *publicSetupContextAdapter) HTTPConfig() HTTPConfig {
 	return convertEngineHTTPConfig(a.SetupContext.HTTPConfig())
 }
 
+func (a *publicSetupContextAdapter) HTTPClients() map[string]HTTPConfig {
+	return convertEngineHTTPClients(a.SetupContext.HTTPClients())
+}
+
 type publicVUContextAdapter struct {
 	engine.VUContext
 	loggerAdapter  publicLoggerAdapter
@@ -250,6 +254,10 @@ func (a *publicVUContextAdapter) Metrics() MetricsCollector {
 
 func (a *publicVUContextAdapter) HTTPConfig() HTTPConfig {
 	return convertEngineHTTPConfig(a.VUContext.HTTPConfig())
+}
+
+func (a *publicVUContextAdapter) HTTPClients() map[string]HTTPConfig {
+	return convertEngineHTTPClients(a.VUContext.HTTPClients())
 }
 
 func (a *publicVUContextAdapter) Check(name string, fn CheckFunc) bool {
@@ -297,6 +305,10 @@ func (a *publicTeardownContextAdapter) HTTPConfig() HTTPConfig {
 	return convertEngineHTTPConfig(a.TeardownContext.HTTPConfig())
 }
 
+func (a *publicTeardownContextAdapter) HTTPClients() map[string]HTTPConfig {
+	return convertEngineHTTPClients(a.TeardownContext.HTTPClients())
+}
+
 type publicSummaryContextAdapter struct {
 	engine.SummaryContext
 	loggerAdapter  publicLoggerAdapter
@@ -313,6 +325,10 @@ func (a *publicSummaryContextAdapter) Metrics() MetricsCollector {
 
 func (a *publicSummaryContextAdapter) HTTPConfig() HTTPConfig {
 	return convertEngineHTTPConfig(a.SummaryContext.HTTPConfig())
+}
+
+func (a *publicSummaryContextAdapter) HTTPClients() map[string]HTTPConfig {
+	return convertEngineHTTPClients(a.SummaryContext.HTTPClients())
 }
 
 func convertEngineHTTPConfig(c config.HTTPConfig) HTTPConfig {
@@ -336,6 +352,17 @@ func convertEngineHTTPConfig(c config.HTTPConfig) HTTPConfig {
 
 type runnerSuiteAdapter struct {
 	suite *Suite
+}
+
+func convertEngineHTTPClients(clients map[string]config.HTTPConfig) map[string]HTTPConfig {
+	if clients == nil {
+		return nil
+	}
+	result := make(map[string]HTTPConfig, len(clients))
+	for name, cfg := range clients {
+		result[name] = convertEngineHTTPConfig(cfg)
+	}
+	return result
 }
 
 func (a *runnerSuiteAdapter) Name() string {

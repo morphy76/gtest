@@ -34,6 +34,9 @@ type ConfigProvider interface {
 
 	// HTTPConfig retrieves the declarative HTTP client configuration for the scenario.
 	HTTPConfig() HTTPConfig
+
+	// HTTPClients retrieves the named HTTP client configurations map.
+	HTTPClients() map[string]HTTPConfig
 }
 
 // HTTPConfig holds declarative configuration for the HTTP client module.

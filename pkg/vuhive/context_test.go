@@ -61,6 +61,11 @@ func (mockConfig) ParamDuration(key string, defaultValue time.Duration) time.Dur
 func (mockConfig) HTTPConfig() vuhive.HTTPConfig {
 	return vuhive.HTTPConfig{BaseURL: "https://api.example.com"}
 }
+func (mockConfig) HTTPClients() map[string]vuhive.HTTPConfig {
+	return map[string]vuhive.HTTPConfig{
+		"api": {BaseURL: "https://api.example.com"},
+	}
+}
 
 type mockState struct{}
 

@@ -32,7 +32,8 @@ type scenarioConfigDTO struct {
 	InteractionDelay *thinkTimeConfigDTO  `mapstructure:"interaction_delay"`
 	ThinkTime        *thinkTimeConfigDTO  `mapstructure:"think_time"`
 	Thresholds       []thresholdConfigDTO `mapstructure:"thresholds"`
-	HTTP             *httpConfigDTO       `mapstructure:"http"`
+	HTTP             *httpConfigDTO                  `mapstructure:"http"`
+	HTTPClients      map[string]*httpConfigDTO       `mapstructure:"http_clients"`
 }
 
 // httpConfigDTO is the DTO for HTTP client configuration.
@@ -155,6 +156,13 @@ func (d *scenarioConfigDTO) toModel() ScenarioConfig {
 	}
 	if d.HTTP != nil {
 		sc.HTTP = d.HTTP.toModel()
+	}
+
+	if d.HTTPClients != nil {
+		sc.HTTPClients = make(map[string]*HTTPConfig, len(d.HTTPClients))
+		for name, clientDTO := range d.HTTPClients {
+			sc.HTTPClients[name] = clientDTO.toModel()
+		}
 	}
 	return sc
 }

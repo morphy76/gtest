@@ -942,3 +942,46 @@ scenarios:
 
 
 
+
+func TestLoad_HTTPClients(t *testing.T) {
+	yamlInput := `
+version: "1.0"
+scenarios:
+  multi_service:
+    type: constant_vus
+    vus: 10
+    run_period: 30s
+    vu_timeout: 5s
+    http_clients:
+      auth_service:
+        base_url: "https://auth.example.com"
+        timeout: 2s
+        headers:
+          X-Client-ID: "vuhive"
+        pool:
+          max_idle_conns: 20
+        metric_prefix: "vuhive.http.auth."
+      catalog_api:
+        base_url: "https://catalog.example.com/api/v2"
+        timeout: 5s
+`
+	cfg, err := config.Load(strings.NewReader(yamlInput))
+	require.NoError(t, err)
+
+	require.NotNil(t, cfg.Scenarios["multi_service"].HTTPClients)
+	clients := cfg.Scenarios["multi_service"].HTTPClients
+	require.Len(t, clients, 2)
+
+	authClient := clients["auth_service"]
+	require.NotNil(t, authClient)
+	assert.Equal(t, "https://auth.example.com", authClient.BaseURL)
+	assert.Equal(t, 2*time.Second, authClient.Timeout)
+	assert.Equal(t, map[string]string{"x-client-id": "vuhive"}, authClient.Headers)
+	assert.Equal(t, 20, authClient.Pool.MaxIdleConns)
+	assert.Equal(t, "vuhive.http.auth.", authClient.MetricPrefix)
+
+	catalogClient := clients["catalog_api"]
+	require.NotNil(t, catalogClient)
+	assert.Equal(t, "https://catalog.example.com/api/v2", catalogClient.BaseURL)
+	assert.Equal(t, 5*time.Second, catalogClient.Timeout)
+}

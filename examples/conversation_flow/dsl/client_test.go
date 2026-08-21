@@ -38,6 +38,7 @@ func (m *mockScenarioContext) Param(key string) string                          
 func (m *mockScenarioContext) ParamInt(key string, def int) int                            { return def }
 func (m *mockScenarioContext) ParamDuration(key string, def time.Duration) time.Duration { return def }
 func (m *mockScenarioContext) HTTPConfig() vuhive.HTTPConfig                               { return vuhive.HTTPConfig{} }
+func (m *mockScenarioContext) HTTPClients() map[string]vuhive.HTTPConfig                 { return nil }
 func (m *mockScenarioContext) GlobalState(key string) any                                  { return nil }
 func (m *mockScenarioContext) Log() vuhive.Logger                                           { return noopLogger{} }
 func (m *mockScenarioContext) Metrics() vuhive.MetricsCollector                             { return noopMetrics{} }

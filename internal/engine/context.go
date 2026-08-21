@@ -35,6 +35,9 @@ type ConfigProvider interface {
 
 	// HTTPConfig retrieves the declarative HTTP client configuration for the scenario.
 	HTTPConfig() config.HTTPConfig
+
+	// HTTPClients retrieves the named HTTP client configurations map.
+	HTTPClients() map[string]config.HTTPConfig
 }
 
 // StateProvider provides read-only access to global scenario state returned by Setup.
@@ -120,6 +123,7 @@ type scenarioContext struct {
 	groupPath     string
 	params        map[string]string
 	httpCfg       config.HTTPConfig
+	httpClients   map[string]config.HTTPConfig
 	globalState   map[string]any
 	logger        log.Logger
 	metrics       metric.Collector
@@ -179,6 +183,16 @@ func newScenarioContext(
 		httpCfg = *cfg.HTTP
 	}
 
+	var httpClients map[string]config.HTTPConfig
+	if len(cfg.HTTPClients) > 0 {
+		httpClients = make(map[string]config.HTTPConfig, len(cfg.HTTPClients))
+		for name, clientCfg := range cfg.HTTPClients {
+			if clientCfg != nil {
+				httpClients[name] = *clientCfg
+			}
+		}
+	}
+
 	return &scenarioContext{
 		Context:       ctx,
 		vuid:          vuid,
@@ -186,6 +200,7 @@ func newScenarioContext(
 		scenarioName:  scenarioName,
 		params:        cfg.Params,
 		httpCfg:       httpCfg,
+		httpClients:   httpClients,
 		globalState:   globalState,
 		logger:        boundLogger,
 		metrics:       metrics,
@@ -229,6 +244,16 @@ func newVUScenarioContext(
 		httpCfg = *cfg.HTTP
 	}
 
+	var httpClients map[string]config.HTTPConfig
+	if len(cfg.HTTPClients) > 0 {
+		httpClients = make(map[string]config.HTTPConfig, len(cfg.HTTPClients))
+		for name, clientCfg := range cfg.HTTPClients {
+			if clientCfg != nil {
+				httpClients[name] = *clientCfg
+			}
+		}
+	}
+
 	return &scenarioContext{
 		Context:       ctx,
 		vuid:          vuid,
@@ -236,6 +261,7 @@ func newVUScenarioContext(
 		scenarioName:  scenarioName,
 		params:        cfg.Params,
 		httpCfg:       httpCfg,
+		httpClients:   httpClients,
 		globalState:   globalState,
 		logger:        boundLogger,
 		metrics:       metrics,
@@ -315,6 +341,10 @@ func (c *scenarioContext) ParamDuration(key string, defaultValue time.Duration) 
 
 func (c *scenarioContext) HTTPConfig() config.HTTPConfig {
 	return c.httpCfg
+}
+
+func (c *scenarioContext) HTTPClients() map[string]config.HTTPConfig {
+	return c.httpClients
 }
 
 func (c *scenarioContext) GlobalState(key string) any {
