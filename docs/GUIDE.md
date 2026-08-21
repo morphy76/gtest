@@ -10,7 +10,7 @@ A step-by-step guide for load test developers adopting the `vuhive` framework.
 2. [Project Structure](#2-project-structure)
 3. [Writing Your First Scenario](#3-writing-your-first-scenario)
 4. [Configuration (vuhive.yaml)](#4-configuration-vuhiveyaml)
-5. [ScenarioContext API Reference](#5-scenariocontext-api-reference)
+5. [Context Hierarchy & Role-Specific Interfaces](#5-context-hierarchy--role-specific-interfaces)
 6. [Lifecycle Hooks Deep Dive](#6-lifecycle-hooks-deep-dive)
 7. [Recording Metrics](#7-recording-metrics)
 8. [SLA Thresholds (Quality Gates)](#8-sla-thresholds-quality-gates)
@@ -59,7 +59,7 @@ func main() {
 	suite := vuhive.NewSuite("My First Load Test")
 
 	suite.RegisterScenario("hello", vuhive.Scenario{
-		RunVU: func(ctx vuhive.ScenarioContext) error {
+		RunVU: func(ctx vuhive.VUContext) error {
 			start := time.Now()
 			time.Sleep(10 * time.Millisecond) // replace with real work
 			ctx.Metrics().Duration("response_time", vuhive.Tags{}).Observe(time.Since(start))
@@ -205,7 +205,7 @@ default_scenario: my_scenario   # optional, fallback when --scenario not passed
 
 scenarios:
   my_scenario:
-    type: constant_vus           # or "arrival_rate"
+    type: constant_vus           # "constant_vus", "arrival_rate", or "ramping_vus"
 
     # --- constant_vus fields ---
     vus: 10                      # number of concurrent VUs (required for constant_vus)
@@ -789,7 +789,7 @@ go run main.go --config vuhive.yaml --scenario my_scenario
 ### 11.1 HTTP Load Test with Tags
 
 ```go
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     endpoints := []string{"/api/users", "/api/orders", "/api/products"}
     for _, ep := range endpoints {
         start := time.Now()
@@ -1056,7 +1056,7 @@ Use the dedicated `github.com/morphy76/vuhive/pkg/vuhive/data` package to load C
   - `data.SharedQueue`: Dispenses each record exactly once across concurrent VUs until exhausted (`data.ErrDatasetExhausted`).
 
 ```go
-Setup: func(ctx vuhive.ScenarioContext) (map[string]any, error) {
+Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
     ds, err := data.LoadCSVFile("testdata/users.csv", data.Sequential)
     if err != nil {
         return nil, err
@@ -1064,7 +1064,7 @@ Setup: func(ctx vuhive.ScenarioContext) (map[string]any, error) {
     return map[string]any{"dataset": ds}, nil
 },
 
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     ds := ctx.GlobalState("dataset").(*data.DataSet)
     record, err := ds.Next(ctx)
     if err != nil {
@@ -1103,7 +1103,7 @@ scenarios:
 Then call `ctx.Sleep()` at the exact points in your test logic where a user pause occurs (e.g. after receiving a bot response before sending the next message, only if turns remain):
 
 ```go
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     // Action 1: Receive bot response / browse product
     // ...
 
@@ -1122,7 +1122,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 Pass an explicit duration to override scenario defaults:
 
 ```go
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     if err := ctx.Sleep(300 * time.Millisecond); err != nil {
         return err
     }
@@ -1141,7 +1141,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 ```go
 thinkTimer := vuhive.ExpoDelay(500*time.Millisecond, 100*time.Millisecond, 2*time.Second)
 
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     if err := ctx.Sleep(thinkTimer.Next()); err != nil {
         return err
     }
@@ -1154,7 +1154,7 @@ RunVU: func(ctx vuhive.ScenarioContext) error {
 ### 11.6 Multi-Step User Journey
 
 ```go
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     // Step 1: Login
     token, err := login(ctx, baseURL, username, password)
     if err != nil {
@@ -1196,7 +1196,7 @@ if resp.StatusCode == http.StatusOK {
 Use `HandleSummary` to receive the full structured summary after report generation for notifications, metrics export, or CI artifact generation:
 
 ```go
-HandleSummary: func(ctx context.Context, summary vuhive.SummaryData) error {
+HandleSummary: func(ctx vuhive.SummaryContext, summary vuhive.SummaryData) error {
     // 1. Check overall SLA pass/fail status
     if !summary.Passed {
         postSlackAlert(fmt.Sprintf("❌ Load test SLA breached for %s (%s)", summary.Scenario, summary.SuiteName))
@@ -1225,7 +1225,7 @@ HandleSummary: func(ctx context.Context, summary vuhive.SummaryData) error {
 ### 11.9 Inline Assertions (Checks)
 
 ```go
-RunVU: func(ctx vuhive.ScenarioContext) error {
+RunVU: func(ctx vuhive.VUContext) error {
     resp, err := client.Do(req)
     if err != nil {
         return err
@@ -1288,6 +1288,7 @@ See the [**Examples Reference Suite Index**](../examples/README.md) for a struct
 | **HTTP REST Checkout** | [`examples/http_checkout/`](../examples/http_checkout/) | Standard REST API load test, HDR duration histogram, success rate, constant VU concurrency. | [Read Guide](../examples/http_checkout/README.md) |
 | **HTTP Module (Auto-Metrics)** | [`examples/http_module/`](../examples/http_module/) | Built-in `pkg/vuhive/http` client, automatic metrics, JSON parsing, inline checks. | [Read Guide](../examples/http_module/README.md) |
 | **Inline Checks (Assertions)** | [`examples/checks/`](../examples/checks/) | Inline assertions (`ctx.Check`), non-aborting validations, auto-instrumented check counters and report tables. | [Read Guide](../examples/checks/README.md) |
+| **Transaction Groups** | [`examples/groups/`](../examples/groups/) | Transaction boundaries (`ctx.Group`), nested groups, group-scoped duration metrics, threshold targeting. | [Read Guide](../examples/groups/README.md) |
 | **Thinking Time & Delays** | [`examples/think_time/`](../examples/think_time/) | Multi-step journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. | [Read Guide](../examples/think_time/README.md) |
 | **Data Parameterization** | [`examples/data_parameterization/`](../examples/data_parameterization/) | `pkg/vuhive/data` dataset ingestion (CSV, JSON, JSONL) with `Sequential`, `Random`, and `SharedQueue` strategies. | [Read Guide](../examples/data_parameterization/README.md) |
 | **Ramping VUs Spike Test** | [`examples/ramping_vus/`](../examples/ramping_vus/) | Multi-stage spike test with dynamic VU scaling and recovery observation (`ramping_vus`). | [Read Guide](../examples/ramping_vus/README.md) |
