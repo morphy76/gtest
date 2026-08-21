@@ -75,7 +75,7 @@ func drainWorkers(
 				cancelCtx()
 			}
 			<-waitCh
-			if logger != nil && activeBeforeCancel > 0 {
+			if logger != nil {
 				logger.Warn().
 					Str("phase", "drain").
 					Int64("active_vus", activeBeforeCancel).

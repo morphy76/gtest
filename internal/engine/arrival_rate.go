@@ -33,8 +33,7 @@ func RunArrivalRate(
 			Msg("starting arrival_rate pacing execution")
 	}
 
-	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown + cfg.Drain
-	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
+	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	dispatchDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
