@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -8,8 +9,15 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
+
+// bodyBufferPool is a sync.Pool of *bytes.Buffer used to reuse memory when reading
+// HTTP response bodies, reducing GC pressure in high-throughput load testing scenarios.
+var bodyBufferPool = sync.Pool{
+	New: func() any { return bytes.NewBuffer(make([]byte, 0, 4096)) },
+}
 
 // resolveURL resolves rawURL against cfg.baseURL if cfg.baseURL is configured and rawURL is relative.
 func (c *Client) resolveURL(rawURL string) string {
@@ -107,31 +115,38 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*Response, error) {
 		_ = resp.Body.Close()
 	}()
 
-	bodyBytes, readErr := io.ReadAll(resp.Body)
-	readDone := time.Now()
-
-	if readErr != nil {
-		c.recordFailedMetrics(method, metricURL, time.Since(start))
-		return nil, fmt.Errorf("vuhive/http: failed to read response body: %w", readErr)
-	}
-
-	failed := resp.StatusCode < 200 || resp.StatusCode >= 400
-	c.recordMetrics(method, metricURL, resp.StatusCode, totalDuration, failed)
-
-	if c.cfg.detailedTiming {
-		tags := requestTags(method, metricURL, resp.StatusCode)
-
-		var sendingDuration time.Duration
-		if !timings.wroteHeaders.IsZero() && !timings.gotFirstByte.IsZero() {
-			sendingDuration = timings.gotFirstByte.Sub(timings.wroteHeaders)
+	var bodyBytes []byte
+	if c.cfg.discardBody {
+		_, readErr := io.Copy(io.Discard, resp.Body)
+		readDone := time.Now()
+		if readErr != nil {
+			c.recordFailedMetrics(method, metricURL, time.Since(start))
+			return nil, fmt.Errorf("vuhive/http: failed to drain response body: %w", readErr)
 		}
-
-		var receivingDuration time.Duration
-		if !timings.gotFirstByte.IsZero() {
-			receivingDuration = readDone.Sub(timings.gotFirstByte)
+		failed := resp.StatusCode < 200 || resp.StatusCode >= 400
+		c.recordMetrics(method, metricURL, resp.StatusCode, totalDuration, failed)
+		if c.cfg.detailedTiming {
+			c.recordDetailedTimingsFromTrace(method, metricURL, resp.StatusCode, &timings, readDone)
 		}
+	} else {
+		buf := bodyBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		_, readErr := io.Copy(buf, resp.Body)
+		readDone := time.Now()
+		if readErr != nil {
+			bodyBufferPool.Put(buf)
+			c.recordFailedMetrics(method, metricURL, time.Since(start))
+			return nil, fmt.Errorf("vuhive/http: failed to read response body: %w", readErr)
+		}
+		bodyBytes = make([]byte, buf.Len())
+		copy(bodyBytes, buf.Bytes())
+		bodyBufferPool.Put(buf)
 
-		c.recordDetailedTimings(tags, &timings, sendingDuration, receivingDuration)
+		failed := resp.StatusCode < 200 || resp.StatusCode >= 400
+		c.recordMetrics(method, metricURL, resp.StatusCode, totalDuration, failed)
+		if c.cfg.detailedTiming {
+			c.recordDetailedTimingsFromTrace(method, metricURL, resp.StatusCode, &timings, readDone)
+		}
 	}
 
 	return &Response{

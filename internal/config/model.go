@@ -86,6 +86,9 @@ type ScenarioConfig struct {
 
 	// HTTP defines declarative HTTP client configuration.
 	HTTP *HTTPConfig
+
+	// HTTPClients defines named HTTP client configurations for multi-service scenarios.
+	HTTPClients map[string]*HTTPConfig
 }
 
 // HTTPConfig holds declarative configuration for the HTTP client module.

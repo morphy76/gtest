@@ -376,7 +376,25 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 
 	// Validate http if specified.
 	if sc.HTTP != nil {
-		if err := validateHTTPConfig(prefix, sc.HTTP); err != nil {
+		if err := validateHTTPConfig(fmt.Sprintf("%s.http", prefix), sc.HTTP); err != nil {
+			return err
+		}
+	}
+
+	for clientName, clientCfg := range sc.HTTPClients {
+		if clientName == "" {
+			return &ValidationError{
+				Field:   prefix + ".http_clients",
+				Message: "client names must be non-empty strings",
+			}
+		}
+		if clientCfg == nil {
+			return &ValidationError{
+				Field:   fmt.Sprintf("%s.http_clients.%s", prefix, clientName),
+				Message: "client configuration must not be null",
+			}
+		}
+		if err := validateHTTPConfig(fmt.Sprintf("%s.http_clients.%s", prefix, clientName), clientCfg); err != nil {
 			return err
 		}
 	}
@@ -411,8 +429,7 @@ func validateThinkTime(prefix string, tt *ThinkTimeConfig) error {
 }
 
 // validateHTTPConfig checks the declarative HTTP client configuration.
-func validateHTTPConfig(prefix string, httpCfg *HTTPConfig) error {
-	httpPrefix := fmt.Sprintf("%s.http", prefix)
+func validateHTTPConfig(httpPrefix string, httpCfg *HTTPConfig) error {
 	if httpCfg.Timeout < 0 {
 		return &ValidationError{
 			Field:   httpPrefix + ".timeout",

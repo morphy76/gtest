@@ -699,7 +699,7 @@ func main() {
 `HandleSummary` enables developers to receive the complete execution summary programmatically after the test run and terminal/JSON report generation. This is ideal for posting results to Slack, Datadog, webhooks, or generating custom artifacts.
 
 ```go
-HandleSummary: func(ctx context.Context, summary vuhive.SummaryData) error {
+HandleSummary: func(ctx vuhive.SummaryContext, summary vuhive.SummaryData) error {
     // Check SLA verdict
     if !summary.Passed {
         sendSlackAlert(fmt.Sprintf("SLA breached for %s!", summary.Scenario))
@@ -810,6 +810,12 @@ For complete architectural details, performance verification targets, `pprof` pr
 
 ---
 
+## Development & Architecture
+
+For contributors, architecture guidelines (Hexagonal/DDD), technology stack constraints, structured logging patterns, and the strict TDD development cycle, see the [**Development Guide**](docs/DEVELOPMENT.md).
+
+---
+
 ## Examples & Reference Implementations
 
 The [`examples/`](examples/README.md) directory contains self-contained, compilable load test suites demonstrating all framework capabilities. See the [**Examples Reference Suite**](examples/README.md) for a structured 3-tier learning progression path and complete feature matrix.
@@ -819,6 +825,7 @@ The [`examples/`](examples/README.md) directory contains self-contained, compila
 | [`examples/http_checkout/`](examples/http_checkout/) | `constant_vus` | REST API load test, manual duration/counter/rate metrics, linear ramp-up/down. | [Guide](examples/http_checkout/README.md) |
 | [`examples/http_module/`](examples/http_module/) | `constant_vus` | Built-in `pkg/vuhive/http` client, auto-recorded metrics, JSON decoding, inline checks. | [Guide](examples/http_module/README.md) |
 | [`examples/checks/`](examples/checks/) | `constant_vus` | Inline assertions (`ctx.Check`) for HTTP status, headers, JSON body validation, check metrics. | [Guide](examples/checks/README.md) |
+| [`examples/groups/`](examples/groups/) | `constant_vus` | Transaction boundaries (`ctx.Group`), nested groups, group-scoped duration metrics, threshold targeting. | [Guide](examples/groups/README.md) |
 | [`examples/think_time/`](examples/think_time/) | `constant_vus` | Multi-step user journey, declarative `interaction_delay` (`range`), `ctx.Sleep()`, programmatic `ExpoDelay`. | [Guide](examples/think_time/README.md) |
 | [`examples/data_parameterization/`](examples/data_parameterization/) | `constant_vus` | CSV (`Sequential`), JSON (`Random`), and JSONL (`SharedQueue`) dataset parameterization. | [Guide](examples/data_parameterization/README.md) |
 | [`examples/ramping_vus/`](examples/ramping_vus/) | `ramping_vus` | Multi-stage spike test with dynamic VU scaling and recovery observation. | [Guide](examples/ramping_vus/README.md) |

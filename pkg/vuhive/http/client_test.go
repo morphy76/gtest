@@ -425,6 +425,7 @@ func (m *mockSetupContext) Param(key string) string { return "" }
 func (m *mockSetupContext) ParamInt(key string, def int) int { return def }
 func (m *mockSetupContext) ParamDuration(key string, def time.Duration) time.Duration { return def }
 func (m *mockSetupContext) HTTPConfig() vuhive.HTTPConfig { return m.httpCfg }
+func (m *mockSetupContext) HTTPClients() map[string]vuhive.HTTPConfig { return nil }
 
 type mockVUContext struct {
 	mockSetupContext

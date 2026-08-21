@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"unsafe"
 )
 
 // Response wraps the result of an HTTP request with convenience accessors.
@@ -20,9 +21,14 @@ type Response struct {
 	Body []byte
 }
 
-// Text returns the response body as a string.
+// Text returns the response body as a string using zero-copy conversion.
+// The returned string shares the underlying memory with Body; this is safe because
+// Response.Body is immutable after construction and must not be modified by the caller.
 func (r *Response) Text() string {
-	return string(r.Body)
+	if len(r.Body) == 0 {
+		return ""
+	}
+	return unsafe.String(&r.Body[0], len(r.Body))
 }
 
 // JSON unmarshals the response body into the provided target value.
