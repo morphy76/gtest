@@ -180,3 +180,11 @@ func NewDelayGenerator(cfg *InteractionDelayConfig) (DelayGenerator, error) {
 		return nil, fmt.Errorf("unknown delay type: %q", cfg.Type)
 	}
 }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ DelayGenerator = (*fixedDelay)(nil)
+	_ DelayGenerator = (*rangeDelay)(nil)
+	_ DelayGenerator = (*expoDelay)(nil)
+	_ DelayGenerator = (*gaussianDelay)(nil)
+)

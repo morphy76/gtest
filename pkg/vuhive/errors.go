@@ -61,3 +61,11 @@ func (e *SetupError) Error() string {
 func (e *SetupError) Unwrap() error {
 	return e.Err
 }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ error = (*ConfigError)(nil)
+	_ error = (*ValidationError)(nil)
+	_ error = (*ScenarioNotFoundError)(nil)
+	_ error = (*SetupError)(nil)
+)

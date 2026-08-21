@@ -119,3 +119,10 @@ func NewClientWithCollector(metrics vuhive.MetricsCollector, opts ...Option) (Cl
 		noopConsumer:  noopConsumer{cfg: cfg},
 	}, nil
 }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ Publisher = (*noopPublisher)(nil)
+	_ Consumer  = (*noopConsumer)(nil)
+	_ Client    = (*noopClient)(nil)
+)

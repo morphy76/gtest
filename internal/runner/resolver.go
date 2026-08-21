@@ -24,6 +24,8 @@ func (e *ScenarioNotFoundError) Error() string {
 	return fmt.Sprintf("vuhive: scenario not found: %s", e.Message)
 }
 
+var _ error = (*ScenarioNotFoundError)(nil)
+
 // ScenarioRegistry provides access to named scenarios.
 type ScenarioRegistry interface {
 	Name() string

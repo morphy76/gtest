@@ -494,3 +494,28 @@ func translateError(err error) error {
 	}
 	return err
 }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ LogEvent               = (*publicLogEventAdapter)(nil)
+	_ Logger                 = (*publicLoggerAdapter)(nil)
+	_ MetricsCollector       = (*publicMetricsAdapter)(nil)
+	_ SetupContext           = (*publicSetupContextAdapter)(nil)
+	_ ConfigProvider         = (*publicSetupContextAdapter)(nil)
+	_ ObservabilityProvider = (*publicSetupContextAdapter)(nil)
+	_ VUContext              = (*publicVUContextAdapter)(nil)
+	_ ScenarioContext        = (*publicVUContextAdapter)(nil)
+	_ ExecutionIdentity     = (*publicVUContextAdapter)(nil)
+	_ ConfigProvider         = (*publicVUContextAdapter)(nil)
+	_ StateProvider          = (*publicVUContextAdapter)(nil)
+	_ ObservabilityProvider = (*publicVUContextAdapter)(nil)
+	_ WorkflowController    = (*publicVUContextAdapter)(nil)
+	_ TeardownContext        = (*publicTeardownContextAdapter)(nil)
+	_ ConfigProvider         = (*publicTeardownContextAdapter)(nil)
+	_ StateProvider          = (*publicTeardownContextAdapter)(nil)
+	_ ObservabilityProvider = (*publicTeardownContextAdapter)(nil)
+	_ SummaryContext         = (*publicSummaryContextAdapter)(nil)
+	_ ConfigProvider         = (*publicSummaryContextAdapter)(nil)
+	_ ObservabilityProvider = (*publicSummaryContextAdapter)(nil)
+	_ runner.ScenarioRegistry = (*runnerSuiteAdapter)(nil)
+)

@@ -109,3 +109,11 @@ func (r *pacingRegistry) Get(scenarioType config.ScenarioType) (PacingEngine, bo
 
 // DefaultPacingRegistry is the global default registry containing built-in pacers.
 var DefaultPacingRegistry = NewPacingRegistry()
+
+// Compile-time interface satisfaction checks.
+var (
+	_ PacingEngine   = (*ConstantVUsPacer)(nil)
+	_ PacingEngine   = (*ArrivalRatePacer)(nil)
+	_ PacingEngine   = (*RampingVUsPacer)(nil)
+	_ PacingRegistry = (*pacingRegistry)(nil)
+)

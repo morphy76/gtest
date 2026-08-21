@@ -28,3 +28,9 @@ type ValidationError struct {
 func (e *ValidationError) Error() string {
 	return fmt.Sprintf("vuhive: validation error for field %q: %s", e.Field, e.Message)
 }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ error = (*ConfigError)(nil)
+	_ error = (*ValidationError)(nil)
+)

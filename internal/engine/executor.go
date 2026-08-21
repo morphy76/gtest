@@ -17,6 +17,8 @@ type MetricsStore interface {
 	sla.MetricReader
 }
 
+var _ MetricsStore = (*metric.Store)(nil)
+
 // Executor orchestrates scenario execution: Setup -> VUs -> Teardown.
 type Executor struct {
 	ScenarioName string
