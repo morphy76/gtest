@@ -37,9 +37,10 @@ internal/<component>/
     └── outbound/            # Driven Adapters (pgx databases, OpenAI, Redis, Qdrant, NATS clients)
 ```
 
-### C. Dependency Injection
+### C. Dependency Injection & Interface Verification
 - Always define dependencies as interfaces inside `application/ports/`.
 - Concrete adapters in `adapters/` must implement these interfaces.
+- Concrete structs implementing interfaces MUST include static, compile-time type assertions (`var _ Interface = (*Concrete)(nil)`).
 - Application service constructors must accept outbound or inbound port *interfaces*, never concrete adapters.
 
 ### D. Data Mapping & DTO Boundaries

@@ -460,3 +460,10 @@ func NewClientWithCollector(metrics vuhive.MetricsCollector, opts ...Option) (Cl
 		client:    cl,
 	}, nil
 }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ Publisher = (*kafkaPublisher)(nil)
+	_ Consumer  = (*kafkaConsumer)(nil)
+	_ Client    = (*kafkaClient)(nil)
+)

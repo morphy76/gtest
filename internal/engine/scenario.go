@@ -53,3 +53,6 @@ func (e *SetupError) Error() string {
 func (e *SetupError) Unwrap() error {
 	return e.Err
 }
+
+// Compile-time interface satisfaction checks.
+var _ error = (*SetupError)(nil)
