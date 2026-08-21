@@ -225,6 +225,73 @@
       },
       "additionalProperties": false
     },
+    "http_config": {
+      "type": "object",
+      "description": "Declarative HTTP client transport, connection pooling, headers, and TLS configuration.",
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "Base target URL prepended to relative request paths.",
+          "examples": [
+            "https://api.example.com"
+          ]
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration",
+          "description": "Per-request timeout for HTTP client requests."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Default HTTP headers sent with every request."
+        },
+        "tls": {
+          "type": "object",
+          "description": "TLS transport configuration.",
+          "properties": {
+            "insecure_skip_verify": {
+              "type": "boolean",
+              "default": false,
+              "description": "Disables TLS certificate verification (for self-signed testing)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "pool": {
+          "type": "object",
+          "description": "HTTP transport connection pool sizing.",
+          "properties": {
+            "max_idle_conns": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Maximum number of idle (keep-alive) connections across all hosts."
+            },
+            "max_idle_conns_per_host": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Maximum number of idle (keep-alive) connections per host."
+            },
+            "idle_conn_timeout": {
+              "$ref": "#/$defs/duration",
+              "description": "Maximum duration an idle connection remains in the pool."
+            }
+          },
+          "additionalProperties": false
+        },
+        "detailed_timing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enables collection of detailed per-phase HTTP timing metrics via net/http/httptrace."
+        },
+        "metric_prefix": {
+          "type": "string",
+          "description": "Custom prefix for auto-recorded HTTP metrics (defaults to 'vuhive.http.')."
+        }
+      },
+      "additionalProperties": false
+    },
     "scenario": {
       "type": "object",
       "required": [
@@ -355,6 +422,10 @@
             "$ref": "#/$defs/threshold"
           },
           "description": "List of SLA threshold assertions to evaluate."
+        },
+        "http": {
+          "$ref": "#/$defs/http_config",
+          "description": "Declarative HTTP client configuration (base_url, timeout, headers, TLS, connection pool, timing)."
         }
       },
       "allOf": [

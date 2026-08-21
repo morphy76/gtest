@@ -220,9 +220,25 @@ scenarios:
     # target_tps: 100            # target transactions/sec (required for arrival_rate)
     # max_vus: 50                # worker pool cap (required for arrival_rate)
 
+    # --- http (declarative HTTP client configuration) ---
+    http:
+      base_url: "https://api.example.com" # prepended to relative paths in client.Get/Post/etc.
+      timeout: 5s                         # per-request timeout (default 30s)
+      headers:                            # default headers sent with every request
+        Accept: "application/json"
+        User-Agent: "vuhive/1.0"
+      tls:
+        insecure_skip_verify: false       # disable certificate verification (default false)
+      pool:
+        max_idle_conns: 100               # max idle connections across all hosts
+        max_idle_conns_per_host: 10       # max idle connections per host
+        idle_conn_timeout: 90s            # idle connection keep-alive timeout
+      detailed_timing: false              # enable httptrace per-phase metrics (default false)
+      metric_prefix: "vuhive.http."       # custom prefix (default "vuhive.http.")
+
     # --- params (available via ctx.Param) ---
     params:
-      base_url: "https://api.example.com"
+      checkout_path: "/api/checkout"
       timeout_ms: "500"
       messages_file: "data/prompts.csv"
 
@@ -324,6 +340,7 @@ To adhere strictly to the **Interface Segregation Principle (ISP)** and prevent 
 | `Param(key)` | `ConfigProvider` | `string` | Read scenario `params` by key; `""` if absent |
 | `ParamInt(key, default)` | `ConfigProvider` | `int` | Parse param as int; logs warning and returns default on parse failure |
 | `ParamDuration(key, default)` | `ConfigProvider` | `time.Duration` | Parse param as duration; logs warning and returns default on parse failure |
+| `HTTPConfig()` | `ConfigProvider` | `HTTPConfig` | Typed declarative HTTP client configuration (BaseURL, Timeout, Headers, TLS, Pool) |
 | `GlobalState(key)` | `StateProvider` | `any` | Read value from Setup's returned map (shallow-copied, read-only) |
 | `Log()` | `ObservabilityProvider` | `Logger` | Zerolog logger pre-enriched with scenario/VU/iteration context |
 | `Metrics()` | `ObservabilityProvider` | `MetricsCollector` | Record custom counters, gauges, durations, rates |
@@ -802,9 +819,34 @@ For standard HTTP load testing, use the built-in `github.com/morphy76/vuhive/pkg
 
 #### Why Use `pkg/vuhive/http`?
 - **Automatic Metrics**: Automatically records `vuhive.http.req_duration` (HDR latency histogram), `vuhive.http.reqs` (total counter), and `vuhive.http.req_failed` (failure rate) tagged with `method`, `url` (path only), and `status`.
+- **Declarative YAML Configuration**: Configure base URL, timeouts, default headers, connection pool settings, and TLS options directly in `vuhive.yaml` under `scenarios.<name>.http`.
+- **Convenient Constructors**: Initialize directly from context using `vuhivehttp.NewClientFromConfig(ctx)` (in `Setup`) or `vuhivehttp.NewClientFromVUConfig(ctx)` (in `RunVU`).
+- **Relative Path Resolution**: When `base_url` is configured, `client.Get(ctx, "/path")` automatically resolves against the base URL. Absolute URLs (`https://...`) are preserved as-is.
 - **Response Decoding**: `resp.JSON(&target)` and `resp.Text()` methods with automatic response body cleanup.
-- **Declarative Client Options**: Configure timeouts, connection pool sizing (`WithMaxIdleConnsPerHost`), default headers (`WithHeader`), and TLS verification (`WithTLSInsecureSkipVerify`).
-- **Opt-in Detailed Timing**: Capture TCP connection, TLS handshake, request write, and response read latencies via `WithDetailedTiming()`.
+- **Opt-in Detailed Timing**: Capture TCP connection, TLS handshake, request write, and response read latencies via `detailed_timing: true` in YAML or `vuhivehttp.WithDetailedTiming()`.
+
+#### Declarative Configuration (`vuhive.yaml`)
+
+```yaml
+scenarios:
+  catalog_api:
+    type: constant_vus
+    vus: 20
+    run_period: 30s
+    vu_timeout: 5s
+
+    http:
+      base_url: "https://api.example.com"
+      timeout: 5s
+      headers:
+        Accept: "application/json"
+        User-Agent: "vuhive/1.0"
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 50
+        idle_conn_timeout: 90s
+      detailed_timing: false
+```
 
 #### Example Usage
 
@@ -814,7 +856,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/morphy76/vuhive/pkg/vuhive"
 	vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
@@ -830,21 +871,16 @@ func main() {
 
 	suite.RegisterScenario("catalog_api", vuhive.Scenario{
 		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
-			// Create a shared instrumented HTTP client with customized options
-			client := vuhivehttp.NewClient(ctx,
-				vuhivehttp.WithTimeout(5*time.Second),
-				vuhivehttp.WithHeader("Accept", "application/json"),
-				vuhivehttp.WithMaxIdleConnsPerHost(100),
-			)
+			// Initialize client from declarative vuhive.yaml configuration
+			client := vuhivehttp.NewClientFromConfig(ctx)
 			return map[string]any{"http_client": client}, nil
 		},
 
 		RunVU: func(ctx vuhive.VUContext) error {
 			client := ctx.GlobalState("http_client").(*vuhivehttp.Client)
-			baseURL := ctx.Param("base_url")
 
-			// 1. Execute GET request — latency, counters, and failure rates are recorded automatically
-			resp, err := client.Get(ctx, baseURL+"/api/items/item-123")
+			// 1. Execute GET request — relative path resolved against base_url, metrics auto-recorded
+			resp, err := client.Get(ctx, "/api/items/item-123")
 			if err != nil {
 				return err
 			}

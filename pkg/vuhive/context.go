@@ -31,6 +31,51 @@ type ConfigProvider interface {
 	// If the value is present but cannot be parsed as a duration, a Warn-level log is emitted
 	// and defaultValue is returned.
 	ParamDuration(key string, defaultValue time.Duration) time.Duration
+
+	// HTTPConfig retrieves the declarative HTTP client configuration for the scenario.
+	HTTPConfig() HTTPConfig
+}
+
+// HTTPConfig holds declarative configuration for the HTTP client module.
+type HTTPConfig struct {
+	// BaseURL is the base URL prepended to relative request paths.
+	BaseURL string
+
+	// Timeout is the per-request timeout.
+	Timeout time.Duration
+
+	// Headers contains default headers sent with every request.
+	Headers map[string]string
+
+	// TLS contains TLS transport configuration.
+	TLS TLSConfig
+
+	// Pool contains connection pool configuration.
+	Pool HTTPPoolConfig
+
+	// DetailedTiming enables httptrace per-phase timing metrics.
+	DetailedTiming bool
+
+	// MetricPrefix overrides the default "vuhive.http." metric name prefix.
+	MetricPrefix string
+}
+
+// TLSConfig holds TLS transport settings.
+type TLSConfig struct {
+	// InsecureSkipVerify disables TLS certificate verification.
+	InsecureSkipVerify bool
+}
+
+// HTTPPoolConfig holds connection pool settings.
+type HTTPPoolConfig struct {
+	// MaxIdleConns is the maximum number of idle (keep-alive) connections across all hosts.
+	MaxIdleConns int
+
+	// MaxIdleConnsPerHost is the maximum number of idle connections per host.
+	MaxIdleConnsPerHost int
+
+	// IdleConnTimeout is the maximum duration an idle connection remains in the pool.
+	IdleConnTimeout time.Duration
 }
 
 // StateProvider provides read-only access to global scenario state returned by Setup.

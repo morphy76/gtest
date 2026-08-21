@@ -414,6 +414,60 @@ func TestScenarioContext_ParamParsingWarnings(t *testing.T) {
 	})
 }
 
+func TestScenarioContext_HTTPConfig(t *testing.T) {
+	logger, metrics := newTestDeps()
+
+	t.Run("HTTPConfig populated from ScenarioConfig", func(t *testing.T) {
+		cfg := config.ScenarioConfig{
+			Type:      config.ScenarioTypeConstantVUs,
+			VUs:       1,
+			RunPeriod: 1 * time.Second,
+			VUTimeout: 1 * time.Second,
+			HTTP: &config.HTTPConfig{
+				BaseURL: "https://api.example.com",
+				Timeout: 5 * time.Second,
+				Headers: map[string]string{"Accept": "application/json"},
+				TLS:     config.TLSConfig{InsecureSkipVerify: true},
+				Pool: config.HTTPPoolConfig{
+					MaxIdleConns:        50,
+					MaxIdleConnsPerHost: 10,
+					IdleConnTimeout:     60 * time.Second,
+				},
+				DetailedTiming: true,
+				MetricPrefix:   "custom.http.",
+			},
+		}
+
+		sCtx := engine.NewScenarioContext(context.Background(), 1, 0, cfg, "http_test", nil, logger, metrics)
+		httpCfg := sCtx.HTTPConfig()
+
+		assert.Equal(t, "https://api.example.com", httpCfg.BaseURL)
+		assert.Equal(t, 5*time.Second, httpCfg.Timeout)
+		assert.Equal(t, "application/json", httpCfg.Headers["Accept"])
+		assert.True(t, httpCfg.TLS.InsecureSkipVerify)
+		assert.Equal(t, 50, httpCfg.Pool.MaxIdleConns)
+		assert.Equal(t, 10, httpCfg.Pool.MaxIdleConnsPerHost)
+		assert.Equal(t, 60*time.Second, httpCfg.Pool.IdleConnTimeout)
+		assert.True(t, httpCfg.DetailedTiming)
+		assert.Equal(t, "custom.http.", httpCfg.MetricPrefix)
+	})
+
+	t.Run("HTTPConfig empty when ScenarioConfig has no HTTP", func(t *testing.T) {
+		cfg := config.ScenarioConfig{
+			Type:      config.ScenarioTypeConstantVUs,
+			VUs:       1,
+			RunPeriod: 1 * time.Second,
+			VUTimeout: 1 * time.Second,
+		}
+
+		sCtx := engine.NewScenarioContext(context.Background(), 1, 0, cfg, "no_http_test", nil, logger, metrics)
+		httpCfg := sCtx.HTTPConfig()
+		assert.Empty(t, httpCfg.BaseURL)
+		assert.Equal(t, time.Duration(0), httpCfg.Timeout)
+	})
+}
+
+
 
 
 

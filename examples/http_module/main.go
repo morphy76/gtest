@@ -43,22 +43,17 @@ func main() {
 
 	// 3. Register scenario using the built-in HTTP module
 	suite.RegisterScenario("http_module_demo", vuhive.Scenario{
-		// Setup: create a SHARED instrumented HTTP client
+		// Setup: create a SHARED instrumented HTTP client from declarative config
 		//
-		// The vuhive HTTP module automatically records:
-		//   - vuhive.http.req_duration  (Duration histogram per request)
-		//   - vuhive.http.req_failed    (Rate of failed requests)
-		//   - vuhive.http.reqs          (Counter of total requests)
-		//
-		// No manual timing or metric recording is needed in RunVU.
+		// Declarative HTTP client settings (timeout, headers, pool) are defined in vuhive.yaml
+		// under scenarios.<scenario>.http and automatically bound via NewClientFromConfig(ctx).
+		// Programmatic options can override settings (e.g. dynamic mock server URL).
 		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
-			client := vuhivehttp.NewClient(ctx,
-				vuhivehttp.WithTimeout(5*time.Second),
-				vuhivehttp.WithHeader("Accept", "application/json"),
+			client := vuhivehttp.NewClientFromConfig(ctx,
+				vuhivehttp.WithBaseURL(ts.URL),
 			)
 			return map[string]any{
-				"client":     client,
-				"server_url": ts.URL,
+				"client": client,
 			}, nil
 		},
 
@@ -66,15 +61,14 @@ func main() {
 		RunVU: func(ctx vuhive.VUContext) error {
 			// Step 1: Retrieve the shared instrumented client from global state
 			client := ctx.GlobalState("client").(*vuhivehttp.Client)
-			serverURL := ctx.GlobalState("server_url").(string)
 
 			checkoutPath := ctx.Param("checkout_path")
 			if checkoutPath == "" {
 				checkoutPath = "/checkout"
 			}
 
-			// Step 2: Execute request — metrics are recorded automatically
-			resp, err := client.Get(ctx, serverURL+checkoutPath)
+			// Step 2: Execute request — relative path resolved against client's BaseURL, metrics recorded automatically
+			resp, err := client.Get(ctx, checkoutPath)
 			if err != nil {
 				return fmt.Errorf("checkout request failed: %w", err)
 			}

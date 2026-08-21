@@ -32,6 +32,9 @@ type ConfigProvider interface {
 	// If the value is present but cannot be parsed as a duration, a Warn-level log is emitted
 	// and defaultValue is returned.
 	ParamDuration(key string, defaultValue time.Duration) time.Duration
+
+	// HTTPConfig retrieves the declarative HTTP client configuration for the scenario.
+	HTTPConfig() config.HTTPConfig
 }
 
 // StateProvider provides read-only access to global scenario state returned by Setup.
@@ -116,6 +119,7 @@ type scenarioContext struct {
 	scenarioName  string
 	groupPath     string
 	params        map[string]string
+	httpCfg       config.HTTPConfig
 	globalState   map[string]any
 	logger        log.Logger
 	metrics       metric.Collector
@@ -170,12 +174,18 @@ func newScenarioContext(
 		delayGen, _ = delay.NewDelayGenerator(delayCfg)
 	}
 
+	var httpCfg config.HTTPConfig
+	if cfg.HTTP != nil {
+		httpCfg = *cfg.HTTP
+	}
+
 	return &scenarioContext{
 		Context:       ctx,
 		vuid:          vuid,
 		iteration:     iteration,
 		scenarioName:  scenarioName,
 		params:        cfg.Params,
+		httpCfg:       httpCfg,
 		globalState:   globalState,
 		logger:        boundLogger,
 		metrics:       metrics,
@@ -214,12 +224,18 @@ func newVUScenarioContext(
 		delayGen, _ = delay.NewDelayGenerator(delayCfg)
 	}
 
+	var httpCfg config.HTTPConfig
+	if cfg.HTTP != nil {
+		httpCfg = *cfg.HTTP
+	}
+
 	return &scenarioContext{
 		Context:       ctx,
 		vuid:          vuid,
 		iteration:     0,
 		scenarioName:  scenarioName,
 		params:        cfg.Params,
+		httpCfg:       httpCfg,
 		globalState:   globalState,
 		logger:        boundLogger,
 		metrics:       metrics,
@@ -295,6 +311,10 @@ func (c *scenarioContext) ParamDuration(key string, defaultValue time.Duration) 
 		return defaultValue
 	}
 	return d
+}
+
+func (c *scenarioContext) HTTPConfig() config.HTTPConfig {
+	return c.httpCfg
 }
 
 func (c *scenarioContext) GlobalState(key string) any {
@@ -413,6 +433,7 @@ func (c *scenarioContext) Group(name string, fn func(ctx VUContext) error) error
 			scenarioName:  c.scenarioName,
 			groupPath:     groupPath,
 			params:        c.params,
+			httpCfg:       c.httpCfg,
 			globalState:   c.globalState,
 			logger:        c.logger,
 			metrics:       c.metrics,

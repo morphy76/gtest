@@ -58,6 +58,9 @@ func (mockConfig) ParamInt(key string, defaultValue int) int                  { 
 func (mockConfig) ParamDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue + time.Second
 }
+func (mockConfig) HTTPConfig() vuhive.HTTPConfig {
+	return vuhive.HTTPConfig{BaseURL: "https://api.example.com"}
+}
 
 type mockState struct{}
 
@@ -112,6 +115,7 @@ func TestInterfaceSegregation_ConfigProvider(t *testing.T) {
 	assert.Equal(t, "val_host", cfg.Param("host"))
 	assert.Equal(t, 11, cfg.ParamInt("port", 10))
 	assert.Equal(t, 2*time.Second, cfg.ParamDuration("timeout", time.Second))
+	assert.Equal(t, "https://api.example.com", cfg.HTTPConfig().BaseURL)
 }
 
 func TestInterfaceSegregation_StateProvider(t *testing.T) {
