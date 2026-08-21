@@ -40,8 +40,7 @@ func RunRampingVUs(
 		totalStagesDuration += st.Duration
 	}
 
-	totalDuration := totalStagesDuration + cfg.RampDown + cfg.Drain
-	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
+	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	var (

@@ -910,6 +910,59 @@ func main() {
 }
 ```
 
+#### Real-Time Server-Sent Events (SSE) Streaming
+
+For continuous real-time streaming architectures (LLM token generation, live market tickers, real-time push notifications), use `client.StreamSSE` or `client.DoStream`. It automatically manages W3C EventSource framing (`text/event-stream`), disables total-lifecycle timeouts while preserving socket connect timeouts, and provides both iterator-based (`stream.Next()`) and channel-based (`stream.Events()`) consumption without unbounded memory buffering.
+
+```go
+RunVU: func(ctx vuhive.VUContext) error {
+    client := vuhivehttp.Default(ctx)
+
+    // Open SSE stream — "Accept: text/event-stream" is set automatically
+    stream, err := client.StreamSSE(ctx, "/v1/chat/completions/stream")
+    if err != nil {
+        return fmt.Errorf("failed to open SSE stream: %w", err)
+    }
+    defer stream.Close()
+
+    var tokenCount int
+    for stream.Next() {
+        event := stream.Event()
+        if event.Event == "token" {
+            tokenCount++
+        }
+        if event.Data == "[DONE]" {
+            break
+        }
+    }
+
+    if err := stream.Err(); err != nil {
+        return fmt.Errorf("stream read error: %w", err)
+    }
+
+    ctx.Check("received_tokens", tokenCount > 0)
+    return nil
+}
+```
+
+#### Auto-Recorded HTTP & SSE Metrics
+
+| Metric Identifier | Type | Tags | Description |
+|---|---|---|---|
+| `vuhive.http.req_duration` | Duration (HDR) | `method`, `url`, `status` | Total request latency histogram |
+| `vuhive.http.reqs` | Counter | `method`, `url`, `status` | Total HTTP requests count |
+| `vuhive.http.req_failed` | Rate | `method`, `url`, `status` | Ratio of failed requests (non-2xx or transport error) |
+| `vuhive.http.sse.connections_total` | Counter | `method`, `url`, `status` | Total SSE stream connection attempts |
+| `vuhive.http.sse.connect_duration` | Duration (HDR) | `method`, `url`, `status` | Latency to establish connection and receive HTTP headers |
+| `vuhive.http.sse.events_total` | Counter | `method`, `url`, `event_type` | Total number of received SSE events |
+| `vuhive.http.sse.event_latency` | Duration (HDR) | `method`, `url`, `event_type` | Inter-arrival latency between successive events (TTFE) |
+| `vuhive.http.sse.stream_duration` | Duration (HDR) | `method`, `url`, `status` | Total active lifespan of streaming sessions |
+| `vuhive.http.sse.errors_total` | Counter | `method`, `url` | SSE stream errors, disconnections, or framing failures |
+| `vuhive.http.req_connecting` | Duration (HDR) | `method`, `url`, `status` | TCP connection latency *(opt-in via `detailed_timing: true`)* |
+| `vuhive.http.req_tls_handshaking` | Duration (HDR) | `method`, `url`, `status` | TLS handshake latency *(opt-in via `detailed_timing: true`)* |
+| `vuhive.http.req_sending` | Duration (HDR) | `method`, `url`, `status` | Request payload write latency *(opt-in via `detailed_timing: true`)* |
+| `vuhive.http.req_receiving` | Duration (HDR) | `method`, `url`, `status` | Response body read latency *(opt-in via `detailed_timing: true`)* |
+
 ### 11.3 Kafka Event Streaming (`pkg/vuhive/kafka`)
 
 For event-driven load tests, use `pkg/vuhive/kafka` (compiled with `-tags kafka`) to produce and consume messages with automatic latency, message count, payload byte, and failure rate tracking.
@@ -1241,6 +1294,7 @@ See the [**Examples Reference Suite Index**](../examples/README.md) for a struct
 | **SLA Thresholds & Quality Gates** | [`examples/sla_thresholds/`](../examples/sla_thresholds/) | Multi-metric thresholds, percentile gates, rate assertions, and early test termination with `abort_on_fail`. | [Read Guide](../examples/sla_thresholds/README.md) |
 | **Execution Summary Hook** | [`examples/handle_summary/`](../examples/handle_summary/) | `HandleSummary` lifecycle hook, summary data inspection, programmatic webhook dispatch and artifact generation. | [Read Guide](../examples/handle_summary/README.md) |
 | **Conversational AI Flow** | [`examples/conversation_flow/`](../examples/conversation_flow/) | Real-time Server-Sent Events (SSE) streaming, multi-turn state machine, DSL client architecture. | [Read Guide](../examples/conversation_flow/README.md) |
+| **Server-Sent Events (SSE)** | [`examples/sse_streaming/`](../examples/sse_streaming/) | Built-in `pkg/vuhive/http` Server-Sent Events (SSE) streaming, TTFE latency, token throughput. | [Read Guide](../examples/sse_streaming/README.md) |
 | **gRPC RPC Service** | [`examples/grpc_user_service/`](../examples/grpc_user_service/) | Open-system arrival rate pacing (`arrival_rate`), target TPS, bounded worker pool (`max_vus`). | [Read Guide](../examples/grpc_user_service/README.md) |
 | **Kafka Event Streaming** | [`examples/kafka/`](../examples/kafka/) | High-throughput Kafka Publisher & Consumer (`pkg/vuhive/kafka`), conditional compilation with `-tags kafka`. | [Read Guide](../examples/kafka/README.md) |
 

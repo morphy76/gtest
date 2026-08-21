@@ -16,7 +16,7 @@
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
 - **Transaction Boundaries (Groups)**: Organize `RunVU` logic into named transaction steps and nested sub-groups with `ctx.Group(name, fn)`. Automatically measures per-step latency (`vuhive.group.<path>.duration`), formats dedicated `GROUPS` summary tables, and enables granular per-step SLA quality gates.
-- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.Default`, `vuhivehttp.NewClientFromConfig`, `vuhivehttp.NewClient`) with declarative YAML configuration (`vuhive.yaml`), automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
+- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.Default`, `vuhivehttp.NewClientFromConfig`, `vuhivehttp.NewClient`) with declarative YAML configuration (`vuhive.yaml`), automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, connection pool tuning, and first-class **Server-Sent Events (SSE)** response streaming (`client.StreamSSE`, `client.DoStream`, `*vuhivehttp.SSEStream`) with dedicated real-time streaming telemetry.
 - **Kafka Messaging Module (`pkg/vuhive/kafka`)**: Auto-instrumented Kafka Publisher and Consumer clients conditionally compiled via Go build tags (`-tags kafka`) for testing event-driven architectures with zero dependencies in standard builds.
 - **Data Parameterization Module (`pkg/vuhive/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
 - **SLA Threshold Evaluator & Graceful Abort**: Declarative quality gates evaluated post-execution, with optional real-time early termination (`abort_on_fail: true`, `delay_abort_eval: 5s`) to stop runaway failures instantly. Returns exit code `0` on success or `1` on SLA breach/abort.
@@ -403,6 +403,7 @@ Eliminate repetitive boilerplate metric instrumentation from your `RunVU` loops 
 - **Convenient Response Parsing**: `Response.JSON(target)` unmarshals directly into Go structs, and `Response.Text()` extracts raw body strings while eagerly closing the underlying response body.
 - **Configurable Connection Pooling & Defaults**: Easily configure timeouts, default authorization headers, connection pool bounds, and TLS skip verification declaratively in YAML or programmatically using fluent functional options.
 - **Opt-in Phase-Breakdown Timing**: Trace TCP connection time, TLS handshake duration, request write time, and response read time via `httptrace` (`detailed_timing: true` in YAML or `vuhivehttp.WithDetailedTiming()`).
+- **Server-Sent Events (SSE) Streaming**: First-class support for persistent `text/event-stream` connections (`client.StreamSSE`, `client.DoStream`). Stream events iteratively (`stream.Next()`, `stream.Event()`) or via channels (`stream.Events()`) with zero unbounded memory buffering and dedicated real-time streaming metrics (TTFE latency, token throughput, stream duration).
 
 ### Declarative Configuration (`vuhive.yaml`)
 
@@ -477,13 +478,48 @@ func main() {
 }
 ```
 
-### Auto-Recorded HTTP Metrics
+### Real-Time Server-Sent Events (SSE) Streaming
+
+```go
+RunVU: func(ctx vuhive.VUContext) error {
+    client := vuhivehttp.Default(ctx)
+
+    // Open SSE stream (Accept: text/event-stream added automatically)
+    stream, err := client.StreamSSE(ctx, "/api/v1/chat/completions/stream")
+    if err != nil {
+        return err
+    }
+    defer stream.Close()
+
+    var tokens int
+    for stream.Next() {
+        event := stream.Event()
+        if event.Event == "token" {
+            tokens++
+        }
+        if event.Data == "[DONE]" {
+            break
+        }
+    }
+
+    ctx.Check("received_tokens", tokens > 0)
+    return stream.Err()
+}
+```
+
+### Auto-Recorded HTTP & SSE Metrics
 
 | Metric Identifier | Type | Tags | Description |
 |---|---|---|---|
 | `vuhive.http.req_duration` | Duration (HDR) | `method`, `url`, `status` | Total request latency histogram |
 | `vuhive.http.reqs` | Counter | `method`, `url`, `status` | Total HTTP requests count |
 | `vuhive.http.req_failed` | Rate | `method`, `url`, `status` | Ratio of failed requests (non-2xx or transport error) |
+| `vuhive.http.sse.connections_total` | Counter | `method`, `url`, `status` | Total SSE stream connection attempts |
+| `vuhive.http.sse.connect_duration` | Duration (HDR) | `method`, `url`, `status` | Latency to establish SSE connection and receive headers |
+| `vuhive.http.sse.events_total` | Counter | `method`, `url`, `event_type` | Total decoded SSE events received |
+| `vuhive.http.sse.event_latency` | Duration (HDR) | `method`, `url`, `event_type` | Inter-arrival latency between successive events (TTFE) |
+| `vuhive.http.sse.stream_duration` | Duration (HDR) | `method`, `url`, `status` | Total active lifespan of streaming sessions |
+| `vuhive.http.sse.errors_total` | Counter | `method`, `url` | SSE stream errors, disconnections, or framing failures |
 | `vuhive.http.req_connecting` | Duration (HDR) | `method`, `url`, `status` | TCP connection latency *(opt-in via `WithDetailedTiming`)* |
 | `vuhive.http.req_tls_handshaking` | Duration (HDR) | `method`, `url`, `status` | TLS handshake latency *(opt-in via `WithDetailedTiming`)* |
 | `vuhive.http.req_sending` | Duration (HDR) | `method`, `url`, `status` | Request payload write latency *(opt-in via `WithDetailedTiming`)* |
@@ -789,6 +825,7 @@ The [`examples/`](examples/README.md) directory contains self-contained, compila
 | [`examples/sla_thresholds/`](examples/sla_thresholds/) | `constant_vus` | Quality gate SLA thresholds across metrics, percentile operators, and early stop with `abort_on_fail`. | [Guide](examples/sla_thresholds/README.md) |
 | [`examples/handle_summary/`](examples/handle_summary/) | `constant_vus` | Post-test execution hook (`HandleSummary`), summary metric inspection, webhook notification dispatch. | [Guide](examples/handle_summary/README.md) |
 | [`examples/conversation_flow/`](examples/conversation_flow/) | `constant_vus` | Real-time SSE streaming conversational AI load test, multi-turn state machine, DSL client. | [Guide](examples/conversation_flow/README.md) |
+| [`examples/sse_streaming/`](examples/sse_streaming/) | `constant_vus` | Built-in `pkg/vuhive/http` Server-Sent Events (SSE) streaming, TTFE latency, token throughput. | [Guide](examples/sse_streaming/README.md) |
 | [`examples/grpc_user_service/`](examples/grpc_user_service/) | `arrival_rate` | High-throughput RPC simulation, token bucket TPS pacing, bounded worker pool. | [Guide](examples/grpc_user_service/README.md) |
 | [`examples/kafka/`](examples/kafka/) | `constant_vus` | Event streaming with `pkg/vuhive/kafka` publisher and consumer, build tag `-tags kafka`. | [Guide](examples/kafka/README.md) |
 

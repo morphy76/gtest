@@ -1382,6 +1382,10 @@ func (c *Client) Put(ctx context.Context, url string, contentType string, body i
 func (c *Client) Delete(ctx context.Context, url string) (*Response, error)
 func (c *Client) Do(ctx context.Context, req *http.Request) (*Response, error)
 
+// Server-Sent Events (SSE) streaming methods.
+func (c *Client) StreamSSE(ctx context.Context, rawURL string, opts ...StreamOption) (*SSEStream, error)
+func (c *Client) DoStream(ctx context.Context, req *http.Request, opts ...StreamOption) (*SSEStream, error)
+
 // Response wraps *http.Response with convenience methods.
 type Response struct {
     StatusCode int
@@ -1391,6 +1395,26 @@ type Response struct {
 
 func (r *Response) JSON(v any) error     // Unmarshal body as JSON
 func (r *Response) Text() string          // Body as string
+
+// SSEEvent represents a single Server-Sent Event frame.
+type SSEEvent struct {
+    ID    string
+    Event string
+    Data  string
+    Retry int
+}
+
+// SSEStream represents an active Server-Sent Events stream connection.
+type SSEStream struct {
+    StatusCode int
+    Headers    http.Header
+}
+
+func (s *SSEStream) Next() bool
+func (s *SSEStream) Event() SSEEvent
+func (s *SSEStream) Err() error
+func (s *SSEStream) Close() error
+func (s *SSEStream) Events() <-chan SSEEvent
 ```
 
 #### Declarative Schema (`vuhive.schema.json` & `vuhive.yaml`)
@@ -1414,13 +1438,19 @@ scenarios:
       metric_prefix: "vuhive.http."
 ```
 
-#### Automatic Metrics (per request)
+#### Automatic Metrics (per request & SSE streaming)
 
 | Metric | Type | Tags |
 |--------|------|------|
 | `vuhive.http.req_duration` | Duration | `method`, `url`, `status` |
 | `vuhive.http.req_failed` | Rate | `method`, `url`, `status` |
 | `vuhive.http.reqs` | Counter | `method`, `url`, `status` |
+| `vuhive.http.sse.connections_total` | Counter | `method`, `url`, `status` |
+| `vuhive.http.sse.connect_duration` | Duration | `method`, `url`, `status` |
+| `vuhive.http.sse.events_total` | Counter | `method`, `url`, `event_type` |
+| `vuhive.http.sse.event_latency` | Duration | `method`, `url`, `event_type` |
+| `vuhive.http.sse.stream_duration` | Duration | `method`, `url`, `status` |
+| `vuhive.http.sse.errors_total` | Counter | `method`, `url` |
 | `vuhive.http.req_receiving` | Duration | `method`, `url`, `status` |
 | `vuhive.http.req_sending` | Duration | `method`, `url`, `status` |
 | `vuhive.http.req_tls_handshaking` | Duration | `method`, `url`, `status` |

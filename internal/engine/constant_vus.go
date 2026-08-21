@@ -32,8 +32,7 @@ func RunConstantVUs(
 			Msg("starting constant_vus pacing execution")
 	}
 
-	totalDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown + cfg.Drain
-	runCtx, cancel := context.WithTimeout(ctx, totalDuration)
+	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	activeDuration := cfg.RampUp + cfg.RunPeriod + cfg.RampDown
