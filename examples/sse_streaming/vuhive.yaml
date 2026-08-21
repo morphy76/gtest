@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+
+default_scenario: sse_streaming_demo
+
+scenarios:
+  sse_streaming_demo:
+    type: constant_vus
+    vus: 5
+    ramp_up: 2s
+    run_period: 10s
+    ramp_down: 2s
+    vu_timeout: 10s
+    drain_timeout: 2s
+
+    http:
+      base_url: "http://localhost:8080"
+      timeout: 30s
+      headers:
+        Accept: "text/event-stream"
+        User-Agent: "vuhive/1.0"
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 20
+        idle_conn_timeout: 90s
+      detailed_timing: false
+      metric_prefix: "vuhive.http."
+
+    params:
+      stream_path: "/v1/chat/completions/stream"
+
+    thresholds:
+      - metric: vuhive.http.sse.connect_duration
+        stat: p95
+        operator: "<"
+        target: "200ms"
+      - metric: vuhive.http.sse.events_total
+        stat: count
+        operator: ">="
+        target: "50"
+      - metric: vuhive.http.sse.errors_total
+        stat: count
+        operator: "<="
+        target: "0"

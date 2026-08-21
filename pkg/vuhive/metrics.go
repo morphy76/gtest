@@ -110,6 +110,27 @@ const (
 	// MetricHTTPReqReceiving records response read time (Duration, opt-in).
 	MetricHTTPReqReceiving = "vuhive.http.req_receiving"
 
+	// MetricHTTPSSEPrefix is the prefix for all built-in HTTP SSE metrics.
+	MetricHTTPSSEPrefix = "vuhive.http.sse."
+
+	// MetricHTTPSSEConnectionsTotal tracks the total number of SSE connection attempts (Counter).
+	MetricHTTPSSEConnectionsTotal = "vuhive.http.sse.connections_total"
+
+	// MetricHTTPSSEConnectDuration records latency to establish SSE connection and receive headers (Duration histogram).
+	MetricHTTPSSEConnectDuration = "vuhive.http.sse.connect_duration"
+
+	// MetricHTTPSSEEventsTotal tracks the total number of received SSE events (Counter).
+	MetricHTTPSSEEventsTotal = "vuhive.http.sse.events_total"
+
+	// MetricHTTPSSEEventLatency records inter-arrival latency between successive SSE events (Duration histogram).
+	MetricHTTPSSEEventLatency = "vuhive.http.sse.event_latency"
+
+	// MetricHTTPSSEStreamDuration records the total active duration of an SSE stream (Duration histogram).
+	MetricHTTPSSEStreamDuration = "vuhive.http.sse.stream_duration"
+
+	// MetricHTTPSSEErrorsTotal tracks SSE connection/stream errors (Counter).
+	MetricHTTPSSEErrorsTotal = "vuhive.http.sse.errors_total"
+
 	// MetricKafkaPrefix is the prefix for all built-in Kafka module metrics.
 	MetricKafkaPrefix = "vuhive.kafka."
 

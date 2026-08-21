@@ -33,6 +33,24 @@ const (
 
 	// MetricSuffixReqReceiving is the suffix for response read time (opt-in).
 	MetricSuffixReqReceiving = "req_receiving"
+
+	// MetricSuffixSSEConnectionsTotal is the suffix for total SSE stream connection attempts.
+	MetricSuffixSSEConnectionsTotal = "sse.connections_total"
+
+	// MetricSuffixSSEConnectDuration is the suffix for SSE connection and handshake latency.
+	MetricSuffixSSEConnectDuration = "sse.connect_duration"
+
+	// MetricSuffixSSEEventsTotal is the suffix for total received SSE events.
+	MetricSuffixSSEEventsTotal = "sse.events_total"
+
+	// MetricSuffixSSEEventLatency is the suffix for inter-arrival latency between successive SSE events.
+	MetricSuffixSSEEventLatency = "sse.event_latency"
+
+	// MetricSuffixSSEStreamDuration is the suffix for total active duration of an SSE stream.
+	MetricSuffixSSEStreamDuration = "sse.stream_duration"
+
+	// MetricSuffixSSEErrorsTotal is the suffix for SSE stream errors and disconnections.
+	MetricSuffixSSEErrorsTotal = "sse.errors_total"
 )
 
 // requestTags builds metric tags for a request.
@@ -132,3 +150,72 @@ func (c *Client) recordDetailedTimings(tags vuhive.Tags, timings *traceTimings, 
 		c.metrics.Duration(c.cfg.metricPrefix+MetricSuffixReqReceiving, tags).Observe(receivingDuration)
 	}
 }
+
+// sseEventTags builds metric tags for an individual SSE event.
+func sseEventTags(method, url, eventType string) vuhive.Tags {
+	return vuhive.Tags{
+		"method":     method,
+		"url":        url,
+		"event_type": eventType,
+	}
+}
+
+// sseErrorTags builds metric tags for an SSE stream error.
+func sseErrorTags(method, url string) vuhive.Tags {
+	return vuhive.Tags{
+		"method": method,
+		"url":    url,
+	}
+}
+
+// recordSSEConnect records metrics when an SSE connection attempt succeeds.
+func (c *Client) recordSSEConnect(method, url string, statusCode int, duration time.Duration) {
+	if c.metrics == nil {
+		return
+	}
+	tags := requestTags(method, url, statusCode)
+	c.metrics.Counter(c.cfg.metricPrefix+MetricSuffixSSEConnectionsTotal, tags).Inc()
+	c.metrics.Duration(c.cfg.metricPrefix+MetricSuffixSSEConnectDuration, tags).Observe(duration)
+}
+
+// recordSSEConnectFailed records metrics when an SSE connection attempt fails.
+func (c *Client) recordSSEConnectFailed(method, url string, duration time.Duration) {
+	if c.metrics == nil {
+		return
+	}
+	tags := requestTagsNoStatus(method, url)
+	c.metrics.Counter(c.cfg.metricPrefix+MetricSuffixSSEConnectionsTotal, tags).Inc()
+	c.metrics.Duration(c.cfg.metricPrefix+MetricSuffixSSEConnectDuration, tags).Observe(duration)
+	c.metrics.Counter(c.cfg.metricPrefix+MetricSuffixSSEErrorsTotal, sseErrorTags(method, url)).Inc()
+}
+
+// recordSSEEvent records metrics for an individual decoded SSE event.
+func (c *Client) recordSSEEvent(method, url, eventType string, latency time.Duration) {
+	if c.metrics == nil {
+		return
+	}
+	tags := sseEventTags(method, url, eventType)
+	c.metrics.Counter(c.cfg.metricPrefix+MetricSuffixSSEEventsTotal, tags).Inc()
+	if latency > 0 {
+		c.metrics.Duration(c.cfg.metricPrefix+MetricSuffixSSEEventLatency, tags).Observe(latency)
+	}
+}
+
+// recordSSEStreamDuration records the total lifespan of an active SSE stream session.
+func (c *Client) recordSSEStreamDuration(method, url string, statusCode int, duration time.Duration) {
+	if c.metrics == nil {
+		return
+	}
+	tags := requestTags(method, url, statusCode)
+	c.metrics.Duration(c.cfg.metricPrefix+MetricSuffixSSEStreamDuration, tags).Observe(duration)
+}
+
+// recordSSEError records an unexpected SSE read, decode, or network error.
+func (c *Client) recordSSEError(method, url string) {
+	if c.metrics == nil {
+		return
+	}
+	tags := sseErrorTags(method, url)
+	c.metrics.Counter(c.cfg.metricPrefix+MetricSuffixSSEErrorsTotal, tags).Inc()
+}
+
