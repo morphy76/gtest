@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -409,3 +410,219 @@ func TestClient_Get_DetailedTiming_Enabled_RecordsPhaseMetrics(t *testing.T) {
 	assert.Equal(t, int64(1), sendSnap.Count, "sending duration should be recorded with detailed timing")
 	assert.Equal(t, int64(1), recvSnap.Count, "receiving duration should be recorded with detailed timing")
 }
+
+// --- Declarative HTTP Config Tests ---
+
+type mockSetupContext struct {
+	context.Context
+	metrics vuhive.MetricsCollector
+	httpCfg vuhive.HTTPConfig
+}
+
+func (m *mockSetupContext) Metrics() vuhive.MetricsCollector { return m.metrics }
+func (m *mockSetupContext) Log() vuhive.Logger { return nil }
+func (m *mockSetupContext) Param(key string) string { return "" }
+func (m *mockSetupContext) ParamInt(key string, def int) int { return def }
+func (m *mockSetupContext) ParamDuration(key string, def time.Duration) time.Duration { return def }
+func (m *mockSetupContext) HTTPConfig() vuhive.HTTPConfig { return m.httpCfg }
+
+type mockVUContext struct {
+	mockSetupContext
+}
+
+func (m *mockVUContext) VUID() int64 { return 1 }
+func (m *mockVUContext) Iteration() int64 { return 0 }
+func (m *mockVUContext) ScenarioName() string { return "mock" }
+func (m *mockVUContext) GlobalState(key string) any { return nil }
+func (m *mockVUContext) Sleep(d ...time.Duration) error { return nil }
+func (m *mockVUContext) Check(name string, fn vuhive.CheckFunc) bool { return true }
+func (m *mockVUContext) Group(name string, fn func(ctx vuhive.VUContext) error) error { return fn(m) }
+
+func TestNewClientFromConfig_FullDeclarativeConfig(t *testing.T) {
+	var capturedAuth, capturedAccept string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		capturedAccept = r.Header.Get("Accept")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer ts.Close()
+
+	store, metrics := newTestStore(t)
+	ctx := &mockSetupContext{
+		Context: context.Background(),
+		metrics: metrics,
+		httpCfg: vuhive.HTTPConfig{
+			BaseURL: ts.URL,
+			Timeout: 5 * time.Second,
+			Headers: map[string]string{
+				"Authorization": "Bearer decl-token",
+				"Accept":        "application/json",
+			},
+			TLS: vuhive.TLSConfig{
+				InsecureSkipVerify: true,
+			},
+			Pool: vuhive.HTTPPoolConfig{
+				MaxIdleConns:        50,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     60 * time.Second,
+			},
+			DetailedTiming: true,
+			MetricPrefix:   "custom.http.",
+		},
+	}
+
+	client := vuhivehttp.NewClientFromConfig(ctx)
+	require.NotNil(t, client)
+	assert.Equal(t, ts.URL, client.BaseURL())
+
+	// Request with relative URL
+	resp, err := client.Get(ctx, "/api/items")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "Bearer decl-token", capturedAuth)
+	assert.Equal(t, "application/json", capturedAccept)
+
+	// Metrics with custom prefix and detailed timing
+	counterVal := store.AggregatedCounterValue("custom.http.reqs")
+	assert.Equal(t, int64(1), counterVal)
+}
+
+func TestNewClientFromConfig_ProgrammaticOverrides(t *testing.T) {
+	var capturedAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	store, metrics := newTestStore(t)
+	ctx := &mockSetupContext{
+		Context: context.Background(),
+		metrics: metrics,
+		httpCfg: vuhive.HTTPConfig{
+			BaseURL: "http://old-url.com",
+			Headers: map[string]string{
+				"Authorization": "Bearer default",
+			},
+			MetricPrefix: "decl.http.",
+		},
+	}
+
+	// Programmatic options override declarative settings
+	client := vuhivehttp.NewClientFromConfig(ctx,
+		vuhivehttp.WithBaseURL(ts.URL),
+		vuhivehttp.WithHeader("Authorization", "Bearer override"),
+		vuhivehttp.WithCustomMetricPrefix("override.http."),
+	)
+	assert.Equal(t, ts.URL, client.BaseURL())
+
+	_, err := client.Get(ctx, "/override-test")
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer override", capturedAuth)
+
+	counterVal := store.AggregatedCounterValue("override.http.reqs")
+	assert.Equal(t, int64(1), counterVal)
+}
+
+func TestNewClientFromVUConfig(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	_, metrics := newTestStore(t)
+	vuCtx := &mockVUContext{
+		mockSetupContext: mockSetupContext{
+			Context: context.Background(),
+			metrics: metrics,
+			httpCfg: vuhive.HTTPConfig{
+				BaseURL: ts.URL,
+				Timeout: 2 * time.Second,
+			},
+		},
+	}
+
+	client := vuhivehttp.NewClientFromVUConfig(vuCtx)
+	require.NotNil(t, client)
+	assert.Equal(t, ts.URL, client.BaseURL())
+
+	resp, err := client.Get(vuCtx, "/test-vu")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestClient_BaseURL_RelativeAndAbsoluteURLs(t *testing.T) {
+	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/relative/path", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts1.Close()
+
+	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/absolute/path", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts2.Close()
+
+	_, metrics := newTestStore(t)
+	client := vuhivehttp.NewClientWithCollector(metrics, vuhivehttp.WithBaseURL(ts1.URL))
+	assert.Equal(t, ts1.URL, client.BaseURL())
+
+	// Relative URL should hit ts1
+	resp1, err := client.Get(context.Background(), "/relative/path")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+
+	// Absolute URL should hit ts2
+	resp2, err := client.Get(context.Background(), ts2.URL+"/absolute/path")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+}
+
+func TestDefault_LazySharedSingleton(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	store, metrics := newTestStore(t)
+	vuCtx := &mockVUContext{
+		mockSetupContext: mockSetupContext{
+			Context: context.Background(),
+			metrics: metrics,
+			httpCfg: vuhive.HTTPConfig{
+				BaseURL: ts.URL,
+				Timeout: 3 * time.Second,
+				Headers: map[string]string{
+					"X-Test": "default-val",
+				},
+			},
+		},
+	}
+
+	// 1. Initial call lazily creates singleton
+	c1 := vuhivehttp.Default(vuCtx)
+	require.NotNil(t, c1)
+	assert.Equal(t, ts.URL, c1.BaseURL())
+
+	// 2. Subsequent call returns exact same instance
+	c2 := vuhivehttp.Default(vuCtx)
+	assert.Same(t, c1, c2, "Default(ctx) must return identical shared singleton for the same scenario")
+
+	// 3. Execution works and records metrics
+	resp, err := c1.Get(vuCtx, "/api/test")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, int64(1), store.AggregatedCounterValue(vuhive.MetricHTTPReqs))
+
+	// 4. Concurrent calls from multiple goroutines return the same singleton safely
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client := vuhivehttp.Default(vuCtx)
+			assert.Same(t, c1, client)
+		}()
+	}
+	wg.Wait()
+}
+
+

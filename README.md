@@ -16,7 +16,7 @@
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
 - **Transaction Boundaries (Groups)**: Organize `RunVU` logic into named transaction steps and nested sub-groups with `ctx.Group(name, fn)`. Automatically measures per-step latency (`vuhive.group.<path>.duration`), formats dedicated `GROUPS` summary tables, and enables granular per-step SLA quality gates.
-- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.NewClient`) with automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
+- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.Default`, `vuhivehttp.NewClientFromConfig`, `vuhivehttp.NewClient`) with declarative YAML configuration (`vuhive.yaml`), automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
 - **Kafka Messaging Module (`pkg/vuhive/kafka`)**: Auto-instrumented Kafka Publisher and Consumer clients conditionally compiled via Go build tags (`-tags kafka`) for testing event-driven architectures with zero dependencies in standard builds.
 - **Data Parameterization Module (`pkg/vuhive/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
 - **SLA Threshold Evaluator & Graceful Abort**: Declarative quality gates evaluated post-execution, with optional real-time early termination (`abort_on_fail: true`, `delay_abort_eval: 5s`) to stop runaway failures instantly. Returns exit code `0` on success or `1` on SLA breach/abort.
@@ -99,6 +99,7 @@ Adhering to the **Interface Segregation Principle (ISP)**, vuhive provides role-
 | `ctx.Param(key)` | `ConfigProvider` | Returns scenario param string from YAML config. |
 | `ctx.ParamInt(key, default)` | `ConfigProvider` | Parses scenario param as integer (logs warning and returns default on parse failure). |
 | `ctx.ParamDuration(key, default)` | `ConfigProvider` | Parses scenario param as `time.Duration` (e.g. `200ms`, logs warning and returns default on parse failure). |
+| `ctx.HTTPConfig()` | `ConfigProvider` | Returns typed declarative HTTP client configuration (BaseURL, Timeout, Headers, TLS, Pool). |
 | `ctx.GlobalState(key)` | `StateProvider` | Accesses values returned by the `Setup` hook (shallow-copied, read-only). |
 | `ctx.Log()` | `ObservabilityProvider` | Structured `Logger` instance bound with VU ID and iteration context. |
 | `ctx.Metrics()` | `ObservabilityProvider` | `MetricsCollector` for recording custom counters, gauges, durations, and rates. |
@@ -224,9 +225,16 @@ scenarios:
     run_period: 30s
     ramp_down: 5s
     vu_timeout: 2s
-    params:
+    http:
       base_url: "https://api.example.com"
-      timeout_ms: "500"
+      timeout: 5s
+      headers:
+        Accept: "application/json"
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 10
+    params:
+      checkout_path: "/api/checkout"
     thresholds:
       - metric: http_request_duration
         stat: p95
@@ -391,9 +399,28 @@ Eliminate repetitive boilerplate metric instrumentation from your `RunVU` loops 
 ### Advantages Over Raw `http.Client`
 
 - **Zero-Boilerplate Metrics**: Latency duration histograms (`vuhive.http.req_duration`), request counts (`vuhive.http.reqs`), and failure rates (`vuhive.http.req_failed`) are recorded automatically for every request with method, path, and status code tags.
+- **Declarative YAML Configuration**: Configure base URL, timeouts, default headers, connection pool parameters, and TLS options directly in `vuhive.yaml` under `scenarios.<name>.http`.
 - **Convenient Response Parsing**: `Response.JSON(target)` unmarshals directly into Go structs, and `Response.Text()` extracts raw body strings while eagerly closing the underlying response body.
-- **Configurable Connection Pooling & Defaults**: Easily configure timeouts, default authorization headers, connection pool bounds, and TLS skip verification using fluent functional options.
-- **Opt-in Phase-Breakdown Timing**: Trace TCP connection time, TLS handshake duration, request write time, and response read time via `httptrace` using `vuhivehttp.WithDetailedTiming()`.
+- **Configurable Connection Pooling & Defaults**: Easily configure timeouts, default authorization headers, connection pool bounds, and TLS skip verification declaratively in YAML or programmatically using fluent functional options.
+- **Opt-in Phase-Breakdown Timing**: Trace TCP connection time, TLS handshake duration, request write time, and response read time via `httptrace` (`detailed_timing: true` in YAML or `vuhivehttp.WithDetailedTiming()`).
+
+### Declarative Configuration (`vuhive.yaml`)
+
+```yaml
+scenarios:
+  http_checkout:
+    http:
+      base_url: "https://api.example.com"
+      timeout: 5s
+      headers:
+        Accept: "application/json"
+        User-Agent: "vuhive/1.0"
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 50
+        idle_conn_timeout: 90s
+      detailed_timing: false
+```
 
 ### Basic Usage
 
@@ -403,7 +430,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/morphy76/vuhive/pkg/vuhive"
 	vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
@@ -418,22 +444,13 @@ func main() {
 	suite := vuhive.NewSuite("Checkout API Load Test")
 
 	suite.RegisterScenario("http_checkout", vuhive.Scenario{
-		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
-			// Initialize a shared, instrumented HTTP client
-			client := vuhivehttp.NewClient(ctx,
-				vuhivehttp.WithTimeout(5*time.Second),
-				vuhivehttp.WithHeader("Accept", "application/json"),
-				vuhivehttp.WithMaxIdleConnsPerHost(50),
-			)
-			return map[string]any{"client": client}, nil
-		},
-
+		// No Setup hook needed — vuhivehttp.Default(ctx) lazily retrieves the shared client
 		RunVU: func(ctx vuhive.VUContext) error {
-			client := ctx.GlobalState("client").(*vuhivehttp.Client)
-			baseURL := ctx.Param("base_url")
+			// Retrieve scenario's shared HTTP client initialized from vuhive.yaml
+			client := vuhivehttp.Default(ctx)
 
-			// Execute request — metrics (duration, rate, counter) are auto-recorded
-			resp, err := client.Get(ctx, baseURL+"/api/checkout")
+			// Execute request — relative URL resolved against BaseURL, metrics auto-recorded
+			resp, err := client.Get(ctx, "/api/checkout")
 			if err != nil {
 				return err
 			}

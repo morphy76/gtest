@@ -221,6 +221,10 @@ func (a *publicSetupContextAdapter) Metrics() MetricsCollector {
 	return &a.metricsAdapter
 }
 
+func (a *publicSetupContextAdapter) HTTPConfig() HTTPConfig {
+	return convertEngineHTTPConfig(a.SetupContext.HTTPConfig())
+}
+
 type publicVUContextAdapter struct {
 	engine.VUContext
 	loggerAdapter  publicLoggerAdapter
@@ -242,6 +246,10 @@ func (a *publicVUContextAdapter) Log() Logger {
 
 func (a *publicVUContextAdapter) Metrics() MetricsCollector {
 	return &a.metricsAdapter
+}
+
+func (a *publicVUContextAdapter) HTTPConfig() HTTPConfig {
+	return convertEngineHTTPConfig(a.VUContext.HTTPConfig())
 }
 
 func (a *publicVUContextAdapter) Check(name string, fn CheckFunc) bool {
@@ -271,8 +279,6 @@ func (a *publicVUContextAdapter) Group(name string, fn func(ctx VUContext) error
 	return err
 }
 
-
-
 type publicTeardownContextAdapter struct {
 	engine.TeardownContext
 	loggerAdapter  publicLoggerAdapter
@@ -287,6 +293,10 @@ func (a *publicTeardownContextAdapter) Metrics() MetricsCollector {
 	return &a.metricsAdapter
 }
 
+func (a *publicTeardownContextAdapter) HTTPConfig() HTTPConfig {
+	return convertEngineHTTPConfig(a.TeardownContext.HTTPConfig())
+}
+
 type publicSummaryContextAdapter struct {
 	engine.SummaryContext
 	loggerAdapter  publicLoggerAdapter
@@ -299,6 +309,29 @@ func (a *publicSummaryContextAdapter) Log() Logger {
 
 func (a *publicSummaryContextAdapter) Metrics() MetricsCollector {
 	return &a.metricsAdapter
+}
+
+func (a *publicSummaryContextAdapter) HTTPConfig() HTTPConfig {
+	return convertEngineHTTPConfig(a.SummaryContext.HTTPConfig())
+}
+
+func convertEngineHTTPConfig(c config.HTTPConfig) HTTPConfig {
+	var headers map[string]string
+	if c.Headers != nil {
+		headers = make(map[string]string, len(c.Headers))
+		for k, v := range c.Headers {
+			headers[k] = v
+		}
+	}
+	return HTTPConfig{
+		BaseURL:        c.BaseURL,
+		Timeout:        c.Timeout,
+		Headers:        headers,
+		TLS:            TLSConfig{InsecureSkipVerify: c.TLS.InsecureSkipVerify},
+		Pool:           HTTPPoolConfig{MaxIdleConns: c.Pool.MaxIdleConns, MaxIdleConnsPerHost: c.Pool.MaxIdleConnsPerHost, IdleConnTimeout: c.Pool.IdleConnTimeout},
+		DetailedTiming: c.DetailedTiming,
+		MetricPrefix:   c.MetricPrefix,
+	}
 }
 
 type runnerSuiteAdapter struct {

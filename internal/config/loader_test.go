@@ -877,5 +877,68 @@ scenarios:
 	})
 }
 
+func TestLoad_HTTPConfig(t *testing.T) {
+	t.Run("valid full http config in YAML", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  http_checkout:
+    type: "constant_vus"
+    vus: 50
+    run_period: "1m"
+    vu_timeout: "5s"
+    http:
+      base_url: "https://api.example.com"
+      timeout: "5s"
+      headers:
+        Accept: "application/json"
+        User-Agent: "vuhive/1.0"
+      tls:
+        insecure_skip_verify: true
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 10
+        idle_conn_timeout: "90s"
+      detailed_timing: true
+      metric_prefix: "vuhive.http.custom."
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+
+		sc, ok := cfg.Scenarios["http_checkout"]
+		require.True(t, ok)
+		require.NotNil(t, sc.HTTP)
+
+		assert.Equal(t, "https://api.example.com", sc.HTTP.BaseURL)
+		assert.Equal(t, 5*time.Second, sc.HTTP.Timeout)
+		assert.Equal(t, "application/json", sc.HTTP.Headers["accept"])
+		assert.Equal(t, "vuhive/1.0", sc.HTTP.Headers["user-agent"])
+		assert.True(t, sc.HTTP.TLS.InsecureSkipVerify)
+		assert.Equal(t, 100, sc.HTTP.Pool.MaxIdleConns)
+		assert.Equal(t, 10, sc.HTTP.Pool.MaxIdleConnsPerHost)
+		assert.Equal(t, 90*time.Second, sc.HTTP.Pool.IdleConnTimeout)
+		assert.True(t, sc.HTTP.DetailedTiming)
+		assert.Equal(t, "vuhive.http.custom.", sc.HTTP.MetricPrefix)
+	})
+
+	t.Run("scenario without http config has nil HTTP", func(t *testing.T) {
+		yaml := `
+version: "1.0"
+scenarios:
+  s1:
+    type: "constant_vus"
+    vus: 1
+    run_period: "10s"
+    vu_timeout: "1s"
+`
+		cfg, err := config.Load(strings.NewReader(yaml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Nil(t, cfg.Scenarios["s1"].HTTP)
+	})
+}
+
+
 
 

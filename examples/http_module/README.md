@@ -18,9 +18,24 @@ if err != nil || resp.StatusCode >= 400 {
 }
 ```
 
-**After (HTTP module):**
+**After (HTTP module with declarative config):**
+```yaml
+# vuhive.yaml
+scenarios:
+  http_module_demo:
+    http:
+      base_url: "https://api.example.com"
+      timeout: 5s
+      headers:
+        Accept: "application/json"
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 10
+```
 ```go
-resp, err := client.Get(ctx, serverURL+"/checkout")
+// In RunVU (Zero Setup boilerplate — automatically uses declarative config):
+client := vuhivehttp.Default(ctx)
+resp, err := client.Get(ctx, "/checkout")
 // All metrics recorded automatically!
 ```
 
@@ -28,8 +43,8 @@ resp, err := client.Get(ctx, serverURL+"/checkout")
 
 | File | Description |
 |---|---|
-| `main.go` | Scenario using the instrumented HTTP client |
-| `vuhive.yaml` | Configuration with SLA thresholds on built-in HTTP metrics |
+| `main.go` | Scenario using the instrumented HTTP client retrieved with `vuhivehttp.Default(ctx)` |
+| `vuhive.yaml` | Declarative HTTP client transport, connection pool, headers, and SLA thresholds |
 
 ## How to Run
 
@@ -49,7 +64,7 @@ The HTTP module records the following metrics for every request:
 
 ### Opt-in Phase Metrics
 
-Enable with `vuhivehttp.WithDetailedTiming()`:
+Enable with `detailed_timing: true` in `vuhive.yaml` or `vuhivehttp.WithDetailedTiming()`:
 
 | Metric | Type | Description |
 |---|---|---|
@@ -61,6 +76,19 @@ Enable with `vuhivehttp.WithDetailedTiming()`:
 ## Configuration Breakdown
 
 ```yaml
+http:
+  base_url: "http://localhost:8080"
+  timeout: 5s
+  headers:
+    Accept: "application/json"
+    User-Agent: "vuhive/1.0"
+  pool:
+    max_idle_conns: 100
+    max_idle_conns_per_host: 10
+    idle_conn_timeout: 90s
+  detailed_timing: false
+  metric_prefix: "vuhive.http."
+
 thresholds:
   - metric: vuhive.http.req_duration    # Built-in HTTP module metric
     stat: p95

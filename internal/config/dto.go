@@ -32,6 +32,30 @@ type scenarioConfigDTO struct {
 	InteractionDelay *thinkTimeConfigDTO  `mapstructure:"interaction_delay"`
 	ThinkTime        *thinkTimeConfigDTO  `mapstructure:"think_time"`
 	Thresholds       []thresholdConfigDTO `mapstructure:"thresholds"`
+	HTTP             *httpConfigDTO       `mapstructure:"http"`
+}
+
+// httpConfigDTO is the DTO for HTTP client configuration.
+type httpConfigDTO struct {
+	BaseURL        string            `mapstructure:"base_url"`
+	Timeout        time.Duration     `mapstructure:"timeout"`
+	Headers        map[string]string `mapstructure:"headers"`
+	TLS            tlsConfigDTO      `mapstructure:"tls"`
+	Pool           httpPoolConfigDTO `mapstructure:"pool"`
+	DetailedTiming bool              `mapstructure:"detailed_timing"`
+	MetricPrefix   string            `mapstructure:"metric_prefix"`
+}
+
+// tlsConfigDTO is the DTO for TLS configuration.
+type tlsConfigDTO struct {
+	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"`
+}
+
+// httpPoolConfigDTO is the DTO for HTTP connection pool configuration.
+type httpPoolConfigDTO struct {
+	MaxIdleConns        int           `mapstructure:"max_idle_conns"`
+	MaxIdleConnsPerHost int           `mapstructure:"max_idle_conns_per_host"`
+	IdleConnTimeout     time.Duration `mapstructure:"idle_conn_timeout"`
 }
 
 // stageConfigDTO is the DTO for a single stage in ramping_vus scenarios.
@@ -129,7 +153,33 @@ func (d *scenarioConfigDTO) toModel() ScenarioConfig {
 			sc.Thresholds[i] = th.toModel()
 		}
 	}
+	if d.HTTP != nil {
+		sc.HTTP = d.HTTP.toModel()
+	}
 	return sc
+}
+
+// toModel converts a httpConfigDTO to a pure domain HTTPConfig model.
+func (d *httpConfigDTO) toModel() *HTTPConfig {
+	if d == nil {
+		return nil
+	}
+	var headers map[string]string
+	if d.Headers != nil {
+		headers = make(map[string]string, len(d.Headers))
+		for k, v := range d.Headers {
+			headers[k] = v
+		}
+	}
+	return &HTTPConfig{
+		BaseURL:        d.BaseURL,
+		Timeout:        d.Timeout,
+		Headers:        headers,
+		TLS:            TLSConfig{InsecureSkipVerify: d.TLS.InsecureSkipVerify},
+		Pool:           HTTPPoolConfig{MaxIdleConns: d.Pool.MaxIdleConns, MaxIdleConnsPerHost: d.Pool.MaxIdleConnsPerHost, IdleConnTimeout: d.Pool.IdleConnTimeout},
+		DetailedTiming: d.DetailedTiming,
+		MetricPrefix:   d.MetricPrefix,
+	}
 }
 
 // toModel converts a thinkTimeConfigDTO to a pure domain ThinkTimeConfig model.

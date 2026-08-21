@@ -474,3 +474,125 @@ func TestValidate_ScenarioEdgeCases(t *testing.T) {
 		assert.Equal(t, "scenarios.s1.thresholds[1].metric", valErr.Field)
 	})
 }
+
+func TestValidate_HTTPConfig(t *testing.T) {
+	t.Run("negative timeout", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTP: &config.HTTPConfig{
+						Timeout: -1 * time.Second,
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http.timeout", valErr.Field)
+	})
+
+	t.Run("negative pool max_idle_conns", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTP: &config.HTTPConfig{
+						Pool: config.HTTPPoolConfig{
+							MaxIdleConns: -1,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http.pool.max_idle_conns", valErr.Field)
+	})
+
+	t.Run("negative pool max_idle_conns_per_host", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTP: &config.HTTPConfig{
+						Pool: config.HTTPPoolConfig{
+							MaxIdleConnsPerHost: -5,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http.pool.max_idle_conns_per_host", valErr.Field)
+	})
+
+	t.Run("negative pool idle_conn_timeout", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTP: &config.HTTPConfig{
+						Pool: config.HTTPPoolConfig{
+							IdleConnTimeout: -10 * time.Second,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.Error(t, err)
+		var valErr *config.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "scenarios.s1.http.pool.idle_conn_timeout", valErr.Field)
+	})
+
+	t.Run("valid http config", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: "1.0",
+			Scenarios: map[string]config.ScenarioConfig{
+				"s1": {
+					Type:      config.ScenarioTypeConstantVUs,
+					VUs:       1,
+					RunPeriod: 10 * time.Second,
+					VUTimeout: 1 * time.Second,
+					HTTP: &config.HTTPConfig{
+						BaseURL: "https://api.example.com",
+						Timeout: 5 * time.Second,
+						Pool: config.HTTPPoolConfig{
+							MaxIdleConns:        100,
+							MaxIdleConnsPerHost: 10,
+							IdleConnTimeout:     90 * time.Second,
+						},
+					},
+				},
+			},
+		}
+		err := config.Validate(cfg)
+		require.NoError(t, err)
+	})
+}
+

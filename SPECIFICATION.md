@@ -1362,52 +1362,79 @@ import vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
 // Client wraps *http.Client with automatic metric instrumentation.
 type Client struct { /* ... */ }
 
+// Default returns a shared, instrumented HTTP client lazily initialized from declarative config.
+func Default(ctx ContextProvider) *Client
+
 // NewClient creates an instrumented HTTP client.
-// All requests record:
-//   - "http_req_duration" (Duration, tagged with method, url, status)
-//   - "http_req_failed" (Rate, 1/1 on error or 4xx/5xx, 0/1 on success)
-//   - "http_reqs" (Counter)
-func NewClient(ctx ScenarioContext, opts ...Option) *Client
+func NewClient(ctx SetupContext, opts ...Option) *Client
+
+// NewClientFromConfig creates an instrumented HTTP client initialized from SetupContext's declarative HTTP config.
+func NewClientFromConfig(ctx SetupContext, opts ...Option) *Client
+
+// NewClientFromVUConfig creates an instrumented HTTP client initialized from VUContext's declarative HTTP config.
+func NewClientFromVUConfig(ctx VUContext, opts ...Option) *Client
 
 // Request methods return *Response with parsed body helpers.
-func (c *Client) Get(ctx ScenarioContext, url string) (*Response, error)
-func (c *Client) Post(ctx ScenarioContext, url string, body io.Reader) (*Response, error)
-func (c *Client) Put(ctx ScenarioContext, url string, body io.Reader) (*Response, error)
-func (c *Client) Delete(ctx ScenarioContext, url string) (*Response, error)
-func (c *Client) Do(ctx ScenarioContext, req *http.Request) (*Response, error)
+func (c *Client) BaseURL() string
+func (c *Client) Get(ctx context.Context, url string) (*Response, error)
+func (c *Client) Post(ctx context.Context, url string, contentType string, body io.Reader) (*Response, error)
+func (c *Client) Put(ctx context.Context, url string, contentType string, body io.Reader) (*Response, error)
+func (c *Client) Delete(ctx context.Context, url string) (*Response, error)
+func (c *Client) Do(ctx context.Context, req *http.Request) (*Response, error)
 
 // Response wraps *http.Response with convenience methods.
 type Response struct {
-    Status     int
+    StatusCode int
     Body       []byte
     Headers    http.Header
-    Duration   time.Duration
 }
 
 func (r *Response) JSON(v any) error     // Unmarshal body as JSON
 func (r *Response) Text() string          // Body as string
 ```
 
+#### Declarative Schema (`vuhive.schema.json` & `vuhive.yaml`)
+
+```yaml
+scenarios:
+  my_scenario:
+    http:
+      base_url: "https://api.example.com"
+      timeout: 5s
+      headers:
+        Accept: "application/json"
+        User-Agent: "vuhive/1.0"
+      tls:
+        insecure_skip_verify: false
+      pool:
+        max_idle_conns: 100
+        max_idle_conns_per_host: 10
+        idle_conn_timeout: 90s
+      detailed_timing: false
+      metric_prefix: "vuhive.http."
+```
+
 #### Automatic Metrics (per request)
 
 | Metric | Type | Tags |
 |--------|------|------|
-| `http_req_duration` | Duration | `method`, `url`, `status` |
-| `http_req_failed` | Rate | `method`, `url` |
-| `http_reqs` | Counter | `method`, `url` |
-| `http_req_receiving` | Duration | `method`, `url` |
-| `http_req_sending` | Duration | `method`, `url` |
-| `http_req_tls_handshaking` | Duration | `method`, `url` |
-| `http_req_connecting` | Duration | `method`, `url` |
+| `vuhive.http.req_duration` | Duration | `method`, `url`, `status` |
+| `vuhive.http.req_failed` | Rate | `method`, `url`, `status` |
+| `vuhive.http.reqs` | Counter | `method`, `url`, `status` |
+| `vuhive.http.req_receiving` | Duration | `method`, `url`, `status` |
+| `vuhive.http.req_sending` | Duration | `method`, `url`, `status` |
+| `vuhive.http.req_tls_handshaking` | Duration | `method`, `url`, `status` |
+| `vuhive.http.req_connecting` | Duration | `method`, `url`, `status` |
 
 #### Options
 
 ```go
-vuhivehttp.NewClient(ctx,
+vuhivehttp.NewClientFromConfig(ctx,
+    vuhivehttp.WithBaseURL("https://api.example.com"),
     vuhivehttp.WithTimeout(5 * time.Second),
     vuhivehttp.WithHeader("Authorization", "Bearer "+token),
     vuhivehttp.WithTLSInsecureSkipVerify(),
-    vuhivehttp.WithCustomMetricPrefix("checkout_api"),  // overrides "http_req"
+    vuhivehttp.WithCustomMetricPrefix("checkout_api."),
 )
 ```
 

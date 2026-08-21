@@ -374,6 +374,13 @@ func validateScenario(name string, sc *ScenarioConfig) error {
 		}
 	}
 
+	// Validate http if specified.
+	if sc.HTTP != nil {
+		if err := validateHTTPConfig(prefix, sc.HTTP); err != nil {
+			return err
+		}
+	}
+
 	// Validate thresholds and detect conflicting inferred metric kinds.
 	metricKinds := make(map[string]string)
 	for i := range sc.Thresholds {
@@ -401,6 +408,36 @@ func validateInteractionDelay(prefix string, delay *InteractionDelayConfig) erro
 // validateThinkTime checks the inter-iteration think time configuration.
 func validateThinkTime(prefix string, tt *ThinkTimeConfig) error {
 	return validateDelayConfig(fmt.Sprintf("%s.think_time", prefix), tt)
+}
+
+// validateHTTPConfig checks the declarative HTTP client configuration.
+func validateHTTPConfig(prefix string, httpCfg *HTTPConfig) error {
+	httpPrefix := fmt.Sprintf("%s.http", prefix)
+	if httpCfg.Timeout < 0 {
+		return &ValidationError{
+			Field:   httpPrefix + ".timeout",
+			Message: "must be >= 0",
+		}
+	}
+	if httpCfg.Pool.MaxIdleConns < 0 {
+		return &ValidationError{
+			Field:   httpPrefix + ".pool.max_idle_conns",
+			Message: "must be >= 0",
+		}
+	}
+	if httpCfg.Pool.MaxIdleConnsPerHost < 0 {
+		return &ValidationError{
+			Field:   httpPrefix + ".pool.max_idle_conns_per_host",
+			Message: "must be >= 0",
+		}
+	}
+	if httpCfg.Pool.IdleConnTimeout < 0 {
+		return &ValidationError{
+			Field:   httpPrefix + ".pool.idle_conn_timeout",
+			Message: "must be >= 0",
+		}
+	}
+	return nil
 }
 
 // validateThreshold checks a single threshold configuration and parses its target value.

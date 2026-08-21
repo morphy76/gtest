@@ -12,6 +12,7 @@ type Option func(*clientConfig)
 
 // clientConfig holds the resolved configuration for a Client.
 type clientConfig struct {
+	baseURL             string
 	timeout             time.Duration
 	defaultHeaders      map[string]string
 	tlsInsecureSkipVerify bool
@@ -30,6 +31,13 @@ func defaultConfig() clientConfig {
 		maxIdleConns:        100,
 		maxIdleConnsPerHost: 10,
 		idleConnTimeout:     90 * time.Second,
+	}
+}
+
+// WithBaseURL sets the base URL prepended to relative request paths.
+func WithBaseURL(baseURL string) Option {
+	return func(c *clientConfig) {
+		c.baseURL = baseURL
 	}
 }
 

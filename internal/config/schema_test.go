@@ -275,3 +275,47 @@ scenarios:
 		})
 	}
 }
+
+func TestJSONSchema_HTTPConfig(t *testing.T) {
+	schema := loadSchema(t)
+
+	defs, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		defs, ok = schema["definitions"].(map[string]any)
+	}
+	require.True(t, ok)
+	assert.Contains(t, defs, "http_config")
+
+	scenarioDef, ok := defs["scenario"].(map[string]any)
+	require.True(t, ok)
+	scenarioProps, ok := scenarioDef["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, scenarioProps, "http")
+
+	httpDef, ok := defs["http_config"].(map[string]any)
+	require.True(t, ok)
+	httpProps, ok := httpDef["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, httpProps, "base_url")
+	assert.Contains(t, httpProps, "timeout")
+	assert.Contains(t, httpProps, "headers")
+	assert.Contains(t, httpProps, "tls")
+	assert.Contains(t, httpProps, "pool")
+	assert.Contains(t, httpProps, "detailed_timing")
+	assert.Contains(t, httpProps, "metric_prefix")
+
+	poolProp, ok := httpProps["pool"].(map[string]any)
+	require.True(t, ok)
+	poolProps, ok := poolProp["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, poolProps, "max_idle_conns")
+	assert.Contains(t, poolProps, "max_idle_conns_per_host")
+	assert.Contains(t, poolProps, "idle_conn_timeout")
+
+	tlsProp, ok := httpProps["tls"].(map[string]any)
+	require.True(t, ok)
+	tlsProps, ok := tlsProp["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, tlsProps, "insecure_skip_verify")
+}
+
