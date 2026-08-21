@@ -95,7 +95,7 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("failed to open SSE stream: %w", err)
 			}
-			defer stream.Close()
+			defer func() { _ = stream.Close() }()
 
 			ctx.Check("stream_status_200", func() string {
 				if stream.StatusCode != http.StatusOK {

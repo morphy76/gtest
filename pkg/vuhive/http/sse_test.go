@@ -33,7 +33,7 @@ func TestSSE_Parser_StandardEvents(t *testing.T) {
 
 	stream, err := client.StreamSSE(context.Background(), ts.URL+"/events")
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	// First event
 	require.True(t, stream.Next(), "expected first event")
@@ -70,7 +70,7 @@ func TestSSE_Parser_MultiLineData(t *testing.T) {
 
 	stream, err := client.StreamSSE(context.Background(), ts.URL+"/multiline")
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	require.True(t, stream.Next())
 	ev := stream.Event()
@@ -98,7 +98,7 @@ func TestSSE_Parser_CommentsAndIgnoredFields(t *testing.T) {
 
 	stream, err := client.StreamSSE(context.Background(), ts.URL+"/comments")
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	require.True(t, stream.Next())
 	ev := stream.Event()
@@ -130,7 +130,7 @@ func TestSSE_Client_StreamConsumption(t *testing.T) {
 
 	stream, err := client.StreamSSE(context.Background(), ts.URL+"/tokens")
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	var received []vuhivehttp.SSEEvent
 	for stream.Next() {
@@ -165,7 +165,7 @@ func TestSSE_Client_EventsChannel(t *testing.T) {
 
 	stream, err := client.StreamSSE(context.Background(), ts.URL+"/chan")
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	var collected []string
 	for ev := range stream.Events() {
@@ -200,7 +200,7 @@ func TestSSE_Client_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := client.StreamSSE(ctx, ts.URL+"/cancel")
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	require.True(t, stream.Next())
 	assert.Equal(t, "initial", stream.Event().Data)
@@ -314,7 +314,7 @@ func TestSSE_Client_DoStream_CustomMethodAndBody(t *testing.T) {
 
 	stream, err := client.DoStream(context.Background(), req)
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	assert.Equal(t, http.MethodPost, capturedMethod)
 	assert.Equal(t, "text/event-stream", capturedAccept)
