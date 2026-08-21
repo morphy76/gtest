@@ -2,9 +2,55 @@ package http
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/morphy76/vuhive/pkg/vuhive"
 )
+
+var (
+	defaultClientsMu sync.RWMutex
+	defaultClients   = make(map[any]*Client)
+)
+
+// ContextProvider provides the configuration and metrics capabilities required
+// to construct or retrieve a default scenario HTTP client.
+// Both vuhive.SetupContext and vuhive.VUContext satisfy this interface.
+type ContextProvider interface {
+	HTTPConfig() vuhive.HTTPConfig
+	Metrics() vuhive.MetricsCollector
+}
+
+// Default returns a shared, instrumented HTTP client initialized from the scenario's
+// declarative HTTP configuration in vuhive.yaml.
+// The client is constructed lazily upon first call and cached as a shared singleton
+// for the scenario execution, safe for concurrent use across all VUs.
+func Default(ctx ContextProvider) *Client {
+	var key any
+	if ident, ok := ctx.(vuhive.ExecutionIdentity); ok && ident.ScenarioName() != "" {
+		key = ident.ScenarioName()
+	} else if ctx.Metrics() != nil {
+		key = ctx.Metrics()
+	} else {
+		key = "default"
+	}
+
+	defaultClientsMu.RLock()
+	client, ok := defaultClients[key]
+	defaultClientsMu.RUnlock()
+	if ok {
+		return client
+	}
+
+	defaultClientsMu.Lock()
+	defer defaultClientsMu.Unlock()
+	if client, ok = defaultClients[key]; ok {
+		return client
+	}
+
+	client = newClientFromHTTPConfig(ctx.HTTPConfig(), ctx.Metrics())
+	defaultClients[key] = client
+	return client
+}
 
 // Client is an instrumented HTTP client that automatically records latency,
 // status code counters, and error rates for every request executed.

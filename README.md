@@ -16,7 +16,7 @@
 - **Lock-Free In-Memory Metrics Engine**: Atomic counters, CAS gauges, atomic rate tracking, copy-on-write atomic pointer map storage, and 16-stripe sharded HDR Histograms (`github.com/HdrHistogram/hdrhistogram-go`) providing zero-contention, high-resolution percentile calculations (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
 - **Structured Logging**: Zerolog (`github.com/rs/zerolog`) integration with hoisted VU ID and scenario context bindings.
 - **Transaction Boundaries (Groups)**: Organize `RunVU` logic into named transaction steps and nested sub-groups with `ctx.Group(name, fn)`. Automatically measures per-step latency (`vuhive.group.<path>.duration`), formats dedicated `GROUPS` summary tables, and enables granular per-step SLA quality gates.
-- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.NewClient`, `vuhivehttp.NewClientFromConfig`) with declarative YAML configuration (`vuhive.yaml`), automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
+- **Instrumented HTTP Client Module (`pkg/vuhive/http`)**: High-performance HTTP client helper (`vuhivehttp.Default`, `vuhivehttp.NewClientFromConfig`, `vuhivehttp.NewClient`) with declarative YAML configuration (`vuhive.yaml`), automatic metric collection (HDR request duration histograms, request counters, failure rates), response body parsing helpers (`.JSON()`, `.Text()`), opt-in `httptrace` phase latency breakdowns, and connection pool tuning.
 - **Kafka Messaging Module (`pkg/vuhive/kafka`)**: Auto-instrumented Kafka Publisher and Consumer clients conditionally compiled via Go build tags (`-tags kafka`) for testing event-driven architectures with zero dependencies in standard builds.
 - **Data Parameterization Module (`pkg/vuhive/data`)**: CSV, JSON, and JSON Lines dataset loaders (`LoadCSV`, `LoadJSON`, `LoadJSONL`) supporting thread-safe distribution strategies (`Sequential`, `Random`, `UniquePerVU`, `SharedQueue`).
 - **SLA Threshold Evaluator & Graceful Abort**: Declarative quality gates evaluated post-execution, with optional real-time early termination (`abort_on_fail: true`, `delay_abort_eval: 5s`) to stop runaway failures instantly. Returns exit code `0` on success or `1` on SLA breach/abort.
@@ -444,14 +444,10 @@ func main() {
 	suite := vuhive.NewSuite("Checkout API Load Test")
 
 	suite.RegisterScenario("http_checkout", vuhive.Scenario{
-		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
-			// Initialize client from declarative vuhive.yaml configuration
-			client := vuhivehttp.NewClientFromConfig(ctx)
-			return map[string]any{"client": client}, nil
-		},
-
+		// No Setup hook needed — vuhivehttp.Default(ctx) lazily retrieves the shared client
 		RunVU: func(ctx vuhive.VUContext) error {
-			client := ctx.GlobalState("client").(*vuhivehttp.Client)
+			// Retrieve scenario's shared HTTP client initialized from vuhive.yaml
+			client := vuhivehttp.Default(ctx)
 
 			// Execute request — relative URL resolved against BaseURL, metrics auto-recorded
 			resp, err := client.Get(ctx, "/api/checkout")

@@ -33,10 +33,8 @@ scenarios:
         max_idle_conns_per_host: 10
 ```
 ```go
-// In Go code (Setup):
-client := vuhivehttp.NewClientFromConfig(ctx)
-
-// In RunVU (relative path resolved against base_url):
+// In RunVU (Zero Setup boilerplate — automatically uses declarative config):
+client := vuhivehttp.Default(ctx)
 resp, err := client.Get(ctx, "/checkout")
 // All metrics recorded automatically!
 ```
@@ -45,7 +43,7 @@ resp, err := client.Get(ctx, "/checkout")
 
 | File | Description |
 |---|---|
-| `main.go` | Scenario using the instrumented HTTP client initialized with `NewClientFromConfig` |
+| `main.go` | Scenario using the instrumented HTTP client retrieved with `vuhivehttp.Default(ctx)` |
 | `vuhive.yaml` | Declarative HTTP client transport, connection pool, headers, and SLA thresholds |
 
 ## How to Run

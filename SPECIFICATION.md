@@ -1362,6 +1362,9 @@ import vuhivehttp "github.com/morphy76/vuhive/pkg/vuhive/http"
 // Client wraps *http.Client with automatic metric instrumentation.
 type Client struct { /* ... */ }
 
+// Default returns a shared, instrumented HTTP client lazily initialized from declarative config.
+func Default(ctx ContextProvider) *Client
+
 // NewClient creates an instrumented HTTP client.
 func NewClient(ctx SetupContext, opts ...Option) *Client
 

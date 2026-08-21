@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -576,4 +577,52 @@ func TestClient_BaseURL_RelativeAndAbsoluteURLs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 }
+
+func TestDefault_LazySharedSingleton(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	store, metrics := newTestStore(t)
+	vuCtx := &mockVUContext{
+		mockSetupContext: mockSetupContext{
+			Context: context.Background(),
+			metrics: metrics,
+			httpCfg: vuhive.HTTPConfig{
+				BaseURL: ts.URL,
+				Timeout: 3 * time.Second,
+				Headers: map[string]string{
+					"X-Test": "default-val",
+				},
+			},
+		},
+	}
+
+	// 1. Initial call lazily creates singleton
+	c1 := vuhivehttp.Default(vuCtx)
+	require.NotNil(t, c1)
+	assert.Equal(t, ts.URL, c1.BaseURL())
+
+	// 2. Subsequent call returns exact same instance
+	c2 := vuhivehttp.Default(vuCtx)
+	assert.Same(t, c1, c2, "Default(ctx) must return identical shared singleton for the same scenario")
+
+	// 3. Execution works and records metrics
+	resp, err := c1.Get(vuCtx, "/api/test")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, int64(1), store.AggregatedCounterValue(vuhive.MetricHTTPReqs))
+
+	// 4. Concurrent calls from multiple goroutines return the same singleton safely
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client := vuhivehttp.Default(vuCtx)
+			assert.Same(t, c1, client)
+		}()
+	}
+	wg.Wait()
+}
+
 

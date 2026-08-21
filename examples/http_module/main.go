@@ -43,32 +43,26 @@ func main() {
 
 	// 3. Register scenario using the built-in HTTP module
 	suite.RegisterScenario("http_module_demo", vuhive.Scenario{
-		// Setup: create a SHARED instrumented HTTP client from declarative config
-		//
-		// Declarative HTTP client settings (timeout, headers, pool) are defined in vuhive.yaml
-		// under scenarios.<scenario>.http and automatically bound via NewClientFromConfig(ctx).
-		// Programmatic options can override settings (e.g. dynamic mock server URL).
+		// Setup: optional scenario lifecycle hook (e.g. sharing dynamic runtime state)
 		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
-			client := vuhivehttp.NewClientFromConfig(ctx,
-				vuhivehttp.WithBaseURL(ts.URL),
-			)
 			return map[string]any{
-				"client": client,
+				"server_url": ts.URL,
 			}, nil
 		},
 
 		// RunVU: execute HTTP requests with automatic instrumentation
 		RunVU: func(ctx vuhive.VUContext) error {
-			// Step 1: Retrieve the shared instrumented client from global state
-			client := ctx.GlobalState("client").(*vuhivehttp.Client)
+			// Step 1: Retrieve scenario's default instrumented HTTP client (zero Setup boilerplate)
+			client := vuhivehttp.Default(ctx)
+			serverURL := ctx.GlobalState("server_url").(string)
 
 			checkoutPath := ctx.Param("checkout_path")
 			if checkoutPath == "" {
 				checkoutPath = "/checkout"
 			}
 
-			// Step 2: Execute request — relative path resolved against client's BaseURL, metrics recorded automatically
-			resp, err := client.Get(ctx, checkoutPath)
+			// Step 2: Execute request — metrics (duration, counter, failed rate) recorded automatically
+			resp, err := client.Get(ctx, serverURL+checkoutPath)
 			if err != nil {
 				return fmt.Errorf("checkout request failed: %w", err)
 			}

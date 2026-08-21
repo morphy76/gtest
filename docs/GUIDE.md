@@ -820,7 +820,8 @@ For standard HTTP load testing, use the built-in `github.com/morphy76/vuhive/pkg
 #### Why Use `pkg/vuhive/http`?
 - **Automatic Metrics**: Automatically records `vuhive.http.req_duration` (HDR latency histogram), `vuhive.http.reqs` (total counter), and `vuhive.http.req_failed` (failure rate) tagged with `method`, `url` (path only), and `status`.
 - **Declarative YAML Configuration**: Configure base URL, timeouts, default headers, connection pool settings, and TLS options directly in `vuhive.yaml` under `scenarios.<name>.http`.
-- **Convenient Constructors**: Initialize directly from context using `vuhivehttp.NewClientFromConfig(ctx)` (in `Setup`) or `vuhivehttp.NewClientFromVUConfig(ctx)` (in `RunVU`).
+- **Zero Boilerplate (`vuhivehttp.Default(ctx)`)**: Retrieve the scenario's shared HTTP client directly in `RunVU` without needing any `Setup` hook or type-casting from `GlobalState`.
+- **Convenient Constructors**: Also supports explicit initialization from context using `vuhivehttp.NewClientFromConfig(ctx)` (in `Setup`) or `vuhivehttp.NewClientFromVUConfig(ctx)` (in `RunVU`).
 - **Relative Path Resolution**: When `base_url` is configured, `client.Get(ctx, "/path")` automatically resolves against the base URL. Absolute URLs (`https://...`) are preserved as-is.
 - **Response Decoding**: `resp.JSON(&target)` and `resp.Text()` methods with automatic response body cleanup.
 - **Opt-in Detailed Timing**: Capture TCP connection, TLS handshake, request write, and response read latencies via `detailed_timing: true` in YAML or `vuhivehttp.WithDetailedTiming()`.
@@ -870,14 +871,9 @@ func main() {
 	suite := vuhive.NewSuite("HTTP Load Test")
 
 	suite.RegisterScenario("catalog_api", vuhive.Scenario{
-		Setup: func(ctx vuhive.SetupContext) (map[string]any, error) {
-			// Initialize client from declarative vuhive.yaml configuration
-			client := vuhivehttp.NewClientFromConfig(ctx)
-			return map[string]any{"http_client": client}, nil
-		},
-
+		// Zero Setup boilerplate: Default(ctx) automatically uses vuhive.yaml config
 		RunVU: func(ctx vuhive.VUContext) error {
-			client := ctx.GlobalState("http_client").(*vuhivehttp.Client)
+			client := vuhivehttp.Default(ctx)
 
 			// 1. Execute GET request — relative path resolved against base_url, metrics auto-recorded
 			resp, err := client.Get(ctx, "/api/items/item-123")
