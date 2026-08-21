@@ -22,6 +22,7 @@ type clientConfig struct {
 	maxIdleConnsPerHost int
 	idleConnTimeout     time.Duration
 	detailedTiming      bool
+	discardBody         bool
 }
 
 func defaultConfig() clientConfig {
@@ -29,7 +30,7 @@ func defaultConfig() clientConfig {
 		timeout:             30 * time.Second,
 		metricPrefix:        defaultMetricPrefix,
 		maxIdleConns:        100,
-		maxIdleConnsPerHost: 10,
+		maxIdleConnsPerHost: 100,
 		idleConnTimeout:     90 * time.Second,
 	}
 }
@@ -121,6 +122,16 @@ func WithIdleConnTimeout(d time.Duration) Option {
 func WithDetailedTiming() Option {
 	return func(c *clientConfig) {
 		c.detailedTiming = true
+	}
+}
+
+// WithDiscardBody configures the client to discard response bodies without reading them into memory.
+// The Response.Body field will be nil. Status code, headers, and metrics are still recorded normally.
+// This is a significant optimization for load test scenarios that only need to measure latency
+// and status codes without inspecting response payloads.
+func WithDiscardBody() Option {
+	return func(c *clientConfig) {
+		c.discardBody = true
 	}
 }
 

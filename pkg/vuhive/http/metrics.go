@@ -151,6 +151,24 @@ func (c *Client) recordDetailedTimings(tags vuhive.Tags, timings *traceTimings, 
 	}
 }
 
+// recordDetailedTimingsFromTrace computes sending and receiving durations from trace timings
+// and records them as detailed phase metrics.
+func (c *Client) recordDetailedTimingsFromTrace(method, metricURL string, statusCode int, timings *traceTimings, readDone time.Time) {
+	tags := requestTags(method, metricURL, statusCode)
+
+	var sendingDuration time.Duration
+	if !timings.wroteHeaders.IsZero() && !timings.gotFirstByte.IsZero() {
+		sendingDuration = timings.gotFirstByte.Sub(timings.wroteHeaders)
+	}
+
+	var receivingDuration time.Duration
+	if !timings.gotFirstByte.IsZero() {
+		receivingDuration = readDone.Sub(timings.gotFirstByte)
+	}
+
+	c.recordDetailedTimings(tags, timings, sendingDuration, receivingDuration)
+}
+
 // sseEventTags builds metric tags for an individual SSE event.
 func sseEventTags(method, url, eventType string) vuhive.Tags {
 	return vuhive.Tags{
